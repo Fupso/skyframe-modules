@@ -1,9 +1,9 @@
 {
-  "video": "视频",
+  "video": "Video",
   "pick_video": "选择视频",
   "change_video": "更换视频",
   "loaded": "已加载",
-  "timeline_hint": "点击时间轴设置最近的标记（开始/结束），标记可拖动。",
+  "timeline_hint": "点击时间轴或拖动标记——播放器将显示对应时间。",
   "start": "开始",
   "end": "结束",
   "length": "时长",

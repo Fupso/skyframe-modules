@@ -1,10 +1,13 @@
 {
   "id": "fimi.cutter",
   "name": "Strihač",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "SkyFrame Community",
-  "description": "Strihanie videí — segmenty s presnými časmi, náhľad, export samostatne alebo spojené s hudbou.",
-  "permissions": ["filesystem.read", "ffmpeg.execute"],
+  "description": "Vystrihni úseky z videa na časovej osi s náhľadmi, spoj ich do jedného výstupu s hudbou.",
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
   "provides": [],
   "entry_point": "index.js",
   "icon": "✂️",

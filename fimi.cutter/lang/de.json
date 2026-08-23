@@ -3,7 +3,7 @@
   "pick_video": "Video auswählen",
   "change_video": "Video ändern",
   "loaded": "Geladen",
-  "timeline_hint": "Klicke auf die Zeitleiste, um die nächste Markierung (Start/Ende) zu setzen; Markierungen lassen sich ziehen.",
+  "timeline_hint": "Klicke auf die Zeitleiste oder ziehe die Markierungen — der Player zeigt die Zeit an.",
   "start": "Start",
   "end": "Ende",
   "length": "Länge",

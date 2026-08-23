@@ -1,345 +1,440 @@
-const t = window.React, p = t.useState, pe = t.useEffect, xe = t.useMemo, O = t.useRef;
+const t = window.React;
+t.useState;
+t.useEffect;
+t.useMemo;
+t.useRef;
 t.useCallback;
-const b = window.SkyFrame, r = b.t, ge = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }], he = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac", "ogg"] }];
-function T(n) {
+const f = window.SkyFrame, a = (n, v) => f.t(n, v), { useState: h, useEffect: pe, useMemo: Le, useRef: S } = window.React, Re = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }], Fe = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac", "ogg"] }], D = ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-rose-500", "bg-violet-500", "bg-teal-500"], W = 16;
+function Z(n) {
   return n.split(/[\\/]/).pop() ?? n;
 }
-function f(n) {
-  const E = Math.max(0, n), i = Math.floor(E / 3600), g = Math.floor(E % 3600 / 60), s = E % 60, y = `${i.toString().padStart(2, "0")}:${g.toString().padStart(2, "0")}:${Math.floor(s).toString().padStart(2, "0")}`, l = Math.round((s - Math.floor(s)) * 10);
-  return l ? `${y}.${l}` : y;
+function y(n) {
+  const v = Math.max(0, n), u = Math.floor(v / 3600), E = Math.floor(v % 3600 / 60), c = v % 60, k = `${u.toString().padStart(2, "0")}:${E.toString().padStart(2, "0")}:${Math.floor(c).toString().padStart(2, "0")}`, i = Math.round((c - Math.floor(c)) * 10);
+  return i ? `${k}.${i}` : k;
 }
-function j(n) {
-  const E = n.trim().split(":");
-  if (E.length === 3) {
-    const [g, s, y] = E.map(parseFloat);
-    if ([g, s, y].every((l) => !isNaN(l))) return g * 3600 + s * 60 + y;
-  } else if (E.length === 2) {
-    const [g, s] = E.map(parseFloat);
-    if (!isNaN(g) && !isNaN(s)) return g * 60 + s;
+function xe(n) {
+  const v = n.trim().split(":");
+  if (v.length === 3) {
+    const [E, c, k] = v.map(parseFloat);
+    if ([E, c, k].every((i) => !isNaN(i))) return E * 3600 + c * 60 + k;
+  } else if (v.length === 2) {
+    const [E, c] = v.map(parseFloat);
+    if (!isNaN(E) && !isNaN(c)) return E * 60 + c;
   }
-  const i = parseFloat(n);
-  return isNaN(i) ? 0 : i;
+  const u = parseFloat(n);
+  return isNaN(u) ? 0 : u;
 }
-function fe() {
+function De() {
   return Math.random().toString(36).slice(2, 9);
 }
-const R = ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-rose-500", "bg-violet-500", "bg-teal-500"];
-function Ee() {
-  var Y;
-  const [n, E] = p(null), [i, g] = p(0), [s, y] = p(0), [l, M] = p([]), [I, Z] = p("copy"), [L, ee] = p(!1), [J, te] = p("cut"), [_, D] = p(""), [P, q] = p(!1), [S, V] = p(null), [H, ae] = p(!0), [C, w] = p([]), [K, re] = p([]), [X, k] = p(""), F = O(!1), B = O(null), A = O(null), h = (e) => re((a) => [...a.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${e}`]), v = ((Y = n == null ? void 0 : n.info) == null ? void 0 : Y.duration) ?? 0, m = C.some((e) => e.status === "running"), G = xe(() => l.reduce((e, a) => e + (a.end - a.start), 0), [l]);
+function Te() {
+  var le;
+  const [n, v] = h(null), [u, E] = h(0), [c, k] = h(0), [i, _] = h([]), [T, K] = h("copy"), [V, ge] = h(!1), [P, X] = h(!1), [C, A] = h(null), [G, fe] = h(!0), [Q, he] = h("cut"), [I, z] = h(""), [L, M] = h([]), [Y, ve] = h([]), [j, $] = h(""), R = S(!1), ee = S(null), O = S(null), te = S(null), B = S(null), N = (e) => ve((r) => [...r.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${e}`]), p = ((le = n == null ? void 0 : n.info) == null ? void 0 : le.duration) ?? 0, b = L.some((e) => e.status === "running"), re = Le(() => i.reduce((e, r) => e + (r.end - r.start), 0), [i]);
   pe(() => {
-    b.invoke("get_last_output_dir").then((e) => {
-      e && D(e);
+    f.invoke("get_last_output_dir").then((e) => {
+      e && z(e);
     }).catch(() => {
     });
   }, []);
-  const ne = async () => {
-    const e = await b.pickFiles(ge, !1);
+  const ae = (e) => {
+    var o;
+    const r = (o = O.current) == null ? void 0 : o.querySelector("video");
+    if (r)
+      try {
+        r.pause(), r.currentTime = Math.max(0, Math.min(p || r.duration || e, e));
+      } catch {
+      }
+  };
+  pe(() => {
+    if (!n || p <= 0) return;
+    let e = !1, r = null, o = null;
+    const x = (s) => {
+      const l = te.current;
+      if (!l || e) return;
+      const m = 960, d = 56;
+      l.width = m, l.height = d;
+      const w = l.getContext("2d");
+      if (!w) return;
+      w.fillStyle = "#000", w.fillRect(0, 0, m, d);
+      const g = document.createElement("video");
+      g.muted = !0, g.preload = "auto";
+      const H = m / W, ce = (F) => {
+        if (e || F >= W) return;
+        const Ie = Math.min(Math.max(0.05, (F + 0.5) / W * p), Math.max(0.05, p - 0.05));
+        let de = !1;
+        const q = () => {
+          if (!de) {
+            de = !0, g.removeEventListener("seeked", ie);
+            try {
+              const J = g.videoWidth, U = g.videoHeight;
+              if (J && U && !e) {
+                const me = Math.max(H / J, d / U), ue = J * me, be = U * me;
+                w.drawImage(g, F * H + (H - ue) / 2, (d - be) / 2, ue, be);
+              }
+            } catch {
+            }
+            ce(F + 1);
+          }
+        }, ie = () => q();
+        g.addEventListener("seeked", ie), setTimeout(q, 900);
+        try {
+          g.currentTime = Ie;
+        } catch {
+          q();
+        }
+      };
+      g.addEventListener("loadeddata", () => ce(0)), g.addEventListener("error", () => {
+      }), g.src = s;
+    };
+    return r = setInterval(() => {
+      var l;
+      if (e) {
+        r && clearInterval(r);
+        return;
+      }
+      const s = (l = O.current) == null ? void 0 : l.querySelector("video");
+      s && s.src && (r && clearInterval(r), x(s.src));
+    }, 500), o = setTimeout(() => {
+      r && clearInterval(r);
+    }, 3e4), () => {
+      e = !0, r && clearInterval(r), o && clearTimeout(o);
+    };
+  }, [n == null ? void 0 : n.path, p]);
+  const Ee = async () => {
+    const e = await f.pickFiles(Re, !1);
     if (!e || Array.isArray(e)) return;
-    let a = null;
+    let r = null;
     try {
-      a = await b.invoke("get_video_info", { path: e });
+      r = await f.invoke("get_video_info", { path: e });
     } catch {
     }
-    E({ path: e, info: a }), g(0), y((a == null ? void 0 : a.duration) ?? 0), M([]), w([]), k(""), h(`${r("loaded", "Načítané")}: ${T(e)}${a ? ` (${f(a.duration)}, ${a.width}×${a.height})` : ""}`);
-  }, U = (e) => {
-    const a = B.current;
-    if (!a || v <= 0) return 0;
-    const c = a.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (e - c.left) / c.width)) * v;
-  }, se = (e) => {
-    if (!n || m) return;
-    const a = U(e.clientX);
-    Math.abs(a - i) <= Math.abs(a - s) ? g(Math.min(a, s - 0.1)) : y(Math.max(a, i + 0.1));
-  }, W = (e) => (a) => {
-    a.stopPropagation(), A.current = e;
-    const c = (o) => {
-      const d = U(o.clientX);
-      A.current === "start" ? g((u) => Math.min(d, s - 0.1) >= 0 ? Math.min(d, s - 0.1) : u) : y((u) => Math.max(d, i + 0.1) <= v ? Math.max(d, i + 0.1) : u);
+    v({ path: e, info: r }), E(0), k((r == null ? void 0 : r.duration) ?? 0), _([]), M([]), $(""), N(`${a("loaded", "Načítané")}: ${Z(e)}${r ? ` (${y(r.duration)}, ${r.width}×${r.height})` : ""}`);
+  }, ne = (e) => {
+    const r = ee.current;
+    if (!r || p <= 0) return 0;
+    const o = r.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e - o.left) / o.width)) * p;
+  }, Ne = (e) => {
+    if (!n || b) return;
+    const r = ne(e.clientX);
+    Math.abs(r - u) <= Math.abs(r - c) ? E(Math.min(r, c - 0.1)) : k(Math.max(r, u + 0.1)), ae(r);
+  }, se = (e) => (r) => {
+    r.stopPropagation(), r.preventDefault(), B.current = e;
+    const o = (s) => {
+      const l = ne(s.clientX);
+      B.current === "start" ? E((m) => {
+        const d = Math.min(l, c - 0.1);
+        return d >= 0 ? d : m;
+      }) : k((m) => {
+        const d = Math.max(l, u + 0.1);
+        return d <= p ? d : m;
+      }), ae(l);
     }, x = () => {
-      A.current = null, window.removeEventListener("pointermove", c), window.removeEventListener("pointerup", x);
+      B.current = null, window.removeEventListener("pointermove", o), window.removeEventListener("pointerup", x);
     };
-    window.addEventListener("pointermove", c), window.addEventListener("pointerup", x);
-  }, oe = (e) => g(Math.max(0, Math.min(j(e), s - 0.1))), le = (e) => y(Math.min(v, Math.max(j(e), i + 0.1))), ce = () => {
-    if (!(!n || s - i < 0.1)) {
-      if (l.some((e) => Math.abs(e.start - i) < 0.5 && Math.abs(e.end - s) < 0.5)) {
-        k(r("seg_exists", "Tento úsek už existuje."));
+    window.addEventListener("pointermove", o), window.addEventListener("pointerup", x);
+  }, ye = (e) => E(Math.max(0, Math.min(xe(e), c - 0.1))), ke = (e) => k(Math.min(p, Math.max(xe(e), u + 0.1))), we = () => {
+    if (!(!n || c - u < 0.1)) {
+      if (i.some((e) => Math.abs(e.start - u) < 0.5 && Math.abs(e.end - c) < 0.5)) {
+        $(a("seg_exists", "Tento úsek už existuje."));
         return;
       }
-      k(""), M((e) => [...e, { id: fe(), start: i, end: s }].sort((a, c) => a.start - c.start));
+      $(""), _((e) => [...e, { id: De(), start: u, end: c }].sort((r, o) => r.start - o.start));
     }
-  }, de = (e) => M((a) => a.filter((c) => c.id !== e)), Q = (e) => new Promise((a) => {
-    let c;
-    b.listenJob(e, (x) => {
-      w((o) => o.map((d) => d.id === e ? x : d)), x.status !== "running" && (c == null || c(), a(x));
-    }).then((x) => c = x);
-  }), ie = async () => {
-    if (!n || l.length === 0) return;
-    k(""), F.current = !1;
-    const e = J.trim() || "cut", a = _ || null, c = l.map((o, d) => `${e}_${d + 1}`);
-    w(l.map((o, d) => ({
-      id: `pending-${d}`,
-      moduleId: b.moduleId,
-      label: c[d],
-      status: "running",
-      progress: -1,
-      message: r("queued", "Čaká v rade"),
-      result: null
-    }))), h(`${r("export_start", "Exportujem")} ${l.length} ${r("pieces", "dielov")}…`);
+  }, $e = (e) => _((r) => r.filter((o) => o.id !== e)), oe = (e) => new Promise((r) => {
+    let o;
+    f.listenJob(e, (x) => {
+      M((s) => s.map((l) => l.id === e ? x : l)), x.status !== "running" && (o == null || o(), r(x));
+    }).then((x) => {
+      o = x;
+    });
+  }), Me = async () => {
+    if (!n || i.length === 0) return;
+    $(""), R.current = !1;
+    const e = Q.trim() || "cut", r = I || null, o = i.map((s, l) => `${e}_${l + 1}`);
+    M(
+      i.map((s, l) => ({
+        id: `pending-${l}`,
+        moduleId: f.moduleId,
+        label: o[l],
+        status: "running",
+        progress: -1,
+        message: a("queued", "Čaká v rade"),
+        result: null
+      }))
+    ), N(`${a("export_start", "Exportujem")} ${i.length} ${a("pieces", "dielov")}…`);
     const x = [];
-    for (let o = 0; o < l.length && !F.current; o++) {
-      const d = l[o];
+    for (let s = 0; s < i.length && !R.current; s++) {
+      const l = i[s];
       try {
-        const u = await b.invoke("trim_video", {
+        const m = await f.invoke("trim_video", {
           input: n.path,
-          start: d.start,
-          end: d.end,
-          mode: I,
-          outputName: c[o],
-          outputDir: a,
-          moduleId: b.moduleId
+          start: l.start,
+          end: l.end,
+          mode: T,
+          outputName: o[s],
+          outputDir: r,
+          moduleId: f.moduleId
         });
-        w(($) => {
-          const z = [...$];
-          return z[o] = { ...z[o], id: u, progress: 0, message: "" }, z;
-        }), h(`▶ ${c[o]} (${f(d.start)} → ${f(d.end)})`);
-        const N = await Q(u);
-        if (N.status === "done" && N.result)
-          x.push(N.result), h(`✓ ${N.result}`);
-        else if (N.status === "error") {
-          h(`✗ ${c[o]}: ${N.message}`), k(N.message);
+        M((w) => {
+          const g = [...w];
+          return g[s] = { ...g[s], id: m, progress: 0, message: "" }, g;
+        }), N(`▶ ${o[s]} (${y(l.start)} → ${y(l.end)})`);
+        const d = await oe(m);
+        if (d.status === "done" && d.result)
+          x.push(d.result), N(`✓ ${d.result}`);
+        else if (d.status === "error") {
+          N(`✗ ${o[s]}: ${d.message}`), $(d.message);
           return;
         } else {
-          h(`⊘ ${c[o]}`);
+          N(`⊘ ${o[s]}`);
           return;
         }
-      } catch (u) {
-        k(String(u)), h(String(u));
+      } catch (m) {
+        $(String(m)), N(String(m));
         return;
       }
     }
-    if (L && x.length > 0 && !F.current)
+    if (V && x.length > 0 && !R.current)
       try {
-        const o = `${e}_merged`;
-        w((N) => [...N, {
-          id: "pending-merge",
-          moduleId: b.moduleId,
-          label: o,
-          status: "running",
-          progress: -1,
-          message: r("queued", "Čaká v rade"),
-          result: null
-        }]);
-        const d = await b.invoke("merge_videos", {
+        const s = `${e}_merged`;
+        M((d) => [
+          ...d,
+          {
+            id: "pending-merge",
+            moduleId: f.moduleId,
+            label: s,
+            status: "running",
+            progress: -1,
+            message: a("queued", "Čaká v rade"),
+            result: null
+          }
+        ]);
+        const l = await f.invoke("merge_videos", {
           files: x,
-          outputName: o,
-          music: P ? S : null,
-          moduleId: b.moduleId,
-          outputDir: a,
-          loopMusic: H
+          outputName: s,
+          music: P ? C : null,
+          moduleId: f.moduleId,
+          outputDir: r,
+          loopMusic: G
         });
-        w((N) => N.map(($) => $.id === "pending-merge" ? { ...$, id: d, progress: 0, message: "" } : $)), h(`▶ ${o} (${x.length} ${r("pieces", "dielov")})`);
-        const u = await Q(d);
-        u.status === "done" && u.result ? h(`✓ ${u.result}`) : u.status === "error" && (k(u.message), h(`✗ ${u.message}`));
-      } catch (o) {
-        k(String(o)), h(String(o));
+        M((d) => d.map((w) => w.id === "pending-merge" ? { ...w, id: l, progress: 0, message: "" } : w)), N(`▶ ${s} (${x.length} ${a("pieces", "dielov")})`);
+        const m = await oe(l);
+        m.status === "done" && m.result ? N(`✓ ${m.result}`) : m.status === "error" && ($(m.message), N(`✗ ${m.message}`));
+      } catch (s) {
+        $(String(s)), N(String(s));
       }
-    h(r("export_done", "Export dokončený."));
-  }, me = async () => {
-    F.current = !0;
-    for (const e of C) e.status === "running" && !e.id.startsWith("pending") && await b.cancelJob(e.id);
-  }, ue = () => {
-    w([]), M([]), E(null), V(null), q(!1), k("");
-  }, be = b.PlayerShell;
-  return /* @__PURE__ */ t.createElement("div", { className: "p-6" }, /* @__PURE__ */ t.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, r("video", "Video")), /* @__PURE__ */ t.createElement(
+    N(a("export_done", "Export dokončený."));
+  }, Se = async () => {
+    R.current = !0;
+    for (const e of L)
+      e.status === "running" && !e.id.startsWith("pending") && await f.cancelJob(e.id);
+  }, _e = () => {
+    M([]), _([]), v(null), A(null), X(!1), $("");
+  }, Ce = f.PlayerShell;
+  return /* @__PURE__ */ t.createElement("div", { className: "p-6" }, /* @__PURE__ */ t.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, a("video", "Video")), /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: ne,
-      disabled: m,
+      onClick: Ee,
+      disabled: b,
       className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
     },
-    n ? r("change_video", "Zmeniť video") : r("pick_video", "Vybrať video")
-  )), n && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("p", { className: "text-xs font-mono text-text-dim break-all" }, T(n.path), " · ", f(v), n.info ? ` · ${n.info.width}×${n.info.height} · ${n.info.codec}` : ""), /* @__PURE__ */ t.createElement("div", { className: "rounded-xl overflow-hidden border border-border bg-black" }, /* @__PURE__ */ t.createElement(be, { src: n.path })), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement(
+    n ? a("change_video", "Zmeniť video") : a("pick_video", "Vybrať video")
+  )), n && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("p", { className: "text-xs font-mono text-text-dim break-all" }, Z(n.path), " · ", y(p), n.info ? ` · ${n.info.width}×${n.info.height} · ${n.info.codec}` : ""), /* @__PURE__ */ t.createElement("div", { ref: O, className: "rounded-xl overflow-hidden border border-border bg-black" }, /* @__PURE__ */ t.createElement(Ce, { src: n.path })), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("div", { className: "relative" }, /* @__PURE__ */ t.createElement(
+    "canvas",
+    {
+      ref: te,
+      className: "block w-full h-14 rounded-lg border border-border bg-black"
+    }
+  ), /* @__PURE__ */ t.createElement(
     "div",
     {
-      ref: B,
-      onClick: se,
-      className: "relative h-10 bg-bg rounded-lg border border-border cursor-pointer select-none overflow-hidden"
+      ref: ee,
+      onClick: Ne,
+      className: "absolute inset-0 cursor-pointer select-none"
     },
-    l.map((e, a) => /* @__PURE__ */ t.createElement(
+    i.map((e, r) => /* @__PURE__ */ t.createElement(
       "div",
       {
         key: e.id,
-        className: `absolute top-0 bottom-0 opacity-40 ${R[a % R.length]}`,
-        style: { left: `${e.start / v * 100}%`, width: `${(e.end - e.start) / v * 100}%` }
+        className: `absolute top-0 bottom-0 opacity-40 ${D[r % D.length]}`,
+        style: { left: `${e.start / p * 100}%`, width: `${(e.end - e.start) / p * 100}%` }
       }
     )),
     /* @__PURE__ */ t.createElement(
       "div",
       {
         className: "absolute top-0 bottom-0 bg-accent/30 border-x-2 border-accent",
-        style: { left: `${i / v * 100}%`, width: `${(s - i) / v * 100}%` }
+        style: { left: `${u / p * 100}%`, width: `${(c - u) / p * 100}%` }
       }
     ),
     /* @__PURE__ */ t.createElement(
       "div",
       {
-        onPointerDown: W("start"),
+        onPointerDown: se("start"),
         className: "absolute top-0 bottom-0 w-3 bg-accent cursor-ew-resize rounded-l",
-        style: { left: `calc(${i / v * 100}% - 4px)` }
+        style: { left: `calc(${u / p * 100}% - 4px)` }
       }
     ),
     /* @__PURE__ */ t.createElement(
       "div",
       {
-        onPointerDown: W("end"),
+        onPointerDown: se("end"),
         className: "absolute top-0 bottom-0 w-3 bg-accent cursor-ew-resize rounded-r",
-        style: { left: `calc(${s / v * 100}% - 4px)` }
+        style: { left: `calc(${c / p * 100}% - 4px)` }
       }
     )
-  ), /* @__PURE__ */ t.createElement("p", { className: "mt-1.5 text-[11px] text-text-dim" }, r("timeline_hint", "Klikni na os alebo ťahaj značky. Zelené polia = už pridané úseky.")), /* @__PURE__ */ t.createElement("div", { className: "mt-3 flex flex-wrap items-end gap-3" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1" }, r("start", "Začiatok")), /* @__PURE__ */ t.createElement(
+  )), /* @__PURE__ */ t.createElement("p", { className: "mt-1 text-[10px] text-text-dim" }, a("timeline_hint", "Klikni na os alebo ťahaj značky — prehrávač ukáže daný čas.")), /* @__PURE__ */ t.createElement("div", { className: "mt-3 grid grid-cols-3 gap-3 items-end" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1" }, a("start", "Štart")), /* @__PURE__ */ t.createElement(
     "input",
     {
-      value: f(i),
-      onChange: (e) => oe(e.target.value),
-      disabled: m,
-      className: "w-28 px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50"
+      defaultValue: y(u),
+      key: `s-${u.toFixed(2)}`,
+      onBlur: (e) => ye(e.target.value),
+      disabled: b,
+      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50 disabled:opacity-40"
     }
-  )), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1" }, r("end", "Koniec")), /* @__PURE__ */ t.createElement(
+  )), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1" }, a("end", "Koniec")), /* @__PURE__ */ t.createElement(
     "input",
     {
-      value: f(s),
-      onChange: (e) => le(e.target.value),
-      disabled: m,
-      className: "w-28 px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50"
+      defaultValue: y(c),
+      key: `e-${c.toFixed(2)}`,
+      onBlur: (e) => ke(e.target.value),
+      disabled: b,
+      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50 disabled:opacity-40"
     }
-  )), /* @__PURE__ */ t.createElement("div", { className: "text-xs text-text-dim pb-2.5" }, r("length", "Dĺžka"), ": ", f(s - i)), /* @__PURE__ */ t.createElement(
+  )), /* @__PURE__ */ t.createElement("div", { className: "flex items-center justify-between gap-2" }, /* @__PURE__ */ t.createElement("span", { className: "text-xs text-text-dim font-mono" }, y(c - u)), /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: ce,
-      disabled: m || !n || s - i < 0.1,
+      onClick: we,
+      disabled: b || c - u < 0.1,
       className: "px-4 py-2 rounded-xl text-sm font-medium bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
     },
     "+ ",
-    r("add_cut", "Pridať úsek")
-  ))))), l.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold mb-3" }, r("segments", "Úseky"), " (", l.length, ") · ", f(G)), /* @__PURE__ */ t.createElement("div", { className: "space-y-1.5" }, l.map((e, a) => /* @__PURE__ */ t.createElement("div", { key: e.id, className: "flex items-center gap-3 px-3 py-2 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ t.createElement("span", { className: `w-2.5 h-2.5 rounded-full ${R[a % R.length]}` }), /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium" }, r("segment", "Úsek"), " ", a + 1), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim" }, f(e.start), " → ", f(e.end)), /* @__PURE__ */ t.createElement("span", { className: "text-xs text-text-dim" }, "(", f(e.end - e.start), ")"), /* @__PURE__ */ t.createElement(
+    a("add_cut", "Pridať úsek")
+  )))))), i.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold mb-3" }, a("segments", "Úseky"), " (", i.length, ") · ", y(re)), /* @__PURE__ */ t.createElement("div", { className: "space-y-1.5" }, i.map((e, r) => /* @__PURE__ */ t.createElement("div", { key: e.id, className: "flex items-center gap-3 px-3 py-2 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ t.createElement("span", { className: `w-2.5 h-2.5 rounded-full ${D[r % D.length]}` }), /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium" }, a("segment", "Úsek"), " ", r + 1), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim" }, y(e.start), " → ", y(e.end)), /* @__PURE__ */ t.createElement("span", { className: "text-xs text-text-dim" }, "(", y(e.end - e.start), ")"), /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: () => de(e.id),
-      disabled: m,
+      onClick: () => $e(e.id),
+      disabled: b,
       className: "ml-auto px-2 py-1 rounded text-error hover:bg-error/10 text-xs disabled:opacity-30"
     },
     "✕"
-  ))))), l.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, r("output", "Výstup")), /* @__PURE__ */ t.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, r("cut_mode", "Režim strihu")), /* @__PURE__ */ t.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ t.createElement(
+  ))))), i.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, a("output", "Výstup")), /* @__PURE__ */ t.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, a("cut_mode", "Režim strihu")), /* @__PURE__ */ t.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: () => Z("copy"),
-      disabled: m,
-      className: `flex-1 px-3 py-2.5 text-sm ${I === "copy" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
+      onClick: () => K("copy"),
+      disabled: b,
+      className: `flex-1 px-3 py-2.5 text-sm ${T === "copy" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
     },
-    r("mode_copy", "Rýchly")
+    a("mode_copy", "Rýchly (bez prekódovania)")
   ), /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: () => Z("precise"),
-      disabled: m,
-      className: `flex-1 px-3 py-2.5 text-sm ${I === "precise" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
+      onClick: () => K("precise"),
+      disabled: b,
+      className: `flex-1 px-3 py-2.5 text-sm ${T === "precise" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
     },
-    r("mode_precise", "Presný")
-  )), /* @__PURE__ */ t.createElement("p", { className: "mt-1 text-[10px] text-text-dim" }, r("mode_hint", "Rýchly = bez re-enkódu (keyframe). Presný = pomalší, na frame."))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, r("output_name", "Názov súboru")), /* @__PURE__ */ t.createElement(
+    a("mode_precise", "Presný (prekódovanie)")
+  )), /* @__PURE__ */ t.createElement("p", { className: "mt-1 text-[10px] text-text-dim" }, a("mode_hint", "Rýchly = bez re-enkódu (keyframe). Presný = pomalší, na frame."))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, a("output_name", "Názov súboru")), /* @__PURE__ */ t.createElement(
     "input",
     {
-      value: J,
-      onChange: (e) => te(e.target.value),
-      disabled: m,
+      value: Q,
+      onChange: (e) => he(e.target.value),
+      disabled: b,
       className: "w-full px-3 py-2.5 bg-bg rounded-xl border border-border text-sm text-text outline-none focus:border-accent/50"
     }
-  ))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, r("output_dir", "Výstupný priečinok")), /* @__PURE__ */ t.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ t.createElement(
+  ))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, a("output_dir", "Výstupný priečinok")), /* @__PURE__ */ t.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ t.createElement(
     "button",
     {
       onClick: async () => {
-        const e = await b.pickDirectory();
-        e && D(e);
+        const e = await f.pickDirectory();
+        e && z(e);
       },
-      disabled: m,
+      disabled: b,
       className: "px-4 py-2.5 rounded-xl text-sm bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
     },
-    _ ? r("change", "Zmeniť") : r("browse", "Vybrať…")
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim truncate flex-1" }, _ || r("default_output", "(predvolený priečinok)")), _ && /* @__PURE__ */ t.createElement("button", { onClick: () => D(""), disabled: m, className: "px-2 py-1 text-error hover:bg-error/10 rounded" }, "✕"))), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ t.createElement(
+    I ? a("change", "Zmeniť") : a("browse", "Vybrať…")
+  ), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim truncate flex-1" }, I || a("default_output", "(predvolený priečinok)")), I && /* @__PURE__ */ t.createElement("button", { onClick: () => z(""), disabled: b, className: "px-2 py-1 text-error hover:bg-error/10 rounded" }, "✕"))), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ t.createElement(
     "input",
     {
       type: "checkbox",
-      checked: L,
-      onChange: (e) => ee(e.target.checked),
-      disabled: m,
+      checked: V,
+      onChange: (e) => ge(e.target.checked),
+      disabled: b,
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-sm" }, r("merge_after", "Úseky aj spojiť do jedného súboru"))), L && /* @__PURE__ */ t.createElement("div", { className: "flex flex-wrap items-center gap-2 pl-7" }, /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-2 text-sm cursor-pointer" }, /* @__PURE__ */ t.createElement(
+  ), /* @__PURE__ */ t.createElement("span", { className: "text-sm" }, a("merge_after", "Úseky aj spojiť do jedného súboru"))), V && /* @__PURE__ */ t.createElement("div", { className: "flex flex-wrap items-center gap-2 pl-7" }, /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-2 text-sm cursor-pointer" }, /* @__PURE__ */ t.createElement(
     "input",
     {
       type: "checkbox",
       checked: P,
-      onChange: (e) => q(e.target.checked),
-      disabled: m,
+      onChange: (e) => X(e.target.checked),
+      disabled: b,
       className: "w-3.5 h-3.5 accent-[#6366f1]"
     }
-  ), r("music", "Hudba")), P && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement(
+  ), a("music", "Hudba")), P && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement(
     "button",
     {
       onClick: async () => {
-        const e = await b.pickFiles(he, !1);
-        e && !Array.isArray(e) && V(e);
+        const e = await f.pickFiles(Fe, !1);
+        e && !Array.isArray(e) && A(e);
       },
-      disabled: m,
+      disabled: b,
       className: "px-3 py-1.5 rounded-lg text-xs bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
     },
-    S ? T(S) : r("pick_music", "Vybrať hudbu")
-  ), S && /* @__PURE__ */ t.createElement("button", { onClick: () => V(null), disabled: m, className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs" }, "✕"), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-2 text-xs text-text-dim" }, /* @__PURE__ */ t.createElement(
+    C ? Z(C) : a("pick_music", "Vybrať hudbu")
+  ), C && /* @__PURE__ */ t.createElement("button", { onClick: () => A(null), disabled: b, className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs" }, "✕"), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-2 text-xs text-text-dim" }, /* @__PURE__ */ t.createElement(
     "input",
     {
       type: "checkbox",
-      checked: H,
-      onChange: (e) => ae(e.target.checked),
-      disabled: m,
+      checked: G,
+      onChange: (e) => fe(e.target.checked),
+      disabled: b,
       className: "w-3.5 h-3.5 accent-[#6366f1]"
     }
-  ), r("loop_music", "Slučka"))))), X && /* @__PURE__ */ t.createElement("div", { className: "bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error" }, X), l.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, C.length > 0 ? /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("div", { className: "space-y-3" }, C.map((e) => /* @__PURE__ */ t.createElement("div", { key: e.id }, /* @__PURE__ */ t.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium truncate" }, e.label), /* @__PURE__ */ t.createElement("span", { className: `text-xs font-mono ${e.status === "error" ? "text-error" : e.status === "done" ? "text-success" : "text-text-dim"}` }, e.status === "running" ? e.progress >= 0 ? `${Math.round(e.progress)}%` : e.message || "…" : e.status === "done" ? "✓" : e.status === "cancelled" ? r("cancelled", "zrušené") : e.status === "error" ? r("error", "chyba") : e.message)), /* @__PURE__ */ t.createElement("div", { className: "w-full h-2 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ t.createElement(
+  ), a("loop_music", "Slučka"))))), j && /* @__PURE__ */ t.createElement("div", { className: "bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error" }, j), i.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, L.length > 0 ? /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("div", { className: "space-y-3" }, L.map((e) => /* @__PURE__ */ t.createElement("div", { key: e.id }, /* @__PURE__ */ t.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium truncate" }, e.label), /* @__PURE__ */ t.createElement(
+    "span",
+    {
+      className: `text-xs font-mono ${e.status === "error" ? "text-error" : e.status === "done" ? "text-success" : "text-text-dim"}`
+    },
+    e.status === "running" ? e.progress >= 0 ? `${Math.round(e.progress)}%${e.message ? ` · ${e.message}` : ""}` : e.message || "…" : e.status === "done" ? "✓" : e.status === "cancelled" ? a("cancelled", "zrušené") : e.status === "error" ? a("error", "chyba") : e.message
+  )), /* @__PURE__ */ t.createElement("div", { className: "w-full h-2 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ t.createElement(
     "div",
     {
       className: `h-full rounded-full transition-all duration-300 ${e.status === "error" ? "bg-error" : e.status === "done" ? "bg-success" : "bg-accent"}`,
       style: { width: e.status === "done" ? "100%" : `${Math.max(2, Math.min(100, e.progress))}%` }
     }
-  ))))), /* @__PURE__ */ t.createElement("div", { className: "flex gap-2" }, m && /* @__PURE__ */ t.createElement(
+  ))))), /* @__PURE__ */ t.createElement("div", { className: "flex gap-2" }, b && /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: me,
+      onClick: Se,
       className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
     },
-    r("cancel_all", "Zrušiť všetko")
-  ), !m && /* @__PURE__ */ t.createElement(
+    a("cancel_all", "Zrušiť všetko")
+  ), !b && /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: ue,
+      onClick: _e,
       className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
     },
-    r("new_cut", "Nové strihanie")
+    a("new_cut", "Nové strihanie")
   ))) : /* @__PURE__ */ t.createElement(
     "button",
     {
-      onClick: ie,
-      disabled: m || !n,
+      onClick: Me,
+      disabled: b || !n,
       className: "w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
     },
-    r("export", "Exportovať"),
+    a("export", "Exportovať"),
     " (",
-    l.length,
+    i.length,
     " ",
-    r("pieces", "dielov"),
+    a("pieces", "dielov"),
     " · ",
-    f(G),
+    y(re),
     ")"
-  )), K.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, r("log", "Log")), /* @__PURE__ */ t.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, K.map((e, a) => /* @__PURE__ */ t.createElement("div", { key: a }, e))))));
+  )), Y.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, a("log", "Log")), /* @__PURE__ */ t.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, Y.map((e, r) => /* @__PURE__ */ t.createElement("div", { key: r }, e))))));
 }
 export {
-  Ee as default
+  Te as default
 };
