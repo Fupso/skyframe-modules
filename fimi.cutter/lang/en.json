@@ -3,7 +3,7 @@
   "pick_video": "Pick video",
   "change_video": "Change video",
   "loaded": "Loaded",
-  "timeline_hint": "Click the timeline or drag the markers — the player will show that time.",
+  "timeline_hint": "Hold and drag on the timeline for live preview. A click sets the nearest marker.",
   "start": "Start",
   "end": "End",
   "length": "Length",

@@ -3,7 +3,7 @@
   "pick_video": "Video auswählen",
   "change_video": "Video ändern",
   "loaded": "Geladen",
-  "timeline_hint": "Klicke auf die Zeitleiste oder ziehe die Markierungen — der Player zeigt die Zeit an.",
+  "timeline_hint": "Halte die Maustaste auf der Zeitleiste und ziehe für eine Live-Vorschau. Ein Klick setzt die nächste Markierung.",
   "start": "Start",
   "end": "Ende",
   "length": "Länge",
