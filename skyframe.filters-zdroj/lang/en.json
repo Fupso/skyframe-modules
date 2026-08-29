@@ -24,5 +24,8 @@
   "tool_clear": "Clear filter",
   "intensity": "Intensity",
   "preview_compare": "Left original, right derived tone",
-  "sky_only": "Bright areas only (sky)"
+  "sky_only": "Bright areas only (sky)",
+  "export": "Export video with filter",
+  "exporting": "Exporting…",
+  "sky_export_note": "Export currently applies the tone to the whole video."
 }

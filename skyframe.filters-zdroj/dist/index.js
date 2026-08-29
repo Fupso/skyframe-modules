@@ -33,6 +33,8 @@ var initialState = {
   tempPhotoUrl: "",
   presetName: "",
   fromActiveMedia: false,
+  job: null,
+  // {id, status, progress, message, result} | null
   restored: false
 };
 var state = { ...initialState };
@@ -154,6 +156,58 @@ function analyzePhoto(file) {
     img.src = URL.createObjectURL(file);
   });
 }
+function buildVf(style, intensity) {
+  const s = scaledStyle(style, intensity);
+  const ch = (name, c) => {
+    const off = Math.round(c.intercept * 255);
+    const sign = off >= 0 ? "+" : "";
+    return `${name}='clip(val${sign}${off}\\,0\\,255)'`;
+  };
+  const lut = `lutrgb=${ch("r", s.channels.r)}:${ch("g", s.channels.g)}:${ch("b", s.channels.b)}`;
+  const eq = `eq=brightness=${((s.css.brightness - 100) / 100 * 0.5).toFixed(3)}:contrast=${(s.css.contrast / 100).toFixed(3)}:saturation=${(s.css.saturate / 100).toFixed(3)}`;
+  return `${lut},${eq}`;
+}
+function watchJob(jobId) {
+  return new Promise((resolve) => {
+    let unlisten;
+    api.listenJob(jobId, (job) => {
+      store.setState({ job });
+      if (job.status !== "running") {
+        unlisten?.();
+        resolve(job);
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+  });
+}
+async function exportVideo() {
+  const s = store.getState();
+  if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
+  const vf = buildVf(s.activeStyle, s.intensity);
+  try {
+    const jobId = await api.invoke("filter_video", {
+      input: s.videoPath,
+      vf,
+      af: null,
+      quality: "21",
+      outputName: null,
+      outputDir: null,
+      moduleId: api.moduleId
+    });
+    store.setState({
+      job: { id: jobId, status: "running", progress: 0, message: "", result: null }
+    });
+    const res = await watchJob(jobId);
+    if (res.status === "done" && res.result && api.setActiveMedia) {
+      api.setActiveMedia(res.result);
+    }
+  } catch (e) {
+    store.setState({
+      job: { id: "error", status: "error", progress: 0, message: String(e), result: null }
+    });
+  }
+}
 if (api.registerToolbar) {
   api.registerToolbar([
     {
@@ -267,7 +321,16 @@ function SidePanel() {
       onChange: (e) => store.setState({ skyOnly: e.target.checked }),
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len svetl\xE9 partie (obloha)")))), /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len svetl\xE9 partie (obloha)"))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, s.skyOnly && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("sky_export_note", "Export zatia\u013E aplikuje t\xF3n na cel\xE9 video.")), !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => void exportVideo(),
+      disabled: !s.videoPath,
+      className: "w-full px-3 py-2 rounded-xl text-xs font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
+    },
+    "\u2B07\uFE0F ",
+    t("export", "Exportova\u0165 video s filtrom")
+  ) : /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center mb-1" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs" }, t("exporting", "Exportujem\u2026")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[11px] font-mono text-text-dim" }, Math.round(s.job.progress), "%")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "w-full h-1.5 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "h-full rounded-full bg-accent transition-all duration-300", style: { width: `${Math.max(2, Math.min(100, s.job.progress))}%` } }))), s.job?.status === "done" && s.job.result && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] font-mono text-success break-all" }, "\u2713 ", s.job.result), s.job?.status === "error" && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-error break-all" }, "\u2717 ", s.job.message))), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ showNewStyle: true }),

@@ -1,4 +1,4 @@
-// skyframe.filters v1.2.0 — Filtre
+// skyframe.filters v1.3.0 — Filtre
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
 // priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
 // (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
@@ -30,6 +30,7 @@ const initialState = {
   tempPhotoUrl: "",
   presetName: "",
   fromActiveMedia: false,
+  job: null,            // {id, status, progress, message, result} | null
   restored: false,
 };
 
@@ -212,6 +213,65 @@ function analyzePhoto(file) {
   });
 }
 
+/** Zostaví ffmpeg -vf reťazec zo štýlu (lutrgb kanálové posuny + eq jas/kontrast/sýtosť). */
+function buildVf(style, intensity) {
+  const s = scaledStyle(style, intensity);
+  const ch = (name, c) => {
+    const off = Math.round(c.intercept * 255);
+    const sign = off >= 0 ? "+" : "";
+    return `${name}='clip(val${sign}${off}\\,0\\,255)'`;
+  };
+  const lut = `lutrgb=${ch("r", s.channels.r)}:${ch("g", s.channels.g)}:${ch("b", s.channels.b)}`;
+  const eq = `eq=brightness=${(((s.css.brightness - 100) / 100) * 0.5).toFixed(3)}:contrast=${(s.css.contrast / 100).toFixed(3)}:saturation=${(s.css.saturate / 100).toFixed(3)}`;
+  return `${lut},${eq}`;
+}
+
+function watchJob(jobId) {
+  return new Promise((resolve) => {
+    let unlisten;
+    api
+      .listenJob(jobId, (job) => {
+        store.setState({ job });
+        if (job.status !== "running") {
+          unlisten?.();
+          resolve(job);
+        }
+      })
+      .then((u) => {
+        unlisten = u;
+      });
+  });
+}
+
+/** Vypáli aktívny štýl do videa cez core filter_video (ffmpeg). */
+async function exportVideo() {
+  const s = store.getState();
+  if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
+  const vf = buildVf(s.activeStyle, s.intensity);
+  try {
+    const jobId = await api.invoke("filter_video", {
+      input: s.videoPath,
+      vf,
+      af: null,
+      quality: "21",
+      outputName: null,
+      outputDir: null,
+      moduleId: api.moduleId,
+    });
+    store.setState({
+      job: { id: jobId, status: "running", progress: 0, message: "", result: null },
+    });
+    const res = await watchJob(jobId);
+    if (res.status === "done" && res.result && api.setActiveMedia) {
+      api.setActiveMedia(res.result);
+    }
+  } catch (e) {
+    store.setState({
+      job: { id: "error", status: "error", progress: 0, message: String(e), result: null },
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Toolbar
 // ---------------------------------------------------------------------------
@@ -355,6 +415,40 @@ function SidePanel() {
             />
             <span className="text-sm">{t("sky_only", "Len svetlé partie (obloha)")}</span>
           </label>
+        )}
+
+        {/* Export — vypáli filter do videa */}
+        {s.activeStyle && (
+          <div className="space-y-2 pt-2 border-t border-border">
+            {s.skyOnly && (
+              <p className="text-[10px] text-text-dim">{t("sky_export_note", "Export zatiaľ aplikuje tón na celé video.")}</p>
+            )}
+            {!s.job || s.job.status !== "running" ? (
+              <button
+                onClick={() => void exportVideo()}
+                disabled={!s.videoPath}
+                className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
+              >
+                ⬇️ {t("export", "Exportovať video s filtrom")}
+              </button>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs">{t("exporting", "Exportujem…")}</span>
+                  <span className="text-[11px] font-mono text-text-dim">{Math.round(s.job.progress)}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-bg rounded-full overflow-hidden border border-border">
+                  <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${Math.max(2, Math.min(100, s.job.progress))}%` }} />
+                </div>
+              </div>
+            )}
+            {s.job?.status === "done" && s.job.result && (
+              <p className="text-[10px] font-mono text-success break-all">✓ {s.job.result}</p>
+            )}
+            {s.job?.status === "error" && (
+              <p className="text-[10px] text-error break-all">✗ {s.job.message}</p>
+            )}
+          </div>
         )}
       </div>
 

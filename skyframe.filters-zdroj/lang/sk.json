@@ -24,5 +24,8 @@
   "tool_clear": "Zrušiť filter",
   "intensity": "Intenzita",
   "preview_compare": "Vľavo originál, vpravo odvodený tón",
-  "sky_only": "Len svetlé partie (obloha)"
+  "sky_only": "Len svetlé partie (obloha)",
+  "export": "Exportovať video s filtrom",
+  "exporting": "Exportujem…",
+  "sky_export_note": "Export zatiaľ aplikuje tón na celé video."
 }

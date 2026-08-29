@@ -24,5 +24,8 @@
   "tool_clear": "Filter entfernen",
   "intensity": "Intensität",
   "preview_compare": "Links Original, rechts abgeleiteter Ton",
-  "sky_only": "Nur helle Bereiche (Himmel)"
+  "sky_only": "Nur helle Bereiche (Himmel)",
+  "export": "Video mit Filter exportieren",
+  "exporting": "Exportiere…",
+  "sky_export_note": "Der Export wendet den Ton derzeit auf das gesamte Video an."
 }
