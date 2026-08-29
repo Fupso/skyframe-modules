@@ -1,4 +1,4 @@
-// fimi.merger v2.3.0 — Spájač
+// fimi.merger v2.3.1 — Spájač
 // Layout: zdroj + lety + náhľad v hlavnej ploche, hudba/výstup/spustenie
 // v pravom paneli core (registerSidePanel), nástroje v toolbare (registerToolbar).
 // Zdieľaný stav ide cez modulový store (panel sa renderuje v strome core).
@@ -253,6 +253,7 @@ async function startMerge() {
       const res = await watchJob(jobId);
       if (res.status === "done" && res.result) {
         log(`✓ ${res.result}`);
+        if (api.setActiveMedia) api.setActiveMedia(res.result);
         if (s.convertAfter) {
           const preset = PRESETS.find((p) => p.id === s.preset);
           const label = preset ? (preset.labelKey ? t(preset.labelKey, preset.labelKey) : preset.label) : s.preset;
@@ -278,7 +279,10 @@ async function startMerge() {
             ],
           }));
           const convRes = await watchJob(convId);
-          if (convRes.status === "done") log(`✓ ${convRes.result}`);
+          if (convRes.status === "done") {
+            log(`✓ ${convRes.result}`);
+            if (convRes.result && api.setActiveMedia) api.setActiveMedia(convRes.result);
+          }
         }
       } else if (res.status === "error") {
         log(`✗ ${g.name}: ${res.message}`);

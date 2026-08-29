@@ -1,4 +1,4 @@
-// merger-build/react-shim.js
+// ../../../../tmp/merger-build/react-shim.js
 var R = window.React;
 var react_shim_default = R;
 var useState = R.useState;
@@ -9,7 +9,7 @@ var useCallback = R.useCallback;
 var useSyncExternalStore = R.useSyncExternalStore;
 var Fragment = R.Fragment;
 
-// ../mnt/agents/output/fimi.merger-zdroj/src/index.jsx
+// src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useMemo: useMemo2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
@@ -211,6 +211,7 @@ async function startMerge() {
       const res = await watchJob(jobId);
       if (res.status === "done" && res.result) {
         log(`\u2713 ${res.result}`);
+        if (api.setActiveMedia) api.setActiveMedia(res.result);
         if (s.convertAfter) {
           const preset = PRESETS.find((p) => p.id === s.preset);
           const label = preset ? preset.labelKey ? t(preset.labelKey, preset.labelKey) : preset.label : s.preset;
@@ -236,7 +237,10 @@ async function startMerge() {
             ]
           }));
           const convRes = await watchJob(convId);
-          if (convRes.status === "done") log(`\u2713 ${convRes.result}`);
+          if (convRes.status === "done") {
+            log(`\u2713 ${convRes.result}`);
+            if (convRes.result && api.setActiveMedia) api.setActiveMedia(convRes.result);
+          }
         }
       } else if (res.status === "error") {
         log(`\u2717 ${g.name}: ${res.message}`);
