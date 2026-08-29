@@ -21,5 +21,7 @@
   "favorite": "Favorite",
   "tool_open": "Pick video",
   "tool_new_style": "New style",
-  "tool_clear": "Clear filter"
+  "tool_clear": "Clear filter",
+  "intensity": "Intensity",
+  "preview_compare": "Left original, right derived tone"
 }

@@ -17,15 +17,17 @@ var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }
 var initialState = {
   videoPath: null,
   // cesta k videu (aktívne médium / výber)
-  activeFilters: null,
-  // {brightness, contrast, saturate, sepia, hueRotate} | null
+  activeStyle: null,
+  // {channels:{r,g,b:{slope,intercept}}, css:{brightness,contrast,saturate}} | null
   activePresetId: null,
+  intensity: 80,
+  // sila štýlu v % (mierni kanálové posuny aj css)
   presets: [],
-  // {id, name, filters, avgColor, favorite, createdAt}[]
+  // {id, name, style, avgColor, favorite, createdAt}[]
   showNewStyle: false,
   analyzing: false,
   tempAnalysis: null,
-  // {filters, avgColor}
+  // {style, avgColor}
   tempPhotoUrl: "",
   presetName: "",
   fromActiveMedia: false,
@@ -50,9 +52,33 @@ function useStore() {
 function baseName(p) {
   return p.split(/[\\/]/).pop() ?? p;
 }
-function filterString(f) {
-  if (!f) return "";
-  return `brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturate}%) sepia(${f.sepia}%) hue-rotate(${f.hueRotate}deg)`;
+var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var MAIN_FILTER_ID = "skyframe-style-channels";
+function scaledStyle(style, intensity) {
+  const k = clamp(intensity, 0, 100) / 100;
+  const ch = {};
+  for (const c of ["r", "g", "b"]) {
+    ch[c] = {
+      slope: 1 + (style.channels[c].slope - 1) * k,
+      intercept: style.channels[c].intercept * k
+    };
+  }
+  const css = {
+    brightness: 100 + (style.css.brightness - 100) * k,
+    contrast: 100 + (style.css.contrast - 100) * k,
+    saturate: 100 + (style.css.saturate - 100) * k
+  };
+  return { channels: ch, css };
+}
+function fullFilterString(style, intensity, filterId = MAIN_FILTER_ID) {
+  if (!style) return "";
+  const s = scaledStyle(style, intensity);
+  return `url(#${filterId}) brightness(${s.css.brightness.toFixed(1)}%) contrast(${s.css.contrast.toFixed(1)}%) saturate(${s.css.saturate.toFixed(1)}%)`;
+}
+function ChannelFilterDefs({ style, intensity, filterId = MAIN_FILTER_ID }) {
+  if (!style) return null;
+  const s = scaledStyle(style, intensity);
+  return /* @__PURE__ */ react_shim_default.createElement("svg", { width: "0", height: "0", style: { position: "absolute" }, "aria-hidden": "true" }, /* @__PURE__ */ react_shim_default.createElement("filter", { id: filterId, colorInterpolationFilters: "sRGB" }, /* @__PURE__ */ react_shim_default.createElement("feComponentTransfer", null, /* @__PURE__ */ react_shim_default.createElement("feFuncR", { type: "linear", slope: s.channels.r.slope.toFixed(4), intercept: s.channels.r.intercept.toFixed(4) }), /* @__PURE__ */ react_shim_default.createElement("feFuncG", { type: "linear", slope: s.channels.g.slope.toFixed(4), intercept: s.channels.g.intercept.toFixed(4) }), /* @__PURE__ */ react_shim_default.createElement("feFuncB", { type: "linear", slope: s.channels.b.slope.toFixed(4), intercept: s.channels.b.intercept.toFixed(4) }))));
 }
 async function pickVideo() {
   const f = await api.pickFiles(VIDEO_FILTERS, false);
@@ -70,39 +96,42 @@ function analyzePhoto(file) {
   return new Promise(function(resolve) {
     const img = new Image();
     img.onload = function() {
+      const N = 100;
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      canvas.width = 100;
-      canvas.height = 100;
-      ctx.drawImage(img, 0, 0, 100, 100);
-      const data = ctx.getImageData(0, 0, 100, 100).data;
-      let r = 0, g = 0, b = 0, warm = 0, cool = 0, sat = 0, bright = 0, dark = 0;
+      canvas.width = N;
+      canvas.height = N;
+      ctx.drawImage(img, 0, 0, N, N);
+      const data = ctx.getImageData(0, 0, N, N).data;
+      let r = 0, g = 0, b = 0, lumSum = 0, lumSq = 0, satSum = 0;
       const pc = data.length / 4;
       for (let i = 0; i < data.length; i += 4) {
         const pr = data[i], pg = data[i + 1], pb = data[i + 2];
         r += pr;
         g += pg;
         b += pb;
-        if (pr > pb + 20) warm++;
-        else if (pb > pr + 20) cool++;
+        const lum2 = (pr + pg + pb) / 3 / 255;
+        lumSum += lum2;
+        lumSq += lum2 * lum2;
         const mx = Math.max(pr, pg, pb), mn = Math.min(pr, pg, pb);
-        sat += (mx - mn) / 255;
-        const br2 = (pr + pg + pb) / 3;
-        if (br2 > 180) bright++;
-        else if (br2 < 75) dark++;
+        satSum += mx > 0 ? (mx - mn) / mx : 0;
       }
-      const avgSat = sat / pc * 100, wm = warm / pc, cl = cool / pc, br = (r + g + b) / 3 / pc / 255 * 100;
-      const f = {
-        brightness: Math.round(90 + (br - 50) * 0.4),
-        contrast: Math.round(100 + (avgSat - 50) * 0.8),
-        saturate: Math.round(80 + avgSat * 0.8),
-        sepia: Math.round(wm * 60),
-        hueRotate: wm > 0.4 ? Math.round(wm * -15) : cl > 0.4 ? Math.round(cl * 10) : 0
+      const avgR = r / pc / 255, avgG = g / pc / 255, avgB = b / pc / 255;
+      const lum = lumSum / pc;
+      const std = Math.sqrt(Math.max(0, lumSq / pc - lum * lum));
+      const sat = satSum / pc;
+      const chan = (a) => ({ slope: 1, intercept: clamp(a - 0.5, -0.3, 0.3) });
+      const style = {
+        channels: { r: chan(avgR), g: chan(avgG), b: chan(avgB) },
+        css: {
+          brightness: clamp(100 + (lum - 0.5) * 60, 70, 140),
+          contrast: clamp(100 + (std - 0.18) * 160, 70, 150),
+          saturate: clamp(60 + sat * 200, 60, 180)
+        }
       };
-      if (bright > 0.3 && dark > 0.2) f.contrast = Math.min(f.contrast + 20, 150);
       resolve({
-        avgColor: { r: Math.round(r / pc), g: Math.round(g / pc), b: Math.round(b / pc) },
-        filters: f
+        avgColor: { r: Math.round(avgR * 255), g: Math.round(avgG * 255), b: Math.round(avgB * 255) },
+        style
       });
     };
     img.src = URL.createObjectURL(file);
@@ -126,7 +155,7 @@ if (api.registerToolbar) {
       id: "clear",
       icon: "\u{1F6AB}",
       labelKey: "tool_clear",
-      onClick: () => store.setState({ activeFilters: null, activePresetId: null })
+      onClick: () => store.setState({ activeStyle: null, activePresetId: null })
     }
   ]);
 }
@@ -138,7 +167,7 @@ function PresetCard({ preset }) {
     "div",
     {
       onClick: () => store.setState(
-        isActive ? { activeFilters: null, activePresetId: null } : { activeFilters: preset.filters, activePresetId: preset.id }
+        isActive ? { activeStyle: null, activePresetId: null } : { activeStyle: preset.style, activePresetId: preset.id }
       ),
       className: `rounded-xl border p-2 text-center transition-colors cursor-pointer relative ${isActive ? "border-accent bg-accent/10" : "border-border bg-bg hover:border-accent/40"}`
     },
@@ -188,14 +217,24 @@ function SidePanel() {
   const s = useStore();
   const favorites = s.presets.filter((p) => p.favorite);
   const others = s.presets.filter((p) => !p.favorite);
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-4 px-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim" }, s.activeFilters ? t("filter_on", "Filter akt\xEDvny") : t("filter_off", "\u017Diadny filter")), s.activeFilters && /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-4 px-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim" }, s.activeStyle ? t("filter_on", "Filter akt\xEDvny") : t("filter_off", "\u017Diadny filter")), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: () => store.setState({ activeFilters: null, activePresetId: null }),
+      onClick: () => store.setState({ activeStyle: null, activePresetId: null }),
       className: "px-2 py-1 rounded text-[10px] text-text-dim border border-border hover:border-accent/40"
     },
     t("clear", "Zru\u0161i\u0165 filter")
-  )), /* @__PURE__ */ react_shim_default.createElement(
+  )), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1" }, t("intensity", "Intenzita"), ": ", s.intensity, " %"), /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      type: "range",
+      min: 0,
+      max: 100,
+      value: s.intensity,
+      onChange: (e) => store.setState({ intensity: Number(e.target.value) }),
+      className: "w-full accent-[#6366f1]"
+    }
+  ))), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ showNewStyle: true }),
@@ -216,7 +255,9 @@ function Filters() {
     (async () => {
       try {
         const cfg = await api.invoke("get_module_config", { id: api.moduleId });
-        if (Array.isArray(cfg?.presets)) store.setState({ presets: cfg.presets });
+        if (Array.isArray(cfg?.presets)) {
+          store.setState({ presets: cfg.presets.filter((p) => p && p.style && p.style.channels) });
+        }
       } catch {
       }
       store.setState({ restored: true });
@@ -245,7 +286,7 @@ function Filters() {
     const np = {
       id: Date.now().toString(),
       name: st.presetName.trim(),
-      filters: st.tempAnalysis.filters,
+      style: st.tempAnalysis.style,
       avgColor: st.tempAnalysis.avgColor,
       favorite: false,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -254,7 +295,7 @@ function Filters() {
     store.setState({ presetName: "", tempAnalysis: null, tempPhotoUrl: "", showNewStyle: false });
   };
   const closeModal = () => store.setState({ showNewStyle: false, tempAnalysis: null, presetName: "", tempPhotoUrl: "" });
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, "\u{1F3A8} ", t("title", "Filtre")), /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement(ChannelFilterDefs, { style: s.activeStyle, intensity: s.intensity }), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, "\u{1F3A8} ", t("title", "Filtre")), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: pickVideo,
@@ -265,10 +306,10 @@ function Filters() {
     "div",
     {
       className: "rounded-xl overflow-hidden border border-border bg-black",
-      style: { filter: filterString(s.activeFilters) }
+      style: { filter: fullFilterString(s.activeStyle, s.intensity) }
     },
     /* @__PURE__ */ react_shim_default.createElement(PlayerShell, { src: s.videoPath })
-  ), s.activeFilters && /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-2 text-[11px] font-mono text-text-dim" }, filterString(s.activeFilters))) : /* @__PURE__ */ react_shim_default.createElement(
+  )) : /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
       onClick: pickVideo,
@@ -299,7 +340,15 @@ function Filters() {
         },
         "\u{1F4C1} ",
         t("pick_photo", "Vybra\u0165 fotku")
-      ), /* @__PURE__ */ react_shim_default.createElement("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: handleStylePhoto })) : /* @__PURE__ */ react_shim_default.createElement("div", null, s.tempPhotoUrl && /* @__PURE__ */ react_shim_default.createElement("img", { src: s.tempPhotoUrl, alt: "", className: "rounded-lg mb-3", style: { width: "100%", height: 120, objectFit: "cover" } }), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] font-mono text-text-dim mb-3" }, filterString(s.tempAnalysis.filters)), /* @__PURE__ */ react_shim_default.createElement(
+      ), /* @__PURE__ */ react_shim_default.createElement("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: handleStylePhoto })) : /* @__PURE__ */ react_shim_default.createElement("div", null, s.tempPhotoUrl && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-2 mb-3" }, /* @__PURE__ */ react_shim_default.createElement("img", { src: s.tempPhotoUrl, alt: "", className: "rounded-lg", style: { width: "48%", height: 100, objectFit: "cover" } }), /* @__PURE__ */ react_shim_default.createElement(
+        "img",
+        {
+          src: s.tempPhotoUrl,
+          alt: "",
+          className: "rounded-lg",
+          style: { width: "48%", height: 100, objectFit: "cover", filter: fullFilterString(s.tempAnalysis.style, s.intensity, "skyframe-style-preview") }
+        }
+      )), s.tempAnalysis && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement(ChannelFilterDefs, { style: s.tempAnalysis.style, intensity: s.intensity, filterId: "skyframe-style-preview" }), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim mb-2 -mt-1" }, t("preview_compare", "V\u013Eavo origin\xE1l, vpravo odvoden\xFD t\xF3n"))), /* @__PURE__ */ react_shim_default.createElement(
         "input",
         {
           type: "text",

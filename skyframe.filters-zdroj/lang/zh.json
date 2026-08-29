@@ -21,5 +21,7 @@
   "favorite": "收藏",
   "tool_open": "选择视频",
   "tool_new_style": "新风格",
-  "tool_clear": "清除滤镜"
+  "tool_clear": "清除滤镜",
+  "intensity": "强度",
+  "preview_compare": "左为原图，右为生成的色调"
 }

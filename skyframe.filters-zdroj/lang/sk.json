@@ -21,5 +21,7 @@
   "favorite": "Obľúbené",
   "tool_open": "Vybrať video",
   "tool_new_style": "Nový štýl",
-  "tool_clear": "Zrušiť filter"
+  "tool_clear": "Zrušiť filter",
+  "intensity": "Intenzita",
+  "preview_compare": "Vľavo originál, vpravo odvodený tón"
 }

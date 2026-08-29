@@ -21,5 +21,7 @@
   "favorite": "Favorit",
   "tool_open": "Video wählen",
   "tool_new_style": "Neuer Stil",
-  "tool_clear": "Filter entfernen"
+  "tool_clear": "Filter entfernen",
+  "intensity": "Intensität",
+  "preview_compare": "Links Original, rechts abgeleiteter Ton"
 }

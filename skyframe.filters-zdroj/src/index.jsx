@@ -1,5 +1,7 @@
-// fimi.style-transfer v1.0.0 — Filtre
-// Náhľad filtrov na videu naživo (CSS filter), vlastné štýly z fotky.
+// skyframe.filters v1.1.0 — Filtre
+// Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
+// priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
+// (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
 // Video = aktívne médium z core (napr. výstup Spájača) alebo výber súboru.
 // Štýly v pravom paneli core (registerSidePanel), nástroje v toolbare.
 
@@ -17,12 +19,13 @@ const VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"]
 
 const initialState = {
   videoPath: null,      // cesta k videu (aktívne médium / výber)
-  activeFilters: null,  // {brightness, contrast, saturate, sepia, hueRotate} | null
+  activeStyle: null,    // {channels:{r,g,b:{slope,intercept}}, css:{brightness,contrast,saturate}} | null
   activePresetId: null,
-  presets: [],          // {id, name, filters, avgColor, favorite, createdAt}[]
+  intensity: 80,        // sila štýlu v % (mierni kanálové posuny aj css)
+  presets: [],          // {id, name, style, avgColor, favorite, createdAt}[]
   showNewStyle: false,
   analyzing: false,
-  tempAnalysis: null,   // {filters, avgColor}
+  tempAnalysis: null,   // {style, avgColor}
   tempPhotoUrl: "",
   presetName: "",
   fromActiveMedia: false,
@@ -56,9 +59,51 @@ function baseName(p) {
   return p.split(/[\\/]/).pop() ?? p;
 }
 
-function filterString(f) {
-  if (!f) return "";
-  return `brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturate}%) sepia(${f.sepia}%) hue-rotate(${f.hueRotate}deg)`;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+/** Zostaví SVG feComponentTransfer pre kanálový prenos farby zo štýlu. */
+const MAIN_FILTER_ID = "skyframe-style-channels";
+
+/** Aplikuje intenzitu na štýl (1 = plná sila). */
+function scaledStyle(style, intensity) {
+  const k = clamp(intensity, 0, 100) / 100;
+  const ch = {};
+  for (const c of ["r", "g", "b"]) {
+    ch[c] = {
+      slope: 1 + (style.channels[c].slope - 1) * k,
+      intercept: style.channels[c].intercept * k,
+    };
+  }
+  const css = {
+    brightness: 100 + (style.css.brightness - 100) * k,
+    contrast: 100 + (style.css.contrast - 100) * k,
+    saturate: 100 + (style.css.saturate - 100) * k,
+  };
+  return { channels: ch, css };
+}
+
+/** Finálny CSS filter reťazec: SVG kanály + jas/kontrast/sýtosť. */
+function fullFilterString(style, intensity, filterId = MAIN_FILTER_ID) {
+  if (!style) return "";
+  const s = scaledStyle(style, intensity);
+  return `url(#${filterId}) brightness(${s.css.brightness.toFixed(1)}%) contrast(${s.css.contrast.toFixed(1)}%) saturate(${s.css.saturate.toFixed(1)}%)`;
+}
+
+/** Skrytý SVG filter s feComponentTransfer — definícia pre url(#...) vyššie. */
+function ChannelFilterDefs({ style, intensity, filterId = MAIN_FILTER_ID }) {
+  if (!style) return null;
+  const s = scaledStyle(style, intensity);
+  return (
+    <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+      <filter id={filterId} colorInterpolationFilters="sRGB">
+        <feComponentTransfer>
+          <feFuncR type="linear" slope={s.channels.r.slope.toFixed(4)} intercept={s.channels.r.intercept.toFixed(4)} />
+          <feFuncG type="linear" slope={s.channels.g.slope.toFixed(4)} intercept={s.channels.g.intercept.toFixed(4)} />
+          <feFuncB type="linear" slope={s.channels.b.slope.toFixed(4)} intercept={s.channels.b.intercept.toFixed(4)} />
+        </feComponentTransfer>
+      </filter>
+    </svg>
+  );
 }
 
 async function pickVideo() {
@@ -76,40 +121,52 @@ function savePresets(presets) {
     .catch(() => {});
 }
 
-/** Analýza fotky -> odvodený filter (rovnaký algoritmus ako pôvodný draft). */
+/**
+ * Analýza fotky -> štýl v2.
+ * Kanálové posuny: neutrálna sivá (0.5) sa zobrazí na priemernú farbu fotky,
+ * čierna/biela zostanú (intercept = avg - 0.5, obmedzený). Jas/kontrast/sýtosť
+ * z globálnej štatistiky fotky.
+ */
 function analyzePhoto(file) {
   return new Promise(function (resolve) {
     const img = new Image();
     img.onload = function () {
+      const N = 100;
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      canvas.width = 100;
-      canvas.height = 100;
-      ctx.drawImage(img, 0, 0, 100, 100);
-      const data = ctx.getImageData(0, 0, 100, 100).data;
-      let r = 0, g = 0, b = 0, warm = 0, cool = 0, sat = 0, bright = 0, dark = 0;
+      canvas.width = N;
+      canvas.height = N;
+      ctx.drawImage(img, 0, 0, N, N);
+      const data = ctx.getImageData(0, 0, N, N).data;
+      let r = 0, g = 0, b = 0, lumSum = 0, lumSq = 0, satSum = 0;
       const pc = data.length / 4;
       for (let i = 0; i < data.length; i += 4) {
         const pr = data[i], pg = data[i + 1], pb = data[i + 2];
         r += pr; g += pg; b += pb;
-        if (pr > pb + 20) warm++; else if (pb > pr + 20) cool++;
+        const lum = (pr + pg + pb) / 3 / 255;
+        lumSum += lum;
+        lumSq += lum * lum;
         const mx = Math.max(pr, pg, pb), mn = Math.min(pr, pg, pb);
-        sat += (mx - mn) / 255;
-        const br = (pr + pg + pb) / 3;
-        if (br > 180) bright++; else if (br < 75) dark++;
+        satSum += mx > 0 ? (mx - mn) / mx : 0;
       }
-      const avgSat = (sat / pc) * 100, wm = warm / pc, cl = cool / pc, br = ((r + g + b) / 3 / pc / 255) * 100;
-      const f = {
-        brightness: Math.round(90 + (br - 50) * 0.4),
-        contrast: Math.round(100 + (avgSat - 50) * 0.8),
-        saturate: Math.round(80 + avgSat * 0.8),
-        sepia: Math.round(wm * 60),
-        hueRotate: wm > 0.4 ? Math.round(wm * -15) : cl > 0.4 ? Math.round(cl * 10) : 0,
+      const avgR = r / pc / 255, avgG = g / pc / 255, avgB = b / pc / 255;
+      const lum = lumSum / pc;
+      const std = Math.sqrt(Math.max(0, lumSq / pc - lum * lum));
+      const sat = satSum / pc;
+
+      // Kanálový posun — koľko treba pridať, aby sivá (0.5) mala farbu fotky
+      const chan = (a) => ({ slope: 1, intercept: clamp(a - 0.5, -0.3, 0.3) });
+      const style = {
+        channels: { r: chan(avgR), g: chan(avgG), b: chan(avgB) },
+        css: {
+          brightness: clamp(100 + (lum - 0.5) * 60, 70, 140),
+          contrast: clamp(100 + (std - 0.18) * 160, 70, 150),
+          saturate: clamp(60 + sat * 200, 60, 180),
+        },
       };
-      if (bright > 0.3 && dark > 0.2) f.contrast = Math.min(f.contrast + 20, 150);
       resolve({
-        avgColor: { r: Math.round(r / pc), g: Math.round(g / pc), b: Math.round(b / pc) },
-        filters: f,
+        avgColor: { r: Math.round(avgR * 255), g: Math.round(avgG * 255), b: Math.round(avgB * 255) },
+        style,
       });
     };
     img.src = URL.createObjectURL(file);
@@ -138,7 +195,7 @@ if (api.registerToolbar) {
       id: "clear",
       icon: "🚫",
       labelKey: "tool_clear",
-      onClick: () => store.setState({ activeFilters: null, activePresetId: null }),
+      onClick: () => store.setState({ activeStyle: null, activePresetId: null }),
     },
   ]);
 }
@@ -157,8 +214,8 @@ function PresetCard({ preset }) {
       onClick={() =>
         store.setState(
           isActive
-            ? { activeFilters: null, activePresetId: null }
-            : { activeFilters: preset.filters, activePresetId: preset.id },
+            ? { activeStyle: null, activePresetId: null }
+            : { activeStyle: preset.style, activePresetId: preset.id },
         )
       }
       className={`rounded-xl border p-2 text-center transition-colors cursor-pointer relative ${
@@ -210,18 +267,35 @@ function SidePanel() {
 
   return (
     <div className="space-y-4 px-1">
-      {/* Aktívny filter */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-text-dim">
-          {s.activeFilters ? t("filter_on", "Filter aktívny") : t("filter_off", "Žiadny filter")}
-        </span>
-        {s.activeFilters && (
-          <button
-            onClick={() => store.setState({ activeFilters: null, activePresetId: null })}
-            className="px-2 py-1 rounded text-[10px] text-text-dim border border-border hover:border-accent/40"
-          >
-            {t("clear", "Zrušiť filter")}
-          </button>
+      {/* Aktívny filter + intenzita */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-text-dim">
+            {s.activeStyle ? t("filter_on", "Filter aktívny") : t("filter_off", "Žiadny filter")}
+          </span>
+          {s.activeStyle && (
+            <button
+              onClick={() => store.setState({ activeStyle: null, activePresetId: null })}
+              className="px-2 py-1 rounded text-[10px] text-text-dim border border-border hover:border-accent/40"
+            >
+              {t("clear", "Zrušiť filter")}
+            </button>
+          )}
+        </div>
+        {s.activeStyle && (
+          <div>
+            <label className="block text-xs text-text-dim mb-1">
+              {t("intensity", "Intenzita")}: {s.intensity} %
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={s.intensity}
+              onChange={(e) => store.setState({ intensity: Number(e.target.value) })}
+              className="w-full accent-[#6366f1]"
+            />
+          </div>
         )}
       </div>
 
@@ -279,7 +353,10 @@ function Filters() {
     (async () => {
       try {
         const cfg = await api.invoke("get_module_config", { id: api.moduleId });
-        if (Array.isArray(cfg?.presets)) store.setState({ presets: cfg.presets });
+        // iba presety nového formátu (so style.channels)
+        if (Array.isArray(cfg?.presets)) {
+          store.setState({ presets: cfg.presets.filter((p) => p && p.style && p.style.channels) });
+        }
       } catch {}
       store.setState({ restored: true });
     })();
@@ -311,7 +388,7 @@ function Filters() {
     const np = {
       id: Date.now().toString(),
       name: st.presetName.trim(),
-      filters: st.tempAnalysis.filters,
+      style: st.tempAnalysis.style,
       avgColor: st.tempAnalysis.avgColor,
       favorite: false,
       createdAt: new Date().toISOString(),
@@ -325,6 +402,9 @@ function Filters() {
 
   return (
     <div className="p-6 overflow-y-auto h-full">
+      {/* Definícia SVG filtra pre aktívny štýl */}
+      <ChannelFilterDefs style={s.activeStyle} intensity={s.intensity} />
+
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="bg-bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between mb-4">
@@ -347,13 +427,10 @@ function Filters() {
               {/* Filter sa aplikuje na obal — filtruje video vnútri PlayerShell */}
               <div
                 className="rounded-xl overflow-hidden border border-border bg-black"
-                style={{ filter: filterString(s.activeFilters) }}
+                style={{ filter: fullFilterString(s.activeStyle, s.intensity) }}
               >
                 <PlayerShell src={s.videoPath} />
               </div>
-              {s.activeFilters && (
-                <p className="mt-2 text-[11px] font-mono text-text-dim">{filterString(s.activeFilters)}</p>
-              )}
             </>
           ) : (
             <div
@@ -409,9 +486,22 @@ function Filters() {
             ) : (
               <div>
                 {s.tempPhotoUrl && (
-                  <img src={s.tempPhotoUrl} alt="" className="rounded-lg mb-3" style={{ width: "100%", height: 120, objectFit: "cover" }} />
+                  <div className="flex gap-2 mb-3">
+                    <img src={s.tempPhotoUrl} alt="" className="rounded-lg" style={{ width: "48%", height: 100, objectFit: "cover" }} />
+                    <img
+                      src={s.tempPhotoUrl}
+                      alt=""
+                      className="rounded-lg"
+                      style={{ width: "48%", height: 100, objectFit: "cover", filter: fullFilterString(s.tempAnalysis.style, s.intensity, "skyframe-style-preview") }}
+                    />
+                  </div>
                 )}
-                <p className="text-[11px] font-mono text-text-dim mb-3">{filterString(s.tempAnalysis.filters)}</p>
+                {s.tempAnalysis && (
+                  <>
+                    <ChannelFilterDefs style={s.tempAnalysis.style} intensity={s.intensity} filterId="skyframe-style-preview" />
+                    <p className="text-[10px] text-text-dim mb-2 -mt-1">{t("preview_compare", "Vľavo originál, vpravo odvodený tón")}</p>
+                  </>
+                )}
                 <input
                   type="text"
                   value={s.presetName}

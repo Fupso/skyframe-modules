@@ -1,7 +1,7 @@
 {
-  "id": "fimi.style-transfer",
+  "id": "skyframe.filters",
   "name": "Filtre",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "SkyFrame Community",
   "description": "Filtre a farebné štýly pre video — náhľad naživo, vlastné štýly z fotky.",
   "icon": "🎨",
