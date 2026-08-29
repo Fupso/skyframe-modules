@@ -651,6 +651,232 @@ if (api.registerBottomPanel) {
 }
 
 // ---------------------------------------------------------------------------
+// Bočný panel — výstupné nastavenia + export (pravý panel core)
+// ---------------------------------------------------------------------------
+
+function SidePanel() {
+  const s = useStore();
+  const isBusy = busy();
+  const totalDur = s.segments.reduce((a, seg) => a + (seg.end - seg.start), 0);
+  const g = duration();
+  return (
+    <div className="space-y-3 px-1">
+        {/* Výstup */}
+        {s.segments.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">{t("output", "Výstup")}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-text-dim mb-1.5">{t("cut_mode", "Režim strihu")}</label>
+                <div className="flex rounded-xl border border-border overflow-hidden">
+                  <button
+                    onClick={() => store.setState({ mode: "copy" })}
+                    disabled={isBusy}
+                    className={`flex-1 px-3 py-2.5 text-sm ${s.mode === "copy" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`}
+                  >
+                    {t("mode_copy", "Rýchly (bez prekódovania)")}
+                  </button>
+                  <button
+                    onClick={() => store.setState({ mode: "precise" })}
+                    disabled={isBusy}
+                    className={`flex-1 px-3 py-2.5 text-sm ${s.mode === "precise" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`}
+                  >
+                    {t("mode_precise", "Presný (prekódovanie)")}
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-text-dim">
+                  {t("mode_hint", "Rýchly = bez re-enkódu (keyframe). Presný = pomalší, na frame.")}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs text-text-dim mb-1.5">{t("output_name", "Názov súboru")}</label>
+                <input
+                  value={s.outputName}
+                  onChange={(e) => store.setState({ outputName: e.target.value })}
+                  disabled={isBusy}
+                  className="w-full px-3 py-2.5 bg-bg rounded-xl border border-border text-sm text-text outline-none focus:border-accent/50"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-text-dim mb-1.5">{t("output_dir", "Výstupný priečinok")}</label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const dir = await api.pickDirectory();
+                    if (dir) store.setState({ outDir: dir });
+                  }}
+                  disabled={isBusy}
+                  className="px-4 py-2.5 rounded-xl text-sm bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
+                >
+                  {s.outDir ? t("change", "Zmeniť") : t("browse", "Vybrať…")}
+                </button>
+                <span className="text-xs font-mono text-text-dim truncate flex-1">
+                  {s.outDir || t("default_output", "(predvolený priečinok)")}
+                </span>
+                {s.outDir && (
+                  <button
+                    onClick={() => store.setState({ outDir: "" })}
+                    disabled={isBusy}
+                    className="px-2 py-1 text-error hover:bg-error/10 rounded"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={s.mergeAfter}
+                onChange={(e) => store.setState({ mergeAfter: e.target.checked })}
+                disabled={isBusy}
+                className="w-4 h-4 accent-[#6366f1]"
+              />
+              <span className="text-sm">{t("merge_after", "Úseky aj spojiť do jedného súboru")}</span>
+            </label>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={s.withMusic}
+                  onChange={(e) => store.setState({ withMusic: e.target.checked })}
+                  disabled={isBusy}
+                  className="w-4 h-4 accent-[#6366f1]"
+                />
+                <span className="text-sm">{t("music", "Hudba")}</span>
+              </label>
+              {s.withMusic && (
+                <div className="space-y-2 pl-7">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        const f = await api.pickFiles(AUDIO_FILTERS, false);
+                        if (f && !Array.isArray(f)) store.setState({ music: f });
+                      }}
+                      disabled={isBusy}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
+                    >
+                      {s.music ? baseName(s.music) : t("pick_music", "Vybrať hudbu")}
+                    </button>
+                    {s.music && (
+                      <button
+                        onClick={() => store.setState({ music: null })}
+                        disabled={isBusy}
+                        className="px-2 py-1 text-error hover:bg-error/10 rounded text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <label className="flex items-center gap-2 text-xs text-text-dim">
+                      <input
+                        type="checkbox"
+                        checked={s.loopMusic}
+                        onChange={(e) => store.setState({ loopMusic: e.target.checked })}
+                        disabled={isBusy}
+                        className="w-3.5 h-3.5 accent-[#6366f1]"
+                      />
+                      {t("loop_music", "Slučka (opakovať hudbu)")}
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-text-dim">
+                    {t("music_note", "Hudba sa pridá ku každému výstupu. Končí spolu s videom; ak je kratšia a slučka je vypnutá, video sa skráti na dĺžku hudby.")}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Chyba */}
+        {s.error && (
+          <div className="bg-error/10 border border-error/30 rounded-lg p-3 text-xs text-error">{s.error}</div>
+        )}
+
+        {/* Export / úlohy */}
+        {s.segments.length > 0 && (
+          <div className="space-y-3">
+            {s.jobs.length > 0 ? (
+              <>
+                <div className="space-y-3">
+                  {s.jobs.map((job) => (
+                    <div key={job.id}>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-sm font-medium truncate">{job.label}</span>
+                        <span
+                          className={`text-xs font-mono ${job.status === "error" ? "text-error" : job.status === "done" ? "text-success" : "text-text-dim"}`}
+                        >
+                          {job.status === "running"
+                            ? job.progress >= 0
+                              ? `${Math.round(job.progress)}%${job.message ? ` · ${job.message}` : ""}`
+                              : job.message || "…"
+                            : job.status === "done"
+                              ? "✓"
+                              : job.status === "cancelled"
+                                ? t("cancelled", "zrušené")
+                                : job.status === "error"
+                                  ? t("error", "chyba")
+                                  : job.message}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-bg rounded-full overflow-hidden border border-border">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${job.status === "error" ? "bg-error" : job.status === "done" ? "bg-success" : "bg-accent"}`}
+                          style={{
+                            width:
+                              job.status === "done"
+                                ? "100%"
+                                : `${Math.max(2, Math.min(100, job.progress))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  {isBusy && (
+                    <button
+                      onClick={cancelAll}
+                      className="px-4 py-2.5 rounded-xl text-sm font-medium bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
+                    >
+                      {t("cancel_all", "Zrušiť všetko")}
+                    </button>
+                  )}
+                  {!isBusy && (
+                    <button
+                      onClick={resetAll}
+                      className="px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
+                    >
+                      {t("new_cut", "Nové strihanie")}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={exportAll}
+                disabled={isBusy || !s.video}
+                className="w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
+              >
+                {t("export", "Exportovať")} ({s.segments.length} {t("pieces", "dielov")} · {fmtTime(totalDur)})
+              </button>
+            )}
+          </div>
+        )}
+
+    </div>
+  );
+}
+
+// Registrácia do pravého panelu core
+if (api.registerSidePanel) {
+  api.registerSidePanel(SidePanel);
+}
+
+// ---------------------------------------------------------------------------
 // Hlavný komponent — prehrávač, úseky, výstup
 // ---------------------------------------------------------------------------
 
@@ -860,209 +1086,10 @@ function Cutter() {
           </div>
         )}
 
-        {/* Výstup */}
-        {s.segments.length > 0 && (
-          <div className="bg-bg-card rounded-2xl border border-border p-6 space-y-4">
-            <h2 className="text-lg font-semibold">{t("output", "Výstup")}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-text-dim mb-1.5">{t("cut_mode", "Režim strihu")}</label>
-                <div className="flex rounded-xl border border-border overflow-hidden">
-                  <button
-                    onClick={() => store.setState({ mode: "copy" })}
-                    disabled={isBusy}
-                    className={`flex-1 px-3 py-2.5 text-sm ${s.mode === "copy" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`}
-                  >
-                    {t("mode_copy", "Rýchly (bez prekódovania)")}
-                  </button>
-                  <button
-                    onClick={() => store.setState({ mode: "precise" })}
-                    disabled={isBusy}
-                    className={`flex-1 px-3 py-2.5 text-sm ${s.mode === "precise" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`}
-                  >
-                    {t("mode_precise", "Presný (prekódovanie)")}
-                  </button>
-                </div>
-                <p className="mt-1 text-[10px] text-text-dim">
-                  {t("mode_hint", "Rýchly = bez re-enkódu (keyframe). Presný = pomalší, na frame.")}
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs text-text-dim mb-1.5">{t("output_name", "Názov súboru")}</label>
-                <input
-                  value={s.outputName}
-                  onChange={(e) => store.setState({ outputName: e.target.value })}
-                  disabled={isBusy}
-                  className="w-full px-3 py-2.5 bg-bg rounded-xl border border-border text-sm text-text outline-none focus:border-accent/50"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs text-text-dim mb-1.5">{t("output_dir", "Výstupný priečinok")}</label>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={async () => {
-                    const dir = await api.pickDirectory();
-                    if (dir) store.setState({ outDir: dir });
-                  }}
-                  disabled={isBusy}
-                  className="px-4 py-2.5 rounded-xl text-sm bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
-                >
-                  {s.outDir ? t("change", "Zmeniť") : t("browse", "Vybrať…")}
-                </button>
-                <span className="text-xs font-mono text-text-dim truncate flex-1">
-                  {s.outDir || t("default_output", "(predvolený priečinok)")}
-                </span>
-                {s.outDir && (
-                  <button
-                    onClick={() => store.setState({ outDir: "" })}
-                    disabled={isBusy}
-                    className="px-2 py-1 text-error hover:bg-error/10 rounded"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={s.mergeAfter}
-                onChange={(e) => store.setState({ mergeAfter: e.target.checked })}
-                disabled={isBusy}
-                className="w-4 h-4 accent-[#6366f1]"
-              />
-              <span className="text-sm">{t("merge_after", "Úseky aj spojiť do jedného súboru")}</span>
-            </label>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={s.withMusic}
-                  onChange={(e) => store.setState({ withMusic: e.target.checked })}
-                  disabled={isBusy}
-                  className="w-4 h-4 accent-[#6366f1]"
-                />
-                <span className="text-sm">{t("music", "Hudba")}</span>
-              </label>
-              {s.withMusic && (
-                <div className="space-y-2 pl-7">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={async () => {
-                        const f = await api.pickFiles(AUDIO_FILTERS, false);
-                        if (f && !Array.isArray(f)) store.setState({ music: f });
-                      }}
-                      disabled={isBusy}
-                      className="px-3 py-1.5 rounded-lg text-xs bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
-                    >
-                      {s.music ? baseName(s.music) : t("pick_music", "Vybrať hudbu")}
-                    </button>
-                    {s.music && (
-                      <button
-                        onClick={() => store.setState({ music: null })}
-                        disabled={isBusy}
-                        className="px-2 py-1 text-error hover:bg-error/10 rounded text-xs"
-                      >
-                        ✕
-                      </button>
-                    )}
-                    <label className="flex items-center gap-2 text-xs text-text-dim">
-                      <input
-                        type="checkbox"
-                        checked={s.loopMusic}
-                        onChange={(e) => store.setState({ loopMusic: e.target.checked })}
-                        disabled={isBusy}
-                        className="w-3.5 h-3.5 accent-[#6366f1]"
-                      />
-                      {t("loop_music", "Slučka (opakovať hudbu)")}
-                    </label>
-                  </div>
-                  <p className="text-[10px] text-text-dim">
-                    {t("music_note", "Hudba sa pridá ku každému výstupu. Končí spolu s videom; ak je kratšia a slučka je vypnutá, video sa skráti na dĺžku hudby.")}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Chyba */}
-        {s.error && (
-          <div className="bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error">{s.error}</div>
-        )}
-
-        {/* Export / úlohy */}
-        {s.segments.length > 0 && (
-          <div className="bg-bg-card rounded-2xl border border-border p-6 space-y-4">
-            {s.jobs.length > 0 ? (
-              <>
-                <div className="space-y-3">
-                  {s.jobs.map((job) => (
-                    <div key={job.id}>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-sm font-medium truncate">{job.label}</span>
-                        <span
-                          className={`text-xs font-mono ${job.status === "error" ? "text-error" : job.status === "done" ? "text-success" : "text-text-dim"}`}
-                        >
-                          {job.status === "running"
-                            ? job.progress >= 0
-                              ? `${Math.round(job.progress)}%${job.message ? ` · ${job.message}` : ""}`
-                              : job.message || "…"
-                            : job.status === "done"
-                              ? "✓"
-                              : job.status === "cancelled"
-                                ? t("cancelled", "zrušené")
-                                : job.status === "error"
-                                  ? t("error", "chyba")
-                                  : job.message}
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-bg rounded-full overflow-hidden border border-border">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${job.status === "error" ? "bg-error" : job.status === "done" ? "bg-success" : "bg-accent"}`}
-                          style={{
-                            width:
-                              job.status === "done"
-                                ? "100%"
-                                : `${Math.max(2, Math.min(100, job.progress))}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  {isBusy && (
-                    <button
-                      onClick={cancelAll}
-                      className="px-4 py-2.5 rounded-xl text-sm font-medium bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
-                    >
-                      {t("cancel_all", "Zrušiť všetko")}
-                    </button>
-                  )}
-                  {!isBusy && (
-                    <button
-                      onClick={resetAll}
-                      className="px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
-                    >
-                      {t("new_cut", "Nové strihanie")}
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <button
-                onClick={exportAll}
-                disabled={isBusy || !s.video}
-                className="w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
-              >
-                {t("export", "Exportovať")} ({s.segments.length} {t("pieces", "dielov")} · {fmtTime(totalDur)})
-              </button>
-            )}
+{/* Nastavenia výstupu a export sú v pravom panelu core */}
+        {!api.registerSidePanel && (
+          <div className="bg-bg-card rounded-2xl border border-border p-6">
+            <SidePanel />
           </div>
         )}
 
