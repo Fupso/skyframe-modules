@@ -1,4 +1,4 @@
-// fimi.merger v2.2.0 — Spájač
+// fimi.merger v2.3.0 — Spájač
 // Layout: zdroj + lety + náhľad v hlavnej ploche, hudba/výstup/spustenie
 // v pravom paneli core (registerSidePanel), nástroje v toolbare (registerToolbar).
 // Zdieľaný stav ide cez modulový store (panel sa renderuje v strome core).
@@ -77,7 +77,20 @@ function useStore() {
   return useSyncExternalStore(store.subscribe, store.getState);
 }
 
-const shared = { cancelFlag: { current: false } };
+const shared = { cancelFlag: { current: false }, scrollEl: { current: null } };
+
+/** Otvorí/zavrie náhľad a odroluje hore, kde je prehrávač. */
+function openPreview(path) {
+  const s = store.getState();
+  const next = s.preview === path ? null : path;
+  store.setState({ preview: next });
+  if (next && shared.scrollEl.current) {
+    shared.scrollEl.current.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+/** Cache miniatur (path -> blob URL | "error"). Žije, kým žije modul. */
+const thumbCache = new Map();
 
 function log(msg) {
   store.setState((s) => ({
@@ -301,6 +314,112 @@ function resetAll() {
     sdFolders: store.getState().sdFolders,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Miniatúra videa — karta v mriežke
+// ---------------------------------------------------------------------------
+
+function ThumbCard({ path, checked, onToggle, onRemove, disabled }) {
+  const s = useStore();
+  const [thumb, setThumb] = useState(() => thumbCache.get(path) || null);
+  const active = s.preview === path;
+
+  useEffect(() => {
+    let alive = true;
+    if (thumbCache.has(path)) {
+      setThumb(thumbCache.get(path));
+      return;
+    }
+    api
+      .invoke("video_thumbnail", { path, atSeconds: 1 })
+      .then((bytes) => {
+        if (!alive) return;
+        const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+        const url = URL.createObjectURL(new Blob([arr], { type: "image/jpeg" }));
+        thumbCache.set(path, url);
+        setThumb(url);
+      })
+      .catch(() => {
+        thumbCache.set(path, "error");
+        if (alive) setThumb("error");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [path]);
+
+  return (
+    <div
+      onClick={() => openPreview(path)}
+      title={path}
+      style={{ cursor: "pointer" }}
+      className={`rounded-xl overflow-hidden border transition-colors ${active ? "border-accent" : "border-border hover:border-accent/40"} bg-bg`}
+    >
+      <div style={{ position: "relative", aspectRatio: "16/9", background: "#000" }}>
+        {thumb && thumb !== "error" ? (
+          <img
+            src={thumb}
+            alt={baseName(path)}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            draggable={false}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%", height: "100%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 22, color: "#64748b",
+            }}
+          >
+            {thumb === "error" ? "🎬" : "…"}
+          </div>
+        )}
+        {/* štvorček na označenie — vľavo hore */}
+        <input
+          type="checkbox"
+          checked={!!checked}
+          disabled={disabled}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            e.stopPropagation();
+            onToggle?.();
+          }}
+          style={{ position: "absolute", top: 6, left: 6, width: 16, height: 16, accentColor: "#6366f1", cursor: "pointer" }}
+        />
+        {onRemove && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            disabled={disabled}
+            style={{ position: "absolute", top: 4, right: 4 }}
+            className="px-1.5 py-0.5 rounded text-[10px] text-error bg-black/60 hover:bg-error/20"
+          >
+            ✕
+          </button>
+        )}
+        {active && (
+          <div
+            style={{ position: "absolute", bottom: 4, right: 6 }}
+            className="text-[9px] px-1.5 py-0.5 rounded bg-accent text-white"
+          >
+            ▶
+          </div>
+        )}
+      </div>
+      <div className="px-2 py-1.5">
+        <p className="text-[11px] truncate">{baseName(path)}</p>
+      </div>
+    </div>
+  );
+}
+
+const THUMB_GRID = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+  gap: 10,
+};
 
 // ---------------------------------------------------------------------------
 // Toolbar
@@ -646,7 +765,7 @@ function Merger() {
   const PlayerShell = api.PlayerShell;
 
   return (
-    <div className="p-6 overflow-y-auto h-full">
+    <div ref={(el) => (shared.scrollEl.current = el)} className="p-6 overflow-y-auto h-full">
       <div className="max-w-4xl mx-auto space-y-4">
         {/* Zdroj videí */}
         <div className="bg-bg-card rounded-2xl border border-border p-6">
@@ -711,6 +830,22 @@ function Merger() {
 
           {s.folder && <p className="mt-3 text-xs font-mono text-text-dim break-all">{s.folder}</p>}
 
+          {/* Prehrávač — vždy hore */}
+          {s.preview && (
+            <div className="mt-4 rounded-xl overflow-hidden border border-accent/50 bg-black">
+              <PlayerShell src={s.preview} />
+              <div className="flex items-center gap-2 px-3 py-2 bg-bg-card border-t border-border">
+                <span className="flex-1 text-xs truncate">{baseName(s.preview)}</span>
+                <button
+                  onClick={() => store.setState({ preview: null })}
+                  className="text-[10px] px-2 py-1 rounded text-text-dim border border-border hover:border-accent/40"
+                >
+                  {t("close", "Zavrieť")}
+                </button>
+              </div>
+            </div>
+          )}
+
           {s.flights.length > 0 && (
             <div className="mt-4 space-y-3">
               <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider">
@@ -736,28 +871,15 @@ function Merger() {
                       {flight.split_reason}
                     </span>
                   </label>
-                  <div className="border-t border-border divide-y divide-border">
+                  <div className="border-t border-border p-3" style={THUMB_GRID}>
                     {flight.clips.map((clip, ci) => (
-                      <div key={ci} className="flex items-center gap-3 px-3 py-2 pl-9">
-                        <input
-                          type="checkbox"
-                          checked={clip.checked}
-                          onChange={() => toggleClip(fi, ci)}
-                          disabled={isBusy || !flight.checked}
-                          className="w-3.5 h-3.5 accent-[#6366f1]"
-                        />
-                        <span className="flex-1 text-xs truncate" title={clip.path}>
-                          {baseName(clip.path)}
-                        </span>
-                        <span className="text-[10px] text-text-dim font-mono">{clip.size_mb.toFixed(0)} MB</span>
-                        <span className="text-[10px] text-text-dim">{fmtDate(clip.time)}</span>
-                        <button
-                          onClick={() => store.setState({ preview: s.preview === clip.path ? null : clip.path })}
-                          className={`text-[10px] px-2 py-1 rounded border transition-colors ${s.preview === clip.path ? "bg-accent text-white border-accent" : "text-text-dim border-border hover:border-accent/40"}`}
-                        >
-                          {t("preview", "Náhľad")}
-                        </button>
-                      </div>
+                      <ThumbCard
+                        key={clip.path}
+                        path={clip.path}
+                        checked={clip.checked}
+                        disabled={isBusy || !flight.checked}
+                        onToggle={() => toggleClip(fi, ci)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -770,34 +892,20 @@ function Merger() {
               <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
                 {t("manual_videos", "Ručne pridané")} ({s.manual.length})
               </h3>
-              <div className="space-y-1">
+              <div style={THUMB_GRID}>
                 {s.manual.map((path, i) => (
-                  <div key={path} className="flex items-center gap-2 px-3 py-1.5 bg-bg rounded-lg border border-border">
-                    <span className="flex-1 text-xs truncate">{baseName(path)}</span>
-                    <button
-                      onClick={() => store.setState({ preview: s.preview === path ? null : path })}
-                      className="text-[10px] px-2 py-1 rounded text-text-dim border border-border hover:border-accent/40"
-                    >
-                      {t("preview", "Náhľad")}
-                    </button>
-                    <button
-                      onClick={() => store.setState((st) => ({ manual: st.manual.filter((_, j) => j !== i) }))}
-                      disabled={isBusy}
-                      className="text-[10px] px-2 py-1 rounded text-error hover:bg-error/10"
-                    >
-                      ✕
-                    </button>
-                  </div>
+                  <ThumbCard
+                    key={path}
+                    path={path}
+                    checked
+                    disabled={isBusy}
+                    onRemove={() => store.setState((st) => ({ manual: st.manual.filter((_, j) => j !== i) }))}
+                  />
                 ))}
               </div>
             </div>
           )}
 
-          {s.preview && (
-            <div className="mt-4 rounded-xl overflow-hidden border border-border bg-black">
-              <PlayerShell src={s.preview} />
-            </div>
-          )}
         </div>
 
         {/* Fallback: starší core bez pravého panelu */}

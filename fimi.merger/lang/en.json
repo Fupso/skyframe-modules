@@ -45,5 +45,6 @@
   "tool_scan": "Scan folder",
   "tool_add": "Add videos",
   "tool_start": "Start processing",
-  "bad_response": "Unexpected response from core."
+  "bad_response": "Unexpected response from core.",
+  "close": "Close"
 }

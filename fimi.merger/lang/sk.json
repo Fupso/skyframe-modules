@@ -45,5 +45,6 @@
   "tool_scan": "Skenovať priečinok",
   "tool_add": "Pridať videá",
   "tool_start": "Spustiť spracovanie",
-  "bad_response": "Neočakávaná odpoveď z core."
+  "bad_response": "Neočakávaná odpoveď z core.",
+  "close": "Zavrieť"
 }

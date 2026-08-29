@@ -45,5 +45,6 @@
   "tool_scan": "Ordner scannen",
   "tool_add": "Videos hinzufügen",
   "tool_start": "Verarbeitung starten",
-  "bad_response": "Unerwartete Antwort vom Core."
+  "bad_response": "Unerwartete Antwort vom Core.",
+  "close": "Schließen"
 }

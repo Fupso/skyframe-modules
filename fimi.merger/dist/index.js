@@ -1,4 +1,4 @@
-// ../merger-build/react-shim.js
+// merger-build/react-shim.js
 var R = window.React;
 var react_shim_default = R;
 var useState = R.useState;
@@ -9,7 +9,7 @@ var useCallback = R.useCallback;
 var useSyncExternalStore = R.useSyncExternalStore;
 var Fragment = R.Fragment;
 
-// index.jsx
+// ../mnt/agents/output/fimi.merger-zdroj/src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useMemo: useMemo2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
@@ -25,10 +25,6 @@ var PRESETS = [
 ];
 function baseName(p) {
   return p.split(/[\\/]/).pop() ?? p;
-}
-function fmtDate(iso) {
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? "" : d.toLocaleString();
 }
 var initialState = {
   folder: "",
@@ -71,7 +67,16 @@ var store = {
 function useStore() {
   return useSyncExternalStore2(store.subscribe, store.getState);
 }
-var shared = { cancelFlag: { current: false } };
+var shared = { cancelFlag: { current: false }, scrollEl: { current: null } };
+function openPreview(path) {
+  const s = store.getState();
+  const next = s.preview === path ? null : path;
+  store.setState({ preview: next });
+  if (next && shared.scrollEl.current) {
+    shared.scrollEl.current.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+var thumbCache = /* @__PURE__ */ new Map();
 function log(msg) {
   store.setState((s) => ({
     log: [...s.log.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${msg}`]
@@ -265,6 +270,101 @@ function resetAll() {
     sdFolders: store.getState().sdFolders
   });
 }
+function ThumbCard({ path, checked, onToggle, onRemove, disabled }) {
+  const s = useStore();
+  const [thumb, setThumb] = useState2(() => thumbCache.get(path) || null);
+  const active = s.preview === path;
+  useEffect2(() => {
+    let alive = true;
+    if (thumbCache.has(path)) {
+      setThumb(thumbCache.get(path));
+      return;
+    }
+    api.invoke("video_thumbnail", { path, atSeconds: 1 }).then((bytes) => {
+      if (!alive) return;
+      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      const url = URL.createObjectURL(new Blob([arr], { type: "image/jpeg" }));
+      thumbCache.set(path, url);
+      setThumb(url);
+    }).catch(() => {
+      thumbCache.set(path, "error");
+      if (alive) setThumb("error");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [path]);
+  return /* @__PURE__ */ react_shim_default.createElement(
+    "div",
+    {
+      onClick: () => openPreview(path),
+      title: path,
+      style: { cursor: "pointer" },
+      className: `rounded-xl overflow-hidden border transition-colors ${active ? "border-accent" : "border-border hover:border-accent/40"} bg-bg`
+    },
+    /* @__PURE__ */ react_shim_default.createElement("div", { style: { position: "relative", aspectRatio: "16/9", background: "#000" } }, thumb && thumb !== "error" ? /* @__PURE__ */ react_shim_default.createElement(
+      "img",
+      {
+        src: thumb,
+        alt: baseName(path),
+        style: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
+        draggable: false
+      }
+    ) : /* @__PURE__ */ react_shim_default.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+          color: "#64748b"
+        }
+      },
+      thumb === "error" ? "\u{1F3AC}" : "\u2026"
+    ), /* @__PURE__ */ react_shim_default.createElement(
+      "input",
+      {
+        type: "checkbox",
+        checked: !!checked,
+        disabled,
+        onClick: (e) => e.stopPropagation(),
+        onChange: (e) => {
+          e.stopPropagation();
+          onToggle?.();
+        },
+        style: { position: "absolute", top: 6, left: 6, width: 16, height: 16, accentColor: "#6366f1", cursor: "pointer" }
+      }
+    ), onRemove && /* @__PURE__ */ react_shim_default.createElement(
+      "button",
+      {
+        onClick: (e) => {
+          e.stopPropagation();
+          onRemove();
+        },
+        disabled,
+        style: { position: "absolute", top: 4, right: 4 },
+        className: "px-1.5 py-0.5 rounded text-[10px] text-error bg-black/60 hover:bg-error/20"
+      },
+      "\u2715"
+    ), active && /* @__PURE__ */ react_shim_default.createElement(
+      "div",
+      {
+        style: { position: "absolute", bottom: 4, right: 6 },
+        className: "text-[9px] px-1.5 py-0.5 rounded bg-accent text-white"
+      },
+      "\u25B6"
+    )),
+    /* @__PURE__ */ react_shim_default.createElement("div", { className: "px-2 py-1.5" }, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] truncate" }, baseName(path)))
+  );
+}
+var THUMB_GRID = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+  gap: 10
+};
 if (api.registerToolbar) {
   api.registerToolbar([
     {
@@ -510,7 +610,7 @@ function Merger() {
     };
   }, [s.folder, s.manual, s.mode, s.outputName, s.musicEnabled, s.music, s.loopMusic, s.convertAfter, s.preset, s.restored, isBusy]);
   const PlayerShell = api.PlayerShell;
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-4" }, t("source", "Zdroj vide\xED")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { ref: (el) => shared.scrollEl.current = el, className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-4" }, t("source", "Zdroj vide\xED")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: pickAndScan,
@@ -556,7 +656,14 @@ function Merger() {
     f.path,
     " ",
     /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-accent" }, "(", f.mp4_count, " mp4)")
-  )))), s.folder && /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-3 text-xs font-mono text-text-dim break-all" }, s.folder), s.flights.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4 space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, t("flights", "Lety"), " (", s.flights.length, ") \xB7 ", selectedMb.toFixed(0), " MB"), s.flights.map((flight, fi) => /* @__PURE__ */ react_shim_default.createElement("div", { key: fi, className: "rounded-xl border border-border bg-bg overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-card-hover/50" }, /* @__PURE__ */ react_shim_default.createElement(
+  )))), s.folder && /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-3 text-xs font-mono text-text-dim break-all" }, s.folder), s.preview && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4 rounded-xl overflow-hidden border border-accent/50 bg-black" }, /* @__PURE__ */ react_shim_default.createElement(PlayerShell, { src: s.preview }), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2 px-3 py-2 bg-bg-card border-t border-border" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 text-xs truncate" }, baseName(s.preview)), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ preview: null }),
+      className: "text-[10px] px-2 py-1 rounded text-text-dim border border-border hover:border-accent/40"
+    },
+    t("close", "Zavrie\u0165")
+  ))), s.flights.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4 space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, t("flights", "Lety"), " (", s.flights.length, ") \xB7 ", selectedMb.toFixed(0), " MB"), s.flights.map((flight, fi) => /* @__PURE__ */ react_shim_default.createElement("div", { key: fi, className: "rounded-xl border border-border bg-bg overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-card-hover/50" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
@@ -565,38 +672,25 @@ function Merger() {
       disabled: isBusy,
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "font-medium text-sm" }, t("flight", "Let"), " ", fi + 1), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim" }, flight.clips.length, " ", t("videos_count", "vide\xED"), " \xB7 ", flight.total_mb.toFixed(0), " MB"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "ml-auto text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent" }, flight.split_reason)), /* @__PURE__ */ react_shim_default.createElement("div", { className: "border-t border-border divide-y divide-border" }, flight.clips.map((clip, ci) => /* @__PURE__ */ react_shim_default.createElement("div", { key: ci, className: "flex items-center gap-3 px-3 py-2 pl-9" }, /* @__PURE__ */ react_shim_default.createElement(
-    "input",
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "font-medium text-sm" }, t("flight", "Let"), " ", fi + 1), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim" }, flight.clips.length, " ", t("videos_count", "vide\xED"), " \xB7 ", flight.total_mb.toFixed(0), " MB"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "ml-auto text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent" }, flight.split_reason)), /* @__PURE__ */ react_shim_default.createElement("div", { className: "border-t border-border p-3", style: THUMB_GRID }, flight.clips.map((clip, ci) => /* @__PURE__ */ react_shim_default.createElement(
+    ThumbCard,
     {
-      type: "checkbox",
+      key: clip.path,
+      path: clip.path,
       checked: clip.checked,
-      onChange: () => toggleClip(fi, ci),
       disabled: isBusy || !flight.checked,
-      className: "w-3.5 h-3.5 accent-[#6366f1]"
+      onToggle: () => toggleClip(fi, ci)
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 text-xs truncate", title: clip.path }, baseName(clip.path)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[10px] text-text-dim font-mono" }, clip.size_mb.toFixed(0), " MB"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[10px] text-text-dim" }, fmtDate(clip.time)), /* @__PURE__ */ react_shim_default.createElement(
-    "button",
+  )))))), s.manual.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("manual_videos", "Ru\u010Dne pridan\xE9"), " (", s.manual.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { style: THUMB_GRID }, s.manual.map((path, i) => /* @__PURE__ */ react_shim_default.createElement(
+    ThumbCard,
     {
-      onClick: () => store.setState({ preview: s.preview === clip.path ? null : clip.path }),
-      className: `text-[10px] px-2 py-1 rounded border transition-colors ${s.preview === clip.path ? "bg-accent text-white border-accent" : "text-text-dim border-border hover:border-accent/40"}`
-    },
-    t("preview", "N\xE1h\u013Ead")
-  ))))))), s.manual.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("manual_videos", "Ru\u010Dne pridan\xE9"), " (", s.manual.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-1" }, s.manual.map((path, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: path, className: "flex items-center gap-2 px-3 py-1.5 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 text-xs truncate" }, baseName(path)), /* @__PURE__ */ react_shim_default.createElement(
-    "button",
-    {
-      onClick: () => store.setState({ preview: s.preview === path ? null : path }),
-      className: "text-[10px] px-2 py-1 rounded text-text-dim border border-border hover:border-accent/40"
-    },
-    t("preview", "N\xE1h\u013Ead")
-  ), /* @__PURE__ */ react_shim_default.createElement(
-    "button",
-    {
-      onClick: () => store.setState((st) => ({ manual: st.manual.filter((_, j) => j !== i) })),
+      key: path,
+      path,
+      checked: true,
       disabled: isBusy,
-      className: "text-[10px] px-2 py-1 rounded text-error hover:bg-error/10"
-    },
-    "\u2715"
-  ))))), s.preview && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4 rounded-xl overflow-hidden border border-border bg-black" }, /* @__PURE__ */ react_shim_default.createElement(PlayerShell, { src: s.preview }))), !api.registerSidePanel && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement(SidePanel, null)), !api.registerSidePanel && s.error && null, s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line))))));
+      onRemove: () => store.setState((st) => ({ manual: st.manual.filter((_, j) => j !== i) }))
+    }
+  ))))), !api.registerSidePanel && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement(SidePanel, null)), !api.registerSidePanel && s.error && null, s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line))))));
 }
 var index_default = Merger;
 export {

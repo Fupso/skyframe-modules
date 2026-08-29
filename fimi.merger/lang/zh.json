@@ -45,5 +45,6 @@
   "tool_scan": "扫描文件夹",
   "tool_add": "添加视频",
   "tool_start": "开始处理",
-  "bad_response": "核心返回意外的响应。"
+  "bad_response": "核心返回意外的响应。",
+  "close": "关闭"
 }
