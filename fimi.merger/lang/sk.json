@@ -41,5 +41,9 @@
   "start_merge": "Spustiť spracovanie",
   "done": "Hotovo!",
   "error": "chyba",
-  "log": "Log"
+  "log": "Log",
+  "tool_scan": "Skenovať priečinok",
+  "tool_add": "Pridať videá",
+  "tool_start": "Spustiť spracovanie",
+  "bad_response": "Neočakávaná odpoveď z core."
 }

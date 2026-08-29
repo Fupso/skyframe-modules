@@ -41,5 +41,9 @@
   "start_merge": "Verarbeitung starten",
   "done": "Fertig!",
   "error": "Fehler",
-  "log": "Protokoll"
+  "log": "Protokoll",
+  "tool_scan": "Ordner scannen",
+  "tool_add": "Videos hinzufügen",
+  "tool_start": "Verarbeitung starten",
+  "bad_response": "Unerwartete Antwort vom Core."
 }

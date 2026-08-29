@@ -41,5 +41,9 @@
   "start_merge": "开始处理",
   "done": "完成！",
   "error": "错误",
-  "log": "日志"
+  "log": "日志",
+  "tool_scan": "扫描文件夹",
+  "tool_add": "添加视频",
+  "tool_start": "开始处理",
+  "bad_response": "核心返回意外的响应。"
 }

@@ -1,375 +1,604 @@
-const t = window.React, i = t.useState, le = t.useEffect, U = t.useMemo, ne = t.useRef;
-t.useCallback;
-const c = window.SkyFrame, r = c.t, ve = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }], ke = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac"] }], oe = [
+// ../merger-build/react-shim.js
+var R = window.React;
+var react_shim_default = R;
+var useState = R.useState;
+var useEffect = R.useEffect;
+var useMemo = R.useMemo;
+var useRef = R.useRef;
+var useCallback = R.useCallback;
+var useSyncExternalStore = R.useSyncExternalStore;
+var Fragment = R.Fragment;
+
+// index.jsx
+var api = window.SkyFrame;
+var t = (k, f) => api.t(k, f);
+var { useState: useState2, useEffect: useEffect2, useMemo: useMemo2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
+var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
+var AUDIO_FILTERS = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac"] }];
+var PRESETS = [
   { id: "youtube_4k", label: "YouTube 4K" },
   { id: "youtube_1080", label: "YouTube 1080p" },
   { id: "instagram", label: "Instagram" },
   { id: "tiktok", label: "TikTok" },
-  { id: "email", label: "E-mail (malé)" },
-  { id: "archive", label: r("preset_archive", "Archív (bezstratová)") }
+  { id: "email", label: "E-mail (mal\xE9)" },
+  { id: "archive", labelKey: "preset_archive" }
 ];
-function z(p) {
+function baseName(p) {
   return p.split(/[\\/]/).pop() ?? p;
 }
-function Ee(p) {
-  const h = new Date(p);
-  return isNaN(h.getTime()) ? "" : h.toLocaleString();
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : d.toLocaleString();
 }
-function ye() {
-  const [p, h] = i(""), [b, w] = i([]), [x, I] = i([]), [Y, ce] = i([]), [_, L] = i("flights"), [f, q] = i("merged"), [$, G] = i(""), [C, P] = i(!1), [v, T] = i(null), [D, H] = i(!0), [S, W] = i(!1), [M, Q] = i("youtube_1080"), [A, V] = i(null), [k, X] = i(!1), [j, E] = i(""), [ee, de] = i([]), [R, y] = i([]), B = ne(!1), u = (e) => de((a) => [...a.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${e}`]), [te, ae] = i(!1), F = ne(null);
-  le(() => {
-    c.invoke("find_media_folders").then((e) => {
-      ce(e), e.length && u(r("sd_found", "Nájdené médiá") + `: ${e.length}`);
-    }).catch(() => {
-    }), (async () => {
-      try {
-        const e = await c.invoke("get_module_config", { id: c.moduleId }), a = e == null ? void 0 : e.session;
-        if (a && ((a.mode === "all" || a.mode === "flights") && L(a.mode), a.outputName && q(a.outputName), P(!!a.musicEnabled), T(a.music ?? null), H(a.loopMusic !== !1), W(!!a.convertAfter), a.preset && Q(a.preset), Array.isArray(a.manual) && I(a.manual.filter((l) => typeof l == "string")), a.folder)) {
-          h(a.folder), ae(!0), await Z(a.folder);
-          return;
-        }
-      } catch {
+var initialState = {
+  folder: "",
+  flights: [],
+  // { checked, clips: {checked, path, size_mb, time}[], total_mb, split_reason }[]
+  manual: [],
+  // string[]
+  sdFolders: [],
+  // { path, mp4_count }[]
+  mode: "flights",
+  // "flights" | "all"
+  outputName: "merged",
+  outDir: "",
+  musicEnabled: false,
+  music: null,
+  loopMusic: true,
+  convertAfter: false,
+  preset: "youtube_1080",
+  preview: null,
+  // path | null
+  scanning: false,
+  error: "",
+  jobs: [],
+  log: [],
+  restored: false
+};
+var state = { ...initialState };
+var listeners = /* @__PURE__ */ new Set();
+var store = {
+  getState: () => state,
+  setState(patch) {
+    state = { ...state, ...typeof patch === "function" ? patch(state) : patch };
+    listeners.forEach((l) => l());
+  },
+  subscribe(l) {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  }
+};
+function useStore() {
+  return useSyncExternalStore2(store.subscribe, store.getState);
+}
+var shared = { cancelFlag: { current: false } };
+function log(msg) {
+  store.setState((s) => ({
+    log: [...s.log.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${msg}`]
+  }));
+}
+function busy() {
+  return store.getState().jobs.some((j) => j.status === "running");
+}
+function selectedPaths() {
+  const s = store.getState();
+  const fromFlights = s.flights.filter((f) => f.checked).flatMap((f) => f.clips.filter((c) => c.checked).map((c) => c.path));
+  return [...fromFlights, ...s.manual.filter((m) => !fromFlights.includes(m))];
+}
+async function scanFolder(folder) {
+  store.setState({ scanning: true, error: "" });
+  try {
+    const res = await api.invoke("analyze_flights", { folder });
+    let flights = [];
+    if (Array.isArray(res)) flights = res;
+    else if (res && typeof res === "object" && Array.isArray(res.flights)) flights = res.flights;
+    else throw new Error(t("bad_response", "Neo\u010Dak\xE1van\xE1 odpove\u010F z core."));
+    const withChecks = flights.map((f) => ({
+      ...f,
+      checked: true,
+      clips: (Array.isArray(f.clips) ? f.clips : []).map((c) => ({ ...c, checked: true }))
+    }));
+    store.setState({ flights: withChecks });
+    log(`${t("scan_done", "Skenovanie dokon\u010Den\xE9")}: ${folder} \u2014 ${withChecks.length} ${t("flights", "letov")}`);
+    if (!withChecks.length) log(t("no_videos", "V prie\u010Dinku nie s\xFA \u017Eiadne vide\xE1."));
+  } catch (e) {
+    store.setState({ error: String(e) });
+    log(String(e));
+  } finally {
+    store.setState({ scanning: false });
+  }
+}
+async function pickAndScan() {
+  const dir = await api.pickDirectory();
+  if (!dir) return;
+  store.setState({ folder: dir });
+  await scanFolder(dir);
+}
+async function addManual() {
+  const files = await api.pickFiles(VIDEO_FILTERS, true);
+  if (!files) return;
+  const list = Array.isArray(files) ? files : [files];
+  store.setState((s) => ({ manual: [...s.manual, ...list.filter((f) => !s.manual.includes(f))] }));
+  log(`${t("added_manual", "Pridan\xE9 ru\u010Dne")}: ${list.length}`);
+}
+function toggleFlight(fi) {
+  store.setState((s) => ({
+    flights: s.flights.map((f, i) => i === fi ? { ...f, checked: !f.checked } : f)
+  }));
+}
+function toggleClip(fi, ci) {
+  store.setState((s) => ({
+    flights: s.flights.map(
+      (f, i) => i === fi ? { ...f, clips: f.clips.map((c, j) => j === ci ? { ...c, checked: !c.checked } : c) } : f
+    )
+  }));
+}
+function checkAll(value) {
+  store.setState((s) => ({
+    flights: s.flights.map((f) => ({
+      ...f,
+      checked: value,
+      clips: f.clips.map((c) => ({ ...c, checked: value }))
+    }))
+  }));
+}
+function watchJob(jobId) {
+  return new Promise((resolve) => {
+    let unlisten;
+    api.listenJob(jobId, (job) => {
+      store.setState((s) => ({ jobs: s.jobs.map((j) => j.id === jobId ? job : j) }));
+      if (job.status !== "running") {
+        unlisten?.();
+        resolve(job);
       }
-      ae(!0);
-    })();
-  }, []), le(() => {
-    if (!(!te || k))
-      return F.current && clearTimeout(F.current), F.current = setTimeout(() => {
-        c.invoke("set_module_config", {
-          id: c.moduleId,
-          config: { session: { folder: p, manual: x, mode: _, outputName: f, musicEnabled: C, music: v, loopMusic: D, convertAfter: S, preset: M } }
-        }).catch(() => {
-        });
-      }, 600), () => {
-        F.current && clearTimeout(F.current);
-      };
-  }, [p, x, _, f, C, v, D, S, M, te, k]);
-  const n = R.some((e) => e.status === "running"), J = U(
-    () => b.filter((e) => e.checked).flatMap((e) => e.clips.filter((a) => a.checked).map((a) => a.path)),
-    [b]
-  ), O = U(
-    () => [...J, ...x.filter((e) => !J.includes(e))],
-    [J, x]
-  ), ie = U(
-    () => b.filter((e) => e.checked).reduce((e, a) => e + a.clips.filter((l) => l.checked).reduce((l, s) => l + s.size_mb, 0), 0),
-    [b]
-  ), Z = async (e) => {
-    X(!0), E("");
-    try {
-      const a = await c.invoke("analyze_flights", { folder: e });
-      let l = [];
-      if (Array.isArray(a))
-        l = a;
-      else if (a && typeof a == "object" && Array.isArray(a.flights))
-        l = a.flights;
-      else
-        throw u("DEBUG analyze_flights: " + JSON.stringify(a).slice(0, 200)), new Error(r("bad_response", "Neočakávaná odpoveď z core."));
-      const s = l.map((o) => ({
-        ...o,
-        checked: !0,
-        clips: (Array.isArray(o.clips) ? o.clips : []).map((d) => ({ ...d, checked: !0 }))
-      }));
-      w(s), u(`${r("scan_done", "Skenovanie dokončené")}: ${e} — ${s.length} ${r("flights", "letov")}`), s.length || u(r("no_videos", "V priečinku nie sú žiadne videá."));
-    } catch (a) {
-      E(String(a)), u(String(a));
-    } finally {
-      X(!1);
-    }
-  }, me = async () => {
-    const e = await c.pickDirectory();
-    e && (h(e), await Z(e));
-  }, ue = async () => {
-    const e = await c.pickFiles(ve, !0);
-    if (!e) return;
-    const a = Array.isArray(e) ? e : [e];
-    I((l) => [...l, ...a.filter((s) => !l.includes(s))]), u(`${r("added_manual", "Pridané ručne")}: ${a.length}`);
-  }, be = (e) => w((a) => a.map((l, s) => s === e ? { ...l, checked: !l.checked } : l)), pe = (e, a) => w((l) => l.map((s, o) => o === e ? { ...s, clips: s.clips.map((d, m) => m === a ? { ...d, checked: !d.checked } : d) } : s)), re = (e) => w((a) => a.map((l) => ({ ...l, checked: e, clips: l.clips.map((s) => ({ ...s, checked: e })) }))), se = (e) => new Promise((a) => {
-    let l;
-    c.listenJob(e, (s) => {
-      y((o) => o.map((d) => d.id === e ? s : d)), s.status !== "running" && (l == null || l(), a(s));
-    }).then((s) => l = s);
-  }), xe = async () => {
-    var l;
-    E(""), B.current = !1;
-    const e = [];
-    if (_ === "flights" && b.some((s) => s.checked) ? (b.filter((s) => s.checked).forEach((s, o) => {
-      const d = s.clips.filter((m) => m.checked).map((m) => m.path);
-      d.length && e.push({ files: d, name: `${f}_flight${o + 1}` });
-    }), e.push(...x.length ? [{ files: x, name: `${f}_manual` }] : [])) : e.push({ files: O, name: f }), !e.length || e.every((s) => s.files.length < 1)) {
-      E(r("nothing_selected", "Nie je vybrané žiadne video."));
-      return;
-    }
-    u(`${r("start_log", "Spúšťam")} ${e.length} ${r("jobs_word", "úloh")}…`);
-    const a = e.map((s, o) => ({
-      id: `pending-${o}`,
-      moduleId: c.moduleId,
-      label: s.name,
+    }).then((u) => {
+      unlisten = u;
+    });
+  });
+}
+async function startMerge() {
+  const s = store.getState();
+  store.setState({ error: "" });
+  shared.cancelFlag.current = false;
+  const groups = [];
+  if (s.mode === "flights" && s.flights.some((f) => f.checked)) {
+    s.flights.filter((f) => f.checked).forEach((f, i) => {
+      const files = f.clips.filter((c) => c.checked).map((c) => c.path);
+      if (files.length) groups.push({ files, name: `${s.outputName}_flight${i + 1}` });
+    });
+    if (s.manual.length) groups.push({ files: s.manual, name: `${s.outputName}_manual` });
+  } else {
+    groups.push({ files: selectedPaths(), name: s.outputName });
+  }
+  if (!groups.length || groups.every((g) => g.files.length < 1)) {
+    store.setState({ error: t("nothing_selected", "Nie je vybran\xE9 \u017Eiadne video.") });
+    return;
+  }
+  log(`${t("start_log", "Sp\xFA\u0161\u0165am")} ${groups.length} ${t("jobs_word", "\xFAloh")}\u2026`);
+  store.setState({
+    jobs: groups.map((g, i) => ({
+      id: `pending-${i}`,
+      moduleId: api.moduleId,
+      label: g.name,
       status: "running",
       progress: -1,
-      message: r("queued", "Čaká v rade"),
+      message: t("queued", "\u010Cak\xE1 v rade"),
       result: null
-    }));
-    y(a);
-    for (let s = 0; s < e.length && !B.current; s++) {
-      const o = e[s];
-      try {
-        const d = await c.invoke("merge_videos", {
-          files: o.files,
-          outputName: o.name,
-          music: C ? v : null,
-          moduleId: c.moduleId,
-          outputDir: $ || null,
-          loopMusic: D
-        });
-        y((g) => {
-          const N = [...g];
-          return N[s] = { ...N[s], id: d, progress: 0, message: "" }, N;
-        }), u(`▶ ${o.name} (${o.files.length} ${r("videos_count", "videí")})`);
-        const m = await se(d);
-        if (m.status === "done" && m.result) {
-          if (u(`✓ ${m.result}`), S) {
-            u(`${r("converting", "Konvertujem")}: ${(l = oe.find((K) => K.id === M)) == null ? void 0 : l.label}`);
-            const g = await c.invoke("convert_video", {
-              input: m.result,
-              preset: M,
-              moduleId: c.moduleId,
-              outputDir: $ || null
-            });
-            y((K) => [...K, {
-              id: g,
-              moduleId: c.moduleId,
-              label: `convert: ${z(m.result)}`,
-              status: "running",
-              progress: 0,
-              message: "",
-              result: null
-            }]);
-            const N = await se(g);
-            N.status === "done" && u(`✓ ${N.result}`);
-          }
-        } else if (m.status === "error")
-          u(`✗ ${o.name}: ${m.message}`);
-        else if (m.status === "cancelled") {
-          u(`⊘ ${o.name}: ${r("cancelled", "zrušené")}`);
-          break;
+    }))
+  });
+  for (let i = 0; i < groups.length && !shared.cancelFlag.current; i++) {
+    const g = groups[i];
+    try {
+      const jobId = await api.invoke("merge_videos", {
+        files: g.files,
+        outputName: g.name,
+        music: s.musicEnabled ? s.music : null,
+        moduleId: api.moduleId,
+        outputDir: s.outDir || null,
+        loopMusic: s.loopMusic
+      });
+      store.setState((st) => {
+        const jobs = [...st.jobs];
+        jobs[i] = { ...jobs[i], id: jobId, progress: 0, message: "" };
+        return { jobs };
+      });
+      log(`\u25B6 ${g.name} (${g.files.length} ${t("videos_count", "vide\xED")})`);
+      const res = await watchJob(jobId);
+      if (res.status === "done" && res.result) {
+        log(`\u2713 ${res.result}`);
+        if (s.convertAfter) {
+          const preset = PRESETS.find((p) => p.id === s.preset);
+          const label = preset ? preset.labelKey ? t(preset.labelKey, preset.labelKey) : preset.label : s.preset;
+          log(`${t("converting", "Konvertujem")}: ${label}`);
+          const convId = await api.invoke("convert_video", {
+            input: res.result,
+            preset: s.preset,
+            moduleId: api.moduleId,
+            outputDir: s.outDir || null
+          });
+          store.setState((st) => ({
+            jobs: [
+              ...st.jobs,
+              {
+                id: convId,
+                moduleId: api.moduleId,
+                label: `convert: ${baseName(res.result)}`,
+                status: "running",
+                progress: 0,
+                message: "",
+                result: null
+              }
+            ]
+          }));
+          const convRes = await watchJob(convId);
+          if (convRes.status === "done") log(`\u2713 ${convRes.result}`);
         }
-      } catch (d) {
-        E(String(d)), u(String(d)), y((m) => {
-          const g = [...m];
-          return g[s] = { ...g[s], status: "error", message: String(d) }, g;
-        });
+      } else if (res.status === "error") {
+        log(`\u2717 ${g.name}: ${res.message}`);
+      } else if (res.status === "cancelled") {
+        log(`\u2298 ${g.name}: ${t("cancelled", "zru\u0161en\xE9")}`);
+        break;
+      }
+    } catch (e) {
+      store.setState((st) => {
+        const jobs = [...st.jobs];
+        jobs[i] = { ...jobs[i], status: "error", message: String(e) };
+        return { jobs, error: String(e) };
+      });
+      log(String(e));
+    }
+  }
+  log(t("finished_log", "Spracovanie ukon\u010Den\xE9."));
+}
+async function cancelAll() {
+  shared.cancelFlag.current = true;
+  for (const j of store.getState().jobs) {
+    if (j.status === "running" && !j.id.startsWith("pending")) {
+      await api.cancelJob(j.id);
+    }
+  }
+}
+function resetAll() {
+  store.setState({
+    ...initialState,
+    restored: true,
+    sdFolders: store.getState().sdFolders
+  });
+}
+if (api.registerToolbar) {
+  api.registerToolbar([
+    {
+      id: "scan",
+      icon: "\u{1F4C2}",
+      labelKey: "tool_scan",
+      onClick: () => {
+        if (!busy() && !store.getState().scanning) void pickAndScan();
+      }
+    },
+    {
+      id: "add",
+      icon: "\u2795",
+      labelKey: "tool_add",
+      onClick: () => {
+        if (!busy()) void addManual();
+      }
+    },
+    {
+      id: "start",
+      icon: "\u25B6\uFE0F",
+      labelKey: "tool_start",
+      onClick: () => {
+        if (!busy()) void startMerge();
       }
     }
-    u(r("finished_log", "Spracovanie ukončené."));
-  }, ge = async () => {
-    B.current = !0;
-    for (const e of R) e.status === "running" && !e.id.startsWith("pending") && await c.cancelJob(e.id);
-  }, he = () => {
-    y([]), w([]), I([]), T(null), P(!1), V(null), E("");
-  }, fe = c.PlayerShell;
-  return /* @__PURE__ */ t.createElement("div", { className: "p-6" }, /* @__PURE__ */ t.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold mb-4" }, r("source", "Zdroj videí")), /* @__PURE__ */ t.createElement("div", { className: "flex flex-wrap gap-2" }, /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: me,
-      disabled: k || n,
-      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
-    },
-    k ? r("loading", "Načítavam…") : r("scan_folder", "Vybrať priečinok a skenovať")
-  ), /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: ue,
-      disabled: n,
-      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
-    },
-    r("add_videos", "Pridať videá ručne")
-  ), b.length > 0 && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: () => re(!0),
-      disabled: n,
-      className: "px-3 py-2.5 rounded-xl text-xs font-medium text-text-dim border border-border hover:bg-bg-card-hover"
-    },
-    r("check_all", "Vybrať všetko")
-  ), /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: () => re(!1),
-      disabled: n,
-      className: "px-3 py-2.5 rounded-xl text-xs font-medium text-text-dim border border-border hover:bg-bg-card-hover"
-    },
-    r("uncheck_all", "Zrušiť výber")
-  ))), Y.length > 0 && !b.length && /* @__PURE__ */ t.createElement("div", { className: "mt-4" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, r("sd_cards", "Nájdené médiá (SD karty)")), /* @__PURE__ */ t.createElement("div", { className: "flex flex-wrap gap-2" }, Y.map((e) => /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      key: e.path,
-      onClick: () => {
-        h(e.path), Z(e.path);
-      },
-      disabled: k || n,
-      className: "px-3 py-2 rounded-xl text-xs font-mono bg-bg border border-border hover:border-accent/40 transition-colors disabled:opacity-50"
-    },
-    e.path,
-    " ",
-    /* @__PURE__ */ t.createElement("span", { className: "text-accent" }, "(", e.mp4_count, " mp4)")
-  )))), p && /* @__PURE__ */ t.createElement("p", { className: "mt-3 text-xs font-mono text-text-dim break-all" }, p), b.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "mt-4 space-y-3" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, r("flights", "Lety"), " (", b.length, ") · ", ie.toFixed(0), " MB"), b.map((e, a) => /* @__PURE__ */ t.createElement("div", { key: a, className: "rounded-xl border border-border bg-bg overflow-hidden" }, /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-card-hover/50" }, /* @__PURE__ */ t.createElement(
+  ]);
+}
+function SidePanel() {
+  const s = useStore();
+  const isBusy = busy();
+  const total = selectedPaths().length;
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-4 px-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: e.checked,
-      onChange: () => be(a),
-      disabled: n,
+      checked: s.musicEnabled,
+      onChange: (e) => store.setState({ musicEnabled: e.target.checked }),
+      disabled: isBusy,
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ t.createElement("span", { className: "font-medium text-sm" }, r("flight", "Let"), " ", a + 1), /* @__PURE__ */ t.createElement("span", { className: "text-xs text-text-dim" }, e.clips.length, " ", r("videos_count", "videí"), " · ", e.total_mb.toFixed(0), " MB"), /* @__PURE__ */ t.createElement("span", { className: "ml-auto text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent" }, e.split_reason)), /* @__PURE__ */ t.createElement("div", { className: "border-t border-border divide-y divide-border" }, e.clips.map((l, s) => /* @__PURE__ */ t.createElement("div", { key: s, className: "flex items-center gap-3 px-3 py-2 pl-9" }, /* @__PURE__ */ t.createElement(
-    "input",
-    {
-      type: "checkbox",
-      checked: l.checked,
-      onChange: () => pe(a, s),
-      disabled: n || !e.checked,
-      className: "w-3.5 h-3.5 accent-[#6366f1]"
-    }
-  ), /* @__PURE__ */ t.createElement("span", { className: "flex-1 text-xs truncate", title: l.path }, z(l.path)), /* @__PURE__ */ t.createElement("span", { className: "text-[10px] text-text-dim font-mono" }, l.size_mb.toFixed(0), " MB"), /* @__PURE__ */ t.createElement("span", { className: "text-[10px] text-text-dim" }, Ee(l.time)), /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: () => V(A === l.path ? null : l.path),
-      className: `text-[10px] px-2 py-1 rounded border transition-colors ${A === l.path ? "bg-accent text-white border-accent" : "text-text-dim border-border hover:border-accent/40"}`
-    },
-    r("preview", "Náhľad")
-  ))))))), x.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "mt-4" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, r("manual_videos", "Ručne pridané"), " (", x.length, ")"), /* @__PURE__ */ t.createElement("div", { className: "space-y-1" }, x.map((e, a) => /* @__PURE__ */ t.createElement("div", { key: e, className: "flex items-center gap-2 px-3 py-1.5 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ t.createElement("span", { className: "flex-1 text-xs truncate" }, z(e)), /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: () => V(A === e ? null : e),
-      className: "text-[10px] px-2 py-1 rounded text-text-dim border border-border hover:border-accent/40"
-    },
-    r("preview", "Náhľad")
-  ), /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: () => I((l) => l.filter((s, o) => o !== a)),
-      disabled: n,
-      className: "text-[10px] px-2 py-1 rounded text-error hover:bg-error/10"
-    },
-    "✕"
-  ))))), A && /* @__PURE__ */ t.createElement("div", { className: "mt-4 rounded-xl overflow-hidden border border-border bg-black" }, /* @__PURE__ */ t.createElement(fe, { src: A }))), /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-3" }, /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ t.createElement(
-    "input",
-    {
-      type: "checkbox",
-      checked: C,
-      onChange: (e) => P(e.target.checked),
-      disabled: n,
-      className: "w-4 h-4 accent-[#6366f1]"
-    }
-  ), /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, r("music", "Hudba na pozadí"))), C && /* @__PURE__ */ t.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ t.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm font-medium" }, t("music", "Hudba na pozad\xED"))), s.musicEnabled && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap items-center gap-2 pl-7" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: async () => {
-        const e = await c.pickFiles(ke, !1);
-        e && !Array.isArray(e) && T(e);
+        const f = await api.pickFiles(AUDIO_FILTERS, false);
+        if (f && !Array.isArray(f)) store.setState({ music: f });
       },
-      disabled: n,
-      className: "px-4 py-2 rounded-xl text-sm bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
+      disabled: isBusy,
+      className: "px-3 py-1.5 rounded-lg text-xs bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
     },
-    v ? z(v) : r("pick_music", "Vybrať hudobný súbor")
-  ), v && /* @__PURE__ */ t.createElement("button", { onClick: () => T(null), disabled: n, className: "px-2 py-1 text-error hover:bg-error/10 rounded" }, "✕"), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-2 text-sm text-text-dim" }, /* @__PURE__ */ t.createElement(
+    s.music ? baseName(s.music) : t("pick_music", "Vybra\u0165 hudobn\xFD s\xFAbor")
+  ), s.music && /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ music: null }),
+      disabled: isBusy,
+      className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs"
+    },
+    "\u2715"
+  ), /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-2 text-xs text-text-dim" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: D,
-      onChange: (e) => H(e.target.checked),
-      disabled: n,
+      checked: s.loopMusic,
+      onChange: (e) => store.setState({ loopMusic: e.target.checked }),
+      disabled: isBusy,
       className: "w-3.5 h-3.5 accent-[#6366f1]"
     }
-  ), r("loop_music", "Opakovať hudbu (slučka)")))), /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, r("output", "Výstup")), /* @__PURE__ */ t.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, r("merge_mode", "Režim spájania")), /* @__PURE__ */ t.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ t.createElement(
+  ), t("loop_music", "Opakova\u0165 hudbu (slu\u010Dka)")))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider px-1" }, t("output", "V\xFDstup")), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("merge_mode", "Re\u017Eim sp\xE1jania")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: () => L("flights"),
-      disabled: n,
-      className: `flex-1 px-3 py-2.5 text-sm ${_ === "flights" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
+      onClick: () => store.setState({ mode: "flights" }),
+      disabled: isBusy,
+      className: `flex-1 px-3 py-2 text-xs ${s.mode === "flights" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
     },
-    r("mode_flights", "Podľa letov")
-  ), /* @__PURE__ */ t.createElement(
+    t("mode_flights", "Pod\u013Ea letov")
+  ), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: () => L("all"),
-      disabled: n,
-      className: `flex-1 px-3 py-2.5 text-sm ${_ === "all" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
+      onClick: () => store.setState({ mode: "all" }),
+      disabled: isBusy,
+      className: `flex-1 px-3 py-2 text-xs ${s.mode === "all" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
     },
-    r("mode_all", "Všetko do jedného")
-  ))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, r("output_name", "Názov súboru")), /* @__PURE__ */ t.createElement(
+    t("mode_all", "V\u0161etko do jedn\xE9ho")
+  ))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("output_name", "N\xE1zov s\xFAboru")), /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "text",
-      value: f,
-      onChange: (e) => q(e.target.value),
-      disabled: n,
-      className: "w-full px-3 py-2.5 bg-bg rounded-xl border border-border text-sm text-text outline-none focus:border-accent/50"
+      value: s.outputName,
+      onChange: (e) => store.setState({ outputName: e.target.value }),
+      disabled: isBusy,
+      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none focus:border-accent/50"
     }
-  ))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, r("output_dir", "Výstupný priečinok (voliteľné)")), /* @__PURE__ */ t.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ t.createElement(
+  )), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("output_dir", "V\xFDstupn\xFD prie\u010Dinok (volite\u013En\xE9)")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: async () => {
-        const e = await c.pickDirectory();
-        e && G(e);
+        const dir = await api.pickDirectory();
+        if (dir) store.setState({ outDir: dir });
       },
-      disabled: n,
-      className: "px-4 py-2.5 rounded-xl text-sm bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
+      disabled: isBusy,
+      className: "px-3 py-2 rounded-lg text-xs bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
     },
-    $ ? r("change", "Zmeniť") : r("browse", "Vybrať…")
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim truncate flex-1" }, $ || r("default_output", "(predvolený priečinok aplikácie)")), $ && /* @__PURE__ */ t.createElement("button", { onClick: () => G(""), disabled: n, className: "px-2 py-1 text-error hover:bg-error/10 rounded" }, "✕"))), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 cursor-pointer pt-1" }, /* @__PURE__ */ t.createElement(
+    s.outDir ? t("change", "Zmeni\u0165") : t("browse", "Vybra\u0165\u2026")
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[11px] font-mono text-text-dim truncate flex-1" }, s.outDir || t("default_output", "(predvolen\xFD prie\u010Dinok aplik\xE1cie)")), s.outDir && /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ outDir: "" }),
+      disabled: isBusy,
+      className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs"
+    },
+    "\u2715"
+  ))), /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: S,
-      onChange: (e) => W(e.target.checked),
-      disabled: n,
+      checked: s.convertAfter,
+      onChange: (e) => store.setState({ convertAfter: e.target.checked }),
+      disabled: isBusy,
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-sm" }, r("convert_after", "Po spojení konvertovať")), S && /* @__PURE__ */ t.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("convert_after", "Po spojen\xED konvertova\u0165"))), s.convertAfter && /* @__PURE__ */ react_shim_default.createElement(
     "select",
     {
-      value: M,
-      onChange: (e) => Q(e.target.value),
-      disabled: n,
-      className: "ml-2 px-3 py-1.5 bg-bg rounded-lg border border-border text-sm text-text outline-none"
+      value: s.preset,
+      onChange: (e) => store.setState({ preset: e.target.value }),
+      disabled: isBusy,
+      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
     },
-    oe.map((e) => /* @__PURE__ */ t.createElement("option", { key: e.id, value: e.id }, e.label))
-  ))), j && /* @__PURE__ */ t.createElement("div", { className: "bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error" }, j), /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, R.length > 0 ? /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("div", { className: "space-y-3" }, R.map((e) => /* @__PURE__ */ t.createElement("div", { key: e.id }, /* @__PURE__ */ t.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium truncate" }, e.label), /* @__PURE__ */ t.createElement("span", { className: `text-xs font-mono ${e.status === "error" ? "text-error" : e.status === "done" ? "text-success" : "text-text-dim"}` }, e.status === "running" ? e.progress >= 0 ? `${Math.round(e.progress)}%` : e.message || "…" : e.status === "done" ? "✓" : e.status === "cancelled" ? r("cancelled", "zrušené") : e.status === "error" ? r("error", "chyba") : e.message)), /* @__PURE__ */ t.createElement("div", { className: "w-full h-2 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ t.createElement(
+    PRESETS.map((p) => /* @__PURE__ */ react_shim_default.createElement("option", { key: p.id, value: p.id }, p.labelKey ? t(p.labelKey, p.labelKey) : p.label))
+  )), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-error/10 border border-error/30 rounded-lg p-3 text-xs text-error" }, s.error), s.jobs.length > 0 ? /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, s.jobs.map((job) => /* @__PURE__ */ react_shim_default.createElement("div", { key: job.id }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center mb-1" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs font-medium truncate" }, job.label), /* @__PURE__ */ react_shim_default.createElement(
+    "span",
+    {
+      className: `text-[11px] font-mono ${job.status === "error" ? "text-error" : job.status === "done" ? "text-success" : "text-text-dim"}`
+    },
+    job.status === "running" ? job.progress >= 0 ? `${Math.round(job.progress)}%` : job.message || "\u2026" : job.status === "done" ? "\u2713" : job.status === "cancelled" ? t("cancelled", "zru\u0161en\xE9") : job.status === "error" ? t("error", "chyba") : job.message
+  )), /* @__PURE__ */ react_shim_default.createElement("div", { className: "w-full h-1.5 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
-      className: `h-full rounded-full transition-all duration-300 ${e.status === "error" ? "bg-error" : e.status === "done" ? "bg-success" : "bg-accent"}`,
-      style: { width: e.status === "done" ? "100%" : `${Math.max(2, Math.min(100, e.progress))}%` }
+      className: `h-full rounded-full transition-all duration-300 ${job.status === "error" ? "bg-error" : job.status === "done" ? "bg-success" : "bg-accent"}`,
+      style: {
+        width: job.status === "done" ? "100%" : `${Math.max(2, Math.min(100, job.progress))}%`
+      }
     }
-  )), e.result && /* @__PURE__ */ t.createElement("p", { className: "mt-1 text-[10px] font-mono text-text-dim break-all" }, e.result)))), /* @__PURE__ */ t.createElement("div", { className: "flex gap-2" }, n && /* @__PURE__ */ t.createElement(
+  )), job.result && /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-1 text-[10px] font-mono text-text-dim break-all" }, job.result))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-2" }, isBusy && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: ge,
-      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
+      onClick: cancelAll,
+      className: "px-3 py-2 rounded-lg text-xs font-medium bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
     },
-    r("cancel_all", "Zrušiť všetko")
-  ), !n && /* @__PURE__ */ t.createElement(
+    t("cancel_all", "Zru\u0161i\u0165 v\u0161etko")
+  ), !isBusy && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: he,
-      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
+      onClick: resetAll,
+      className: "px-3 py-2 rounded-lg text-xs font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
     },
-    r("new_merge", "Nové spájanie")
-  ))) : /* @__PURE__ */ t.createElement(
+    t("new_merge", "Nov\xE9 sp\xE1janie")
+  ))) : /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: xe,
-      disabled: O.length < 1 || k,
-      className: "w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
+      onClick: startMerge,
+      disabled: isBusy || s.scanning || total < 1,
+      className: "w-full px-4 py-2.5 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
     },
-    r("start_merge", "Spustiť spracovanie"),
+    t("start_merge", "Spusti\u0165 spracovanie"),
     " (",
-    O.length,
+    total,
     " ",
-    r("videos_count", "videí"),
+    t("videos_count", "vide\xED"),
     ")"
-  )), ee.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, r("log", "Log")), /* @__PURE__ */ t.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, ee.map((e, a) => /* @__PURE__ */ t.createElement("div", { key: a }, e))))));
+  ));
 }
+if (api.registerSidePanel) {
+  api.registerSidePanel(SidePanel);
+}
+function Merger() {
+  const s = useStore();
+  const saveTimer = useRef2(null);
+  const isBusy = busy();
+  const selectedMb = useMemo2(
+    () => s.flights.filter((f) => f.checked).reduce((a, f) => a + f.clips.filter((c) => c.checked).reduce((b, c) => b + c.size_mb, 0), 0),
+    [s.flights]
+  );
+  useEffect2(() => {
+    api.invoke("find_media_folders").then((folders) => {
+      store.setState({ sdFolders: folders });
+      if (folders.length) log(`${t("sd_found", "N\xE1jden\xE9 m\xE9di\xE1")}: ${folders.length}`);
+    }).catch(() => {
+    });
+    (async () => {
+      try {
+        const cfg = await api.invoke("get_module_config", { id: api.moduleId });
+        const sess = cfg?.session;
+        if (sess) {
+          const patch = {};
+          if (sess.mode === "all" || sess.mode === "flights") patch.mode = sess.mode;
+          if (sess.outputName) patch.outputName = sess.outputName;
+          patch.musicEnabled = !!sess.musicEnabled;
+          patch.music = sess.music ?? null;
+          patch.loopMusic = sess.loopMusic !== false;
+          patch.convertAfter = !!sess.convertAfter;
+          if (sess.preset) patch.preset = sess.preset;
+          if (Array.isArray(sess.manual)) patch.manual = sess.manual.filter((x) => typeof x === "string");
+          store.setState(patch);
+          if (sess.folder) {
+            store.setState({ folder: sess.folder, restored: true });
+            await scanFolder(sess.folder);
+            return;
+          }
+        }
+      } catch {
+      }
+      store.setState({ restored: true });
+    })();
+  }, []);
+  useEffect2(() => {
+    if (!s.restored || isBusy) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const st = store.getState();
+      api.invoke("set_module_config", {
+        id: api.moduleId,
+        config: {
+          session: {
+            folder: st.folder,
+            manual: st.manual,
+            mode: st.mode,
+            outputName: st.outputName,
+            musicEnabled: st.musicEnabled,
+            music: st.music,
+            loopMusic: st.loopMusic,
+            convertAfter: st.convertAfter,
+            preset: st.preset
+          }
+        }
+      }).catch(() => {
+      });
+    }, 600);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [s.folder, s.manual, s.mode, s.outputName, s.musicEnabled, s.music, s.loopMusic, s.convertAfter, s.preset, s.restored, isBusy]);
+  const PlayerShell = api.PlayerShell;
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-4" }, t("source", "Zdroj vide\xED")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: pickAndScan,
+      disabled: s.scanning || isBusy,
+      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
+    },
+    s.scanning ? t("loading", "Na\u010D\xEDtavam\u2026") : t("scan_folder", "Vybra\u0165 prie\u010Dinok a skenova\u0165")
+  ), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: addManual,
+      disabled: isBusy,
+      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
+    },
+    t("add_videos", "Prida\u0165 vide\xE1 ru\u010Dne")
+  ), s.flights.length > 0 && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => checkAll(true),
+      disabled: isBusy,
+      className: "px-3 py-2.5 rounded-xl text-xs font-medium text-text-dim border border-border hover:bg-bg-card-hover"
+    },
+    t("check_all", "Vybra\u0165 v\u0161etko")
+  ), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => checkAll(false),
+      disabled: isBusy,
+      className: "px-3 py-2.5 rounded-xl text-xs font-medium text-text-dim border border-border hover:bg-bg-card-hover"
+    },
+    t("uncheck_all", "Zru\u0161i\u0165 v\xFDber")
+  ))), s.sdFolders.length > 0 && !s.flights.length && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("sd_cards", "N\xE1jden\xE9 m\xE9di\xE1 (SD karty)")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap gap-2" }, s.sdFolders.map((f) => /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      key: f.path,
+      onClick: () => {
+        store.setState({ folder: f.path });
+        void scanFolder(f.path);
+      },
+      disabled: s.scanning || isBusy,
+      className: "px-3 py-2 rounded-xl text-xs font-mono bg-bg border border-border hover:border-accent/40 transition-colors disabled:opacity-50"
+    },
+    f.path,
+    " ",
+    /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-accent" }, "(", f.mp4_count, " mp4)")
+  )))), s.folder && /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-3 text-xs font-mono text-text-dim break-all" }, s.folder), s.flights.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4 space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, t("flights", "Lety"), " (", s.flights.length, ") \xB7 ", selectedMb.toFixed(0), " MB"), s.flights.map((flight, fi) => /* @__PURE__ */ react_shim_default.createElement("div", { key: fi, className: "rounded-xl border border-border bg-bg overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-card-hover/50" }, /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: flight.checked,
+      onChange: () => toggleFlight(fi),
+      disabled: isBusy,
+      className: "w-4 h-4 accent-[#6366f1]"
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "font-medium text-sm" }, t("flight", "Let"), " ", fi + 1), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim" }, flight.clips.length, " ", t("videos_count", "vide\xED"), " \xB7 ", flight.total_mb.toFixed(0), " MB"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "ml-auto text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent" }, flight.split_reason)), /* @__PURE__ */ react_shim_default.createElement("div", { className: "border-t border-border divide-y divide-border" }, flight.clips.map((clip, ci) => /* @__PURE__ */ react_shim_default.createElement("div", { key: ci, className: "flex items-center gap-3 px-3 py-2 pl-9" }, /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: clip.checked,
+      onChange: () => toggleClip(fi, ci),
+      disabled: isBusy || !flight.checked,
+      className: "w-3.5 h-3.5 accent-[#6366f1]"
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 text-xs truncate", title: clip.path }, baseName(clip.path)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[10px] text-text-dim font-mono" }, clip.size_mb.toFixed(0), " MB"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[10px] text-text-dim" }, fmtDate(clip.time)), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ preview: s.preview === clip.path ? null : clip.path }),
+      className: `text-[10px] px-2 py-1 rounded border transition-colors ${s.preview === clip.path ? "bg-accent text-white border-accent" : "text-text-dim border-border hover:border-accent/40"}`
+    },
+    t("preview", "N\xE1h\u013Ead")
+  ))))))), s.manual.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("manual_videos", "Ru\u010Dne pridan\xE9"), " (", s.manual.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-1" }, s.manual.map((path, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: path, className: "flex items-center gap-2 px-3 py-1.5 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 text-xs truncate" }, baseName(path)), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ preview: s.preview === path ? null : path }),
+      className: "text-[10px] px-2 py-1 rounded text-text-dim border border-border hover:border-accent/40"
+    },
+    t("preview", "N\xE1h\u013Ead")
+  ), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState((st) => ({ manual: st.manual.filter((_, j) => j !== i) })),
+      disabled: isBusy,
+      className: "text-[10px] px-2 py-1 rounded text-error hover:bg-error/10"
+    },
+    "\u2715"
+  ))))), s.preview && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-4 rounded-xl overflow-hidden border border-border bg-black" }, /* @__PURE__ */ react_shim_default.createElement(PlayerShell, { src: s.preview }))), !api.registerSidePanel && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement(SidePanel, null)), !api.registerSidePanel && s.error && null, s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line))))));
+}
+var index_default = Merger;
 export {
-  ye as default
+  index_default as default
 };

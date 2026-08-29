@@ -41,5 +41,9 @@
   "start_merge": "Start processing",
   "done": "Done!",
   "error": "error",
-  "log": "Log"
+  "log": "Log",
+  "tool_scan": "Scan folder",
+  "tool_add": "Add videos",
+  "tool_start": "Start processing",
+  "bad_response": "Unexpected response from core."
 }
