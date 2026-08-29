@@ -23,5 +23,6 @@
   "tool_new_style": "Neuer Stil",
   "tool_clear": "Filter entfernen",
   "intensity": "Intensität",
-  "preview_compare": "Links Original, rechts abgeleiteter Ton"
+  "preview_compare": "Links Original, rechts abgeleiteter Ton",
+  "sky_only": "Nur helle Bereiche (Himmel)"
 }

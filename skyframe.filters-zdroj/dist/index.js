@@ -22,6 +22,8 @@ var initialState = {
   activePresetId: null,
   intensity: 80,
   // sila štýlu v % (mierni kanálové posuny aj css)
+  skyOnly: false,
+  // aplikovať tón len na svetlé partie (obloha) — luma maska
   presets: [],
   // {id, name, style, avgColor, favorite, createdAt}[]
   showNewStyle: false,
@@ -75,6 +77,20 @@ function fullFilterString(style, intensity, filterId = MAIN_FILTER_ID) {
   const s = scaledStyle(style, intensity);
   return `url(#${filterId}) brightness(${s.css.brightness.toFixed(1)}%) contrast(${s.css.contrast.toFixed(1)}%) saturate(${s.css.saturate.toFixed(1)}%)`;
 }
+function SkyFilterDefs({ style, intensity, filterId }) {
+  if (!style) return null;
+  const s = scaledStyle(style, intensity);
+  return /* @__PURE__ */ react_shim_default.createElement("svg", { width: "0", height: "0", style: { position: "absolute" }, "aria-hidden": "true" }, /* @__PURE__ */ react_shim_default.createElement("filter", { id: filterId, colorInterpolationFilters: "sRGB" }, /* @__PURE__ */ react_shim_default.createElement(
+    "feColorMatrix",
+    {
+      in: "SourceGraphic",
+      result: "lumamap",
+      type: "matrix",
+      values: "0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.299 0.587 0.114 0 0"
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("feComponentTransfer", { in: "lumamap", result: "mask" }, /* @__PURE__ */ react_shim_default.createElement("feFuncA", { type: "table", tableValues: "0 0 0.15 1 1" })), /* @__PURE__ */ react_shim_default.createElement("feComponentTransfer", { in: "SourceGraphic", result: "tinted" }, /* @__PURE__ */ react_shim_default.createElement("feFuncR", { type: "linear", slope: s.channels.r.slope.toFixed(4), intercept: s.channels.r.intercept.toFixed(4) }), /* @__PURE__ */ react_shim_default.createElement("feFuncG", { type: "linear", slope: s.channels.g.slope.toFixed(4), intercept: s.channels.g.intercept.toFixed(4) }), /* @__PURE__ */ react_shim_default.createElement("feFuncB", { type: "linear", slope: s.channels.b.slope.toFixed(4), intercept: s.channels.b.intercept.toFixed(4) })), /* @__PURE__ */ react_shim_default.createElement("feComposite", { in: "tinted", in2: "mask", operator: "in", result: "tintedMasked" }), /* @__PURE__ */ react_shim_default.createElement("feMerge", null, /* @__PURE__ */ react_shim_default.createElement("feMergeNode", { in: "SourceGraphic" }), /* @__PURE__ */ react_shim_default.createElement("feMergeNode", { in: "tintedMasked" }))));
+}
+var SKY_FILTER_ID = "skyframe-style-sky";
 function ChannelFilterDefs({ style, intensity, filterId = MAIN_FILTER_ID }) {
   if (!style) return null;
   const s = scaledStyle(style, intensity);
@@ -243,7 +259,15 @@ function SidePanel() {
       onChange: (e) => store.setState({ intensity: Number(e.target.value) }),
       className: "w-full accent-[#6366f1]"
     }
-  ))), /* @__PURE__ */ react_shim_default.createElement(
+  )), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: s.skyOnly,
+      onChange: (e) => store.setState({ skyOnly: e.target.checked }),
+      className: "w-4 h-4 accent-[#6366f1]"
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len svetl\xE9 partie (obloha)")))), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ showNewStyle: true }),
@@ -305,7 +329,7 @@ function Filters() {
     store.setState({ presetName: "", tempAnalysis: null, tempPhotoUrl: "", showNewStyle: false });
   };
   const closeModal = () => store.setState({ showNewStyle: false, tempAnalysis: null, presetName: "", tempPhotoUrl: "" });
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement(ChannelFilterDefs, { style: s.activeStyle, intensity: s.intensity }), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, "\u{1F3A8} ", t("title", "Filtre")), /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement(ChannelFilterDefs, { style: s.activeStyle, intensity: s.intensity }), /* @__PURE__ */ react_shim_default.createElement(SkyFilterDefs, { style: s.activeStyle, intensity: s.intensity, filterId: SKY_FILTER_ID }), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, "\u{1F3A8} ", t("title", "Filtre")), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: pickVideo,
@@ -316,7 +340,9 @@ function Filters() {
     "div",
     {
       className: "rounded-xl overflow-hidden border border-border bg-black",
-      style: { filter: fullFilterString(s.activeStyle, s.intensity) }
+      style: {
+        filter: s.skyOnly ? s.activeStyle ? `url(#${SKY_FILTER_ID})` : "" : fullFilterString(s.activeStyle, s.intensity)
+      }
     },
     /* @__PURE__ */ react_shim_default.createElement(PlayerShell, { src: s.videoPath })
   )) : /* @__PURE__ */ react_shim_default.createElement(
@@ -364,6 +390,8 @@ function Filters() {
           type: "text",
           value: s.presetName,
           onChange: (e) => store.setState({ presetName: e.target.value }),
+          onKeyDown: (e) => e.stopPropagation(),
+          onKeyUp: (e) => e.stopPropagation(),
           placeholder: t("style_name", "N\xE1zov \u0161t\xFDlu\u2026"),
           className: "w-full px-3 py-2 mb-3 bg-bg rounded-lg border border-border text-sm text-text outline-none focus:border-accent/50"
         }

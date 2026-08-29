@@ -23,5 +23,6 @@
   "tool_new_style": "New style",
   "tool_clear": "Clear filter",
   "intensity": "Intensity",
-  "preview_compare": "Left original, right derived tone"
+  "preview_compare": "Left original, right derived tone",
+  "sky_only": "Bright areas only (sky)"
 }

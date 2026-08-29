@@ -23,5 +23,6 @@
   "tool_new_style": "新风格",
   "tool_clear": "清除滤镜",
   "intensity": "强度",
-  "preview_compare": "左为原图，右为生成的色调"
+  "preview_compare": "左为原图，右为生成的色调",
+  "sky_only": "仅亮部区域（天空）"
 }

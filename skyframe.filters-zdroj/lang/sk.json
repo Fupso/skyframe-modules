@@ -23,5 +23,6 @@
   "tool_new_style": "Nový štýl",
   "tool_clear": "Zrušiť filter",
   "intensity": "Intenzita",
-  "preview_compare": "Vľavo originál, vpravo odvodený tón"
+  "preview_compare": "Vľavo originál, vpravo odvodený tón",
+  "sky_only": "Len svetlé partie (obloha)"
 }

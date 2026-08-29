@@ -1,4 +1,4 @@
-// skyframe.filters v1.1.1 — Filtre
+// skyframe.filters v1.2.0 — Filtre
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
 // priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
 // (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
@@ -22,6 +22,7 @@ const initialState = {
   activeStyle: null,    // {channels:{r,g,b:{slope,intercept}}, css:{brightness,contrast,saturate}} | null
   activePresetId: null,
   intensity: 80,        // sila štýlu v % (mierni kanálové posuny aj css)
+  skyOnly: false,       // aplikovať tón len na svetlé partie (obloha) — luma maska
   presets: [],          // {id, name, style, avgColor, favorite, createdAt}[]
   showNewStyle: false,
   analyzing: false,
@@ -88,6 +89,43 @@ function fullFilterString(style, intensity, filterId = MAIN_FILTER_ID) {
   const s = scaledStyle(style, intensity);
   return `url(#${filterId}) brightness(${s.css.brightness.toFixed(1)}%) contrast(${s.css.contrast.toFixed(1)}%) saturate(${s.css.saturate.toFixed(1)}%)`;
 }
+
+/** SVG filter: tón len na svetlé partie (obloha). Luma -> alpha maska. */
+function SkyFilterDefs({ style, intensity, filterId }) {
+  if (!style) return null;
+  const s = scaledStyle(style, intensity);
+  return (
+    <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+      <filter id={filterId} colorInterpolationFilters="sRGB">
+        {/* luma mapa: alpha = jas pixela */}
+        <feColorMatrix
+          in="SourceGraphic"
+          result="lumamap"
+          type="matrix"
+          values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.299 0.587 0.114 0 0"
+        />
+        {/* mäkký prah — maska zachytí svetlé partie od ~55 % jasu */}
+        <feComponentTransfer in="lumamap" result="mask">
+          <feFuncA type="table" tableValues="0 0 0.15 1 1" />
+        </feComponentTransfer>
+        {/* tónovaná verzia */}
+        <feComponentTransfer in="SourceGraphic" result="tinted">
+          <feFuncR type="linear" slope={s.channels.r.slope.toFixed(4)} intercept={s.channels.r.intercept.toFixed(4)} />
+          <feFuncG type="linear" slope={s.channels.g.slope.toFixed(4)} intercept={s.channels.g.intercept.toFixed(4)} />
+          <feFuncB type="linear" slope={s.channels.b.slope.toFixed(4)} intercept={s.channels.b.intercept.toFixed(4)} />
+        </feComponentTransfer>
+        {/* tón len cez masku */}
+        <feComposite in="tinted" in2="mask" operator="in" result="tintedMasked" />
+        <feMerge>
+          <feMergeNode in="SourceGraphic" />
+          <feMergeNode in="tintedMasked" />
+        </feMerge>
+      </filter>
+    </svg>
+  );
+}
+
+const SKY_FILTER_ID = "skyframe-style-sky";
 
 /** Skrytý SVG filter s feComponentTransfer — definícia pre url(#...) vyššie. */
 function ChannelFilterDefs({ style, intensity, filterId = MAIN_FILTER_ID }) {
@@ -307,6 +345,17 @@ function SidePanel() {
             />
           </div>
         )}
+        {s.activeStyle && (
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={s.skyOnly}
+              onChange={(e) => store.setState({ skyOnly: e.target.checked })}
+              className="w-4 h-4 accent-[#6366f1]"
+            />
+            <span className="text-sm">{t("sky_only", "Len svetlé partie (obloha)")}</span>
+          </label>
+        )}
       </div>
 
       <button
@@ -413,8 +462,9 @@ function Filters() {
 
   return (
     <div className="p-6 overflow-y-auto h-full">
-      {/* Definícia SVG filtra pre aktívny štýl */}
+      {/* Definícia SVG filtrov pre aktívny štýl */}
       <ChannelFilterDefs style={s.activeStyle} intensity={s.intensity} />
+      <SkyFilterDefs style={s.activeStyle} intensity={s.intensity} filterId={SKY_FILTER_ID} />
 
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="bg-bg-card rounded-2xl border border-border p-6">
@@ -438,7 +488,13 @@ function Filters() {
               {/* Filter sa aplikuje na obal — filtruje video vnútri PlayerShell */}
               <div
                 className="rounded-xl overflow-hidden border border-border bg-black"
-                style={{ filter: fullFilterString(s.activeStyle, s.intensity) }}
+                style={{
+                  filter: s.skyOnly
+                    ? s.activeStyle
+                      ? `url(#${SKY_FILTER_ID})`
+                      : ""
+                    : fullFilterString(s.activeStyle, s.intensity),
+                }}
               >
                 <PlayerShell src={s.videoPath} />
               </div>
@@ -517,6 +573,8 @@ function Filters() {
                   type="text"
                   value={s.presetName}
                   onChange={(e) => store.setState({ presetName: e.target.value })}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onKeyUp={(e) => e.stopPropagation()}
                   placeholder={t("style_name", "Názov štýlu…")}
                   className="w-full px-3 py-2 mb-3 bg-bg rounded-lg border border-border text-sm text-text outline-none focus:border-accent/50"
                 />
