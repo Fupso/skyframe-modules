@@ -35,5 +35,9 @@
   "error": "Error",
   "cancel_all": "Cancel all",
   "new_cut": "New cut",
-  "log": "Log"
+  "log": "Log",
+  "tool_open": "Open video",
+  "tool_add": "Add segment",
+  "tool_export": "Export",
+  "no_video_timeline": "Pick a video first."
 }

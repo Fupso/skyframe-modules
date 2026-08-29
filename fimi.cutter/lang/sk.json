@@ -35,5 +35,9 @@
   "error": "Chyba",
   "cancel_all": "Zrušiť všetko",
   "new_cut": "Nový strih",
-  "log": "Log"
+  "log": "Log",
+  "tool_open": "Otvoriť video",
+  "tool_add": "Pridať úsek",
+  "tool_export": "Exportovať",
+  "no_video_timeline": "Najprv vyber video."
 }

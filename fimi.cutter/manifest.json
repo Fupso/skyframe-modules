@@ -1,7 +1,7 @@
 {
   "id": "fimi.cutter",
   "name": "Strihač",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "author": "SkyFrame Community",
   "description": "Vystrihni úseky z videa na časovej osi s náhľadmi, pridaj hudbu, spoj do jedného výstupu.",
   "permissions": ["filesystem.read", "ffmpeg.execute"],

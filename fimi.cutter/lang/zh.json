@@ -35,5 +35,9 @@
   "error": "错误",
   "cancel_all": "全部取消",
   "new_cut": "新建剪辑",
-  "log": "日志"
+  "log": "日志",
+  "tool_open": "打开视频",
+  "tool_add": "添加片段",
+  "tool_export": "导出",
+  "no_video_timeline": "请先选择视频。"
 }

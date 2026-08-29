@@ -1,557 +1,879 @@
-const t = window.React;
-t.useState;
-t.useEffect;
-t.useMemo;
-t.useRef;
-t.useCallback;
-const p = window.SkyFrame, o = (s, v) => p.t(s, v), { useState: b, useEffect: G, useMemo: Ye, useRef: I } = window.React, je = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }], et = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac", "ogg"] }], Q = ["#10b981", "#0ea5e9", "#f59e0b", "#f43f5e", "#8b5cf6", "#14b8a6"], Pe = "#22c55e", De = "#ef4444", le = 16;
-function Y(s) {
-  return s.split(/[\\/]/).pop() ?? s;
+// ../cutter-build/react-shim.js
+var R = window.React;
+var react_shim_default = R;
+var useState = R.useState;
+var useEffect = R.useEffect;
+var useMemo = R.useMemo;
+var useRef = R.useRef;
+var useCallback = R.useCallback;
+var useSyncExternalStore = R.useSyncExternalStore;
+var Fragment = R.Fragment;
+
+// index.jsx
+var api = window.SkyFrame;
+var t = (k, f) => api.t(k, f);
+var { useState: useState2, useEffect: useEffect2, useMemo: useMemo2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
+var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
+var AUDIO_FILTERS = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac", "ogg"] }];
+var SEG_COLORS = ["#10b981", "#0ea5e9", "#f59e0b", "#f43f5e", "#8b5cf6", "#14b8a6"];
+var START_COLOR = "#22c55e";
+var END_COLOR = "#ef4444";
+var THUMB_COUNT = 16;
+function baseName(p) {
+  return p.split(/[\\/]/).pop() ?? p;
 }
-function f(s) {
-  const v = Math.max(0, s), R = Math.floor(v / 3600), k = Math.floor(v % 3600 / 60), l = v % 60, w = `${R.toString().padStart(2, "0")}:${k.toString().padStart(2, "0")}:${Math.floor(l).toString().padStart(2, "0")}`, u = Math.round((l - Math.floor(l)) * 10);
-  return u ? `${w}.${u}` : w;
+function fmtTime(s) {
+  const v = Math.max(0, s);
+  const h = Math.floor(v / 3600);
+  const m = Math.floor(v % 3600 / 60);
+  const sec = v % 60;
+  const base = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${Math.floor(sec).toString().padStart(2, "0")}`;
+  const tenth = Math.round((sec - Math.floor(sec)) * 10);
+  return tenth ? `${base}.${tenth}` : base;
 }
-function Fe(s) {
-  const v = s.trim().split(":");
-  if (v.length === 3) {
-    const [k, l, w] = v.map(parseFloat);
-    if ([k, l, w].every((u) => !isNaN(u))) return k * 3600 + l * 60 + w;
-  } else if (v.length === 2) {
-    const [k, l] = v.map(parseFloat);
-    if (!isNaN(k) && !isNaN(l)) return k * 60 + l;
+function parseTime(str) {
+  const parts = str.trim().split(":");
+  if (parts.length === 3) {
+    const [h, m, s] = parts.map(parseFloat);
+    if ([h, m, s].every((n) => !isNaN(n))) return h * 3600 + m * 60 + s;
+  } else if (parts.length === 2) {
+    const [m, s] = parts.map(parseFloat);
+    if (!isNaN(m) && !isNaN(s)) return m * 60 + s;
   }
-  const R = parseFloat(s);
-  return isNaN(R) ? 0 : R;
+  const sec = parseFloat(str);
+  return isNaN(sec) ? 0 : sec;
 }
-function ce() {
+function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
-function tt() {
-  var _e;
-  const [s, v] = b(null), [R, k] = b(0), [l, w] = b(0), [u, L] = b(0), [z, j] = b(0), [ie, de] = b(!1), [me, ue] = b(null), [x, T] = b([]), [P, ee] = b("copy"), [D, pe] = b(!1), [F, te] = b(!1), [M, X] = b(null), [H, be] = b(!0), [B, xe] = b("cut"), [U, re] = b(""), [W, _] = b([]), [fe, Ve] = b([]), [ge, $] = b(""), [he, ve] = b(!1), V = I(!1), Ee = I(null), ye = I(null), Ne = I(null), J = I(null), A = I(null), O = I(null), E = (e) => Ve((r) => [...r.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${e}`]), g = (_e = s == null ? void 0 : s.info) != null && _e.duration && s.info.duration > 0 ? s.info.duration : R, m = W.some((e) => e.status === "running"), we = Ye(() => x.reduce((e, r) => e + (r.end - r.start), 0), [x]);
-  G(() => {
-    p.invoke("get_last_output_dir").then((e) => {
-      e && re(e);
-    }).catch(() => {
-    }), (async () => {
-      try {
-        const e = await p.invoke("get_module_config", { id: p.moduleId }), r = e == null ? void 0 : e.session;
-        if (!r) {
-          ve(!0);
-          return;
-        }
-        if (w(r.selStart ?? 0), L(r.selEnd ?? 0), T((r.segments ?? []).map((a) => ({ id: ce(), start: a.start, end: a.end }))), (r.mode === "copy" || r.mode === "precise") && ee(r.mode), pe(!!r.mergeAfter), te(!!r.withMusic), X(r.music ?? null), be(r.loopMusic !== !1), r.outputName && xe(r.outputName), r.videoPath) {
-          let a = null;
-          try {
-            a = await p.invoke("get_video_info", { path: r.videoPath });
-          } catch {
-          }
-          a && (v({ path: r.videoPath, info: a }), E(`${o("loaded", "Načítané")}: ${Y(r.videoPath)} (${f(a.duration)})`));
-        }
-      } catch {
-      }
-      ve(!0);
-    })();
-  }, []), G(() => {
-    if (!(!he || m))
-      return O.current && clearTimeout(O.current), O.current = setTimeout(() => {
-        const e = {
-          videoPath: (s == null ? void 0 : s.path) ?? null,
-          selStart: l,
-          selEnd: u,
-          segments: x.map((r) => ({ start: r.start, end: r.end })),
-          mode: P,
-          mergeAfter: D,
-          withMusic: F,
-          music: M,
-          loopMusic: H,
-          outputName: B
-        };
-        p.invoke("set_module_config", { id: p.moduleId, config: { session: e } }).catch(() => {
-        });
-      }, 600), () => {
-        O.current && clearTimeout(O.current);
-      };
-  }, [s, l, u, x, P, D, F, M, H, B, he, m]);
-  const ne = () => {
-    var e;
-    return ((e = ye.current) == null ? void 0 : e.querySelector("video")) ?? null;
-  }, q = (e) => {
-    const r = ne();
-    if (r)
-      try {
-        r.pause(), r.currentTime = Math.max(0, Math.min(g || r.duration || e, e));
-      } catch {
-      }
-    j(Math.max(0, Math.min(g || e, e)));
-  };
-  G(() => {
-    if (!s) return;
-    const e = setInterval(() => {
-      const r = ne();
-      r && (!A.current && !J.current && !isNaN(r.currentTime) && j(r.currentTime), g <= 0 && r.duration && isFinite(r.duration) && (k(r.duration), L((a) => a <= 0 ? r.duration : a)));
-    }, 200);
-    return () => clearInterval(e);
-  }, [s == null ? void 0 : s.path, g]), G(() => {
-    if (!s || g <= 0) return;
-    let e = !1, r = null, a = null;
-    const c = (d) => {
-      const n = Ne.current;
-      if (!n || e) return;
-      const i = 960, h = 56;
-      n.width = i, n.height = h;
-      const N = n.getContext("2d");
-      if (!N) return;
-      N.fillStyle = "#000", N.fillRect(0, 0, i, h);
-      const y = document.createElement("video");
-      y.muted = !0, y.preload = "auto";
-      const C = i / le, Se = (Z) => {
-        if (e || Z >= le) return;
-        const Qe = Math.min(Math.max(0.05, (Z + 0.5) / le * g), Math.max(0.05, g - 0.05));
-        let Ce = !1;
-        const ae = () => {
-          if (!Ce) {
-            Ce = !0, y.removeEventListener("seeked", Ie);
-            try {
-              const se = y.videoWidth, oe = y.videoHeight;
-              if (se && oe && !e) {
-                const Re = Math.max(C / se, h / oe), Le = se * Re, Te = oe * Re;
-                N.drawImage(y, Z * C + (C - Le) / 2, (h - Te) / 2, Le, Te);
-              }
-            } catch {
-            }
-            Se(Z + 1);
-          }
-        }, Ie = () => ae();
-        y.addEventListener("seeked", Ie), setTimeout(ae, 900);
-        try {
-          y.currentTime = Qe;
-        } catch {
-          ae();
-        }
-      };
-      y.addEventListener("loadeddata", () => Se(0)), y.addEventListener("error", () => {
-      }), y.src = d;
-    };
-    return r = setInterval(() => {
-      if (e) {
-        r && clearInterval(r);
-        return;
-      }
-      const d = ne();
-      d && d.src && (r && clearInterval(r), c(d.src));
-    }, 500), a = setTimeout(() => {
-      r && clearInterval(r);
-    }, 3e4), () => {
-      e = !0, r && clearInterval(r), a && clearTimeout(a);
-    };
-  }, [s == null ? void 0 : s.path, g]);
-  const Ae = async () => {
-    const e = await p.pickFiles(je, !1);
-    if (!e || Array.isArray(e)) return;
-    let r = null;
+var initialState = {
+  video: null,
+  // { path, info } | null
+  videoDuration: 0,
+  // fallback dĺžka z <video>
+  selStart: 0,
+  selEnd: 0,
+  playhead: 0,
+  scrubbing: false,
+  activeHandle: null,
+  // "start" | "end" | null
+  segments: [],
+  // { id, start, end }[]
+  mode: "copy",
+  // "copy" | "precise"
+  mergeAfter: false,
+  withMusic: false,
+  music: null,
+  // cesta | null
+  loopMusic: true,
+  outputName: "cut",
+  outDir: "",
+  jobs: [],
+  // JobInfo-like[]
+  log: [],
+  // string[]
+  error: "",
+  restored: false
+};
+var state = { ...initialState };
+var listeners = /* @__PURE__ */ new Set();
+var store = {
+  getState: () => state,
+  setState(patch) {
+    state = { ...state, ...typeof patch === "function" ? patch(state) : patch };
+    listeners.forEach((l) => l());
+  },
+  subscribe(l) {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  }
+};
+function useStore() {
+  return useSyncExternalStore2(store.subscribe, store.getState);
+}
+var shared = {
+  playerBox: null,
+  // DOM box s <video> z PlayerShell (nastavuje Main)
+  cancelFlag: { current: false },
+  stripEl: null
+  // interaktívna vrstva timeline (nastavuje Timeline)
+};
+function log(msg) {
+  store.setState((s) => ({
+    log: [...s.log.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${msg}`]
+  }));
+}
+function duration() {
+  const s = store.getState();
+  return (s.video?.info?.duration ?? 0) > 0 ? s.video.info.duration : s.videoDuration;
+}
+function getVideoEl() {
+  return shared.playerBox?.querySelector("video") ?? null;
+}
+function seek(tSec) {
+  const g = duration();
+  const v = getVideoEl();
+  if (v) {
     try {
-      r = await p.invoke("get_video_info", { path: e });
+      v.pause();
+      v.currentTime = Math.max(0, Math.min(g || v.duration || tSec, tSec));
     } catch {
     }
-    v({ path: e, info: r }), k(0), w(0), L((r == null ? void 0 : r.duration) ?? 0), j(0), T([]), _([]), $(""), E(`${o("loaded", "Načítané")}: ${Y(e)}${r ? ` (${f(r.duration)}, ${r.width}×${r.height})` : ""}`);
-  }, K = (e) => {
-    const r = Ee.current;
-    if (!r || g <= 0) return 0;
-    const a = r.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (e - a.left) / a.width)) * g;
-  }, Oe = (e) => {
-    if (!s || m) return;
-    e.preventDefault(), A.current = { startX: e.clientX, moved: !1 };
-    const r = K(e.clientX), a = (d) => {
-      const n = A.current;
-      n && (!n.moved && Math.abs(d.clientX - n.startX) < 4 || (n.moved = !0, de(!0), q(K(d.clientX))));
-    }, c = (d) => {
-      const n = A.current;
-      if (A.current = null, de(!1), window.removeEventListener("pointermove", a), window.removeEventListener("pointerup", c), !n) return;
-      const i = K(d.clientX);
-      n.moved || (Math.abs(i - l) <= Math.abs(i - u) ? w(Math.min(i, u - 0.1)) : L(Math.max(i, l + 0.1))), q(i);
-    };
-    window.addEventListener("pointermove", a), window.addEventListener("pointerup", c), q(r);
-  }, ze = (e) => (r) => {
-    r.stopPropagation(), r.preventDefault(), J.current = e, ue(e);
-    const a = (d) => {
-      const n = K(d.clientX);
-      J.current === "start" ? w((i) => {
-        const h = Math.min(n, u - 0.1);
-        return h >= 0 ? h : i;
-      }) : L((i) => {
-        const h = Math.max(n, l + 0.1);
-        return h <= g ? h : i;
-      }), q(n);
-    }, c = () => {
-      J.current = null, ue(null), window.removeEventListener("pointermove", a), window.removeEventListener("pointerup", c);
-    };
-    window.addEventListener("pointermove", a), window.addEventListener("pointerup", c);
-  }, Xe = (e) => w(Math.max(0, Math.min(Fe(e), u - 0.1))), He = (e) => L(Math.min(g, Math.max(Fe(e), l + 0.1))), Be = () => {
-    if (!(!s || u - l < 0.1)) {
-      if (x.some((e) => Math.abs(e.start - l) < 0.5 && Math.abs(e.end - u) < 0.5)) {
-        $(o("seg_exists", "Tento úsek už existuje."));
-        return;
-      }
-      $(""), T((e) => [...e, { id: ce(), start: l, end: u }].sort((r, a) => r.start - a.start));
-    }
-  }, Ue = (e) => T((r) => r.filter((a) => a.id !== e)), ke = (e) => new Promise((r) => {
-    let a;
-    p.listenJob(e, (c) => {
-      _((d) => d.map((n) => n.id === e ? c : n)), c.status !== "running" && (a == null || a(), r(c));
-    }).then((c) => {
-      a = c;
-    });
-  }), We = (e) => _((r) => [
-    ...r,
+  }
+  store.setState({ playhead: Math.max(0, Math.min(g || tSec, tSec)) });
+}
+function busy() {
+  return store.getState().jobs.some((j) => j.status === "running");
+}
+if (api.registerToolbar) {
+  api.registerToolbar([
     {
-      id: `pending-${ce()}`,
-      moduleId: p.moduleId,
-      label: e,
-      status: "running",
-      progress: -1,
-      message: o("queued", "Čaká v rade"),
-      result: null
+      id: "open",
+      icon: "\u{1F4C2}",
+      labelKey: "tool_open",
+      onClick: () => {
+        if (!busy()) void pickVideo();
+      }
+    },
+    {
+      id: "add",
+      icon: "\u2795",
+      labelKey: "tool_add",
+      onClick: () => addSegment()
+    },
+    {
+      id: "export",
+      icon: "\u2B07\uFE0F",
+      labelKey: "tool_export",
+      onClick: () => {
+        if (!busy()) void exportAll();
+      }
     }
-  ]), Je = (e, r) => _(
-    (a) => a.map((c) => c.label === e && c.id.startsWith("pending") ? { ...c, id: r, progress: 0, message: "" } : c)
-  ), $e = async (e, r, a, c) => {
-    We(r);
-    const d = await p.invoke("merge_videos", {
-      files: e,
-      outputName: r,
-      music: a,
-      moduleId: p.moduleId,
-      outputDir: c,
-      loopMusic: H
+  ]);
+}
+async function pickVideo() {
+  const selected = await api.pickFiles(VIDEO_FILTERS, false);
+  if (!selected || Array.isArray(selected)) return;
+  let info = null;
+  try {
+    info = await api.invoke("get_video_info", { path: selected });
+  } catch {
+  }
+  store.setState({
+    video: { path: selected, info },
+    videoDuration: 0,
+    selStart: 0,
+    selEnd: info?.duration ?? 0,
+    playhead: 0,
+    segments: [],
+    jobs: [],
+    error: ""
+  });
+  log(`${t("loaded", "Na\u010D\xEDtan\xE9")}: ${baseName(selected)}${info ? ` (${fmtTime(info.duration)}, ${info.width}\xD7${info.height})` : ""}`);
+}
+function addSegment() {
+  const s = store.getState();
+  if (!s.video || s.selEnd - s.selStart < 0.1) return;
+  if (s.segments.some((seg) => Math.abs(seg.start - s.selStart) < 0.5 && Math.abs(seg.end - s.selEnd) < 0.5)) {
+    store.setState({ error: t("seg_exists", "Tento \xFAsek u\u017E existuje.") });
+    return;
+  }
+  store.setState((st) => ({
+    error: "",
+    segments: [...st.segments, { id: uid(), start: st.selStart, end: st.selEnd }].sort((a, b) => a.start - b.start)
+  }));
+}
+function watchJob(jobId) {
+  return new Promise((resolve) => {
+    let unlisten;
+    api.listenJob(jobId, (job) => {
+      store.setState((s) => ({ jobs: s.jobs.map((j) => j.id === jobId ? job : j) }));
+      if (job.status !== "running") {
+        unlisten?.();
+        resolve(job);
+      }
+    }).then((u) => {
+      unlisten = u;
     });
-    Je(r, d), E(`▶ ${r} (${e.length} ${o("pieces", "dielov")}${a ? " + hudba" : ""})`);
-    const n = await ke(d);
-    return n.status === "done" && n.result ? (E(`✓ ${n.result}`), n.result) : (n.status === "error" ? ($(n.message), E(`✗ ${n.message}`)) : E(`⊘ ${r}`), null);
-  }, qe = async () => {
-    if (!s || x.length === 0) return;
-    $(""), V.current = !1;
-    const e = B.trim() || "cut", r = U || null, a = F && !!M, c = x.map(
-      (n, i) => a || D ? `${e}_${i + 1}_tmp` : `${e}_${i + 1}`
-    );
-    _(
-      x.map((n, i) => ({
-        id: `pending-${i}`,
-        moduleId: p.moduleId,
-        label: c[i],
+  });
+}
+function pushPendingJob(label) {
+  store.setState((s) => ({
+    jobs: [
+      ...s.jobs,
+      {
+        id: `pending-${uid()}`,
+        moduleId: api.moduleId,
+        label,
         status: "running",
         progress: -1,
-        message: o("queued", "Čaká v rade"),
+        message: t("queued", "\u010Cak\xE1 v rade"),
         result: null
-      }))
-    ), E(`${o("export_start", "Exportujem")} ${x.length} ${o("pieces", "dielov")}…`);
-    const d = [];
-    for (let n = 0; n < x.length && !V.current; n++) {
-      const i = x[n];
-      try {
-        const h = await p.invoke("trim_video", {
-          input: s.path,
-          start: i.start,
-          end: i.end,
-          mode: P,
-          outputName: c[n],
-          outputDir: r,
-          moduleId: p.moduleId
-        });
-        _((y) => {
-          const C = [...y];
-          return C[n] = { ...C[n], id: h, progress: 0, message: "" }, C;
-        }), E(`▶ ${c[n]} (${f(i.start)} → ${f(i.end)})`);
-        const N = await ke(h);
-        if (N.status === "done" && N.result)
-          d.push(N.result), E(`✓ ${N.result}`);
-        else if (N.status === "error") {
-          E(`✗ ${c[n]}: ${N.message}`), $(N.message);
-          return;
-        } else {
-          E(`⊘ ${c[n]}`);
-          return;
-        }
-      } catch (h) {
-        $(String(h)), E(String(h));
+      }
+    ]
+  }));
+}
+function resolvePendingJob(label, jobId) {
+  store.setState((s) => ({
+    jobs: s.jobs.map(
+      (j) => j.label === label && j.id.startsWith("pending") ? { ...j, id: jobId, progress: 0, message: "" } : j
+    )
+  }));
+}
+async function runMerge(files, outName, music, outDir) {
+  pushPendingJob(outName);
+  const jobId = await api.invoke("merge_videos", {
+    files,
+    outputName: outName,
+    music,
+    moduleId: api.moduleId,
+    outputDir: outDir,
+    loopMusic: store.getState().loopMusic
+  });
+  resolvePendingJob(outName, jobId);
+  log(`\u25B6 ${outName} (${files.length} ${t("pieces", "dielov")}${music ? " + hudba" : ""})`);
+  const res = await watchJob(jobId);
+  if (res.status === "done" && res.result) {
+    log(`\u2713 ${res.result}`);
+    return res.result;
+  }
+  if (res.status === "error") {
+    store.setState({ error: res.message });
+    log(`\u2717 ${res.message}`);
+  } else {
+    log(`\u2298 ${outName}`);
+  }
+  return null;
+}
+async function exportAll() {
+  const s = store.getState();
+  if (!s.video || s.segments.length === 0) return;
+  store.setState({ error: "" });
+  shared.cancelFlag.current = false;
+  const name = s.outputName.trim() || "cut";
+  const outDir = s.outDir || null;
+  const withMusic = s.withMusic && !!s.music;
+  const partNames = s.segments.map(
+    (_, i) => withMusic || s.mergeAfter ? `${name}_${i + 1}_tmp` : `${name}_${i + 1}`
+  );
+  store.setState({
+    jobs: s.segments.map((_, i) => ({
+      id: `pending-${i}`,
+      moduleId: api.moduleId,
+      label: partNames[i],
+      status: "running",
+      progress: -1,
+      message: t("queued", "\u010Cak\xE1 v rade"),
+      result: null
+    }))
+  });
+  log(`${t("export_start", "Exportujem")} ${s.segments.length} ${t("pieces", "dielov")}\u2026`);
+  const outputs = [];
+  for (let i = 0; i < s.segments.length && !shared.cancelFlag.current; i++) {
+    const seg = s.segments[i];
+    try {
+      const jobId = await api.invoke("trim_video", {
+        input: s.video.path,
+        start: seg.start,
+        end: seg.end,
+        mode: s.mode,
+        outputName: partNames[i],
+        outputDir: outDir,
+        moduleId: api.moduleId
+      });
+      store.setState((st) => {
+        const jobs = [...st.jobs];
+        jobs[i] = { ...jobs[i], id: jobId, progress: 0, message: "" };
+        return { jobs };
+      });
+      log(`\u25B6 ${partNames[i]} (${fmtTime(seg.start)} \u2192 ${fmtTime(seg.end)})`);
+      const res = await watchJob(jobId);
+      if (res.status === "done" && res.result) {
+        outputs.push(res.result);
+        log(`\u2713 ${res.result}`);
+      } else if (res.status === "error") {
+        log(`\u2717 ${partNames[i]}: ${res.message}`);
+        store.setState({ error: res.message });
+        return;
+      } else {
+        log(`\u2298 ${partNames[i]}`);
         return;
       }
+    } catch (e) {
+      store.setState({ error: String(e) });
+      log(String(e));
+      return;
     }
-    if (!(V.current || d.length === 0)) {
-      try {
-        if (D)
-          await $e(d, `${e}_merged`, a ? M : null, r);
-        else if (a)
-          for (let n = 0; n < d.length && !V.current; n++)
-            await $e([d[n]], `${e}_${n + 1}`, M, r);
-      } catch (n) {
-        $(String(n)), E(String(n));
+  }
+  if (shared.cancelFlag.current || outputs.length === 0) return;
+  try {
+    if (s.mergeAfter) {
+      await runMerge(outputs, `${name}_merged`, withMusic ? s.music : null, outDir);
+    } else if (withMusic) {
+      for (let i = 0; i < outputs.length && !shared.cancelFlag.current; i++) {
+        await runMerge([outputs[i]], `${name}_${i + 1}`, s.music, outDir);
       }
-      E(o("export_done", "Export dokončený."));
     }
-  }, Ke = async () => {
-    V.current = !0;
-    for (const e of W)
-      e.status === "running" && !e.id.startsWith("pending") && await p.cancelJob(e.id);
-  }, Ze = () => {
-    _([]), T([]), v(null), X(null), te(!1), $("");
-  }, Ge = p.PlayerShell, S = (e) => `${g > 0 ? e / g * 100 : 0}%`, Me = ({ which: e, time: r }) => {
-    const a = e === "start" ? Pe : De;
-    return /* @__PURE__ */ t.createElement(
-      "div",
-      {
-        onPointerDown: ze(e),
-        className: "absolute z-20 cursor-ew-resize touch-none",
-        style: { left: `calc(${S(r)} - 11px)`, width: 22, top: -8, bottom: -8 }
-      },
-      /* @__PURE__ */ t.createElement(
-        "div",
-        {
-          className: "absolute left-1/2 -translate-x-1/2 rounded",
-          style: { top: 0, bottom: 0, width: 4, backgroundColor: a, boxShadow: "0 0 6px rgba(0,0,0,0.8)" }
-        }
-      ),
-      /* @__PURE__ */ t.createElement(
-        "div",
-        {
-          className: "absolute left-1/2 flex flex-col items-center justify-center gap-[3px] rounded-md border",
-          style: {
-            top: "50%",
-            transform: `translate(-50%, -50%)${me === e ? " scale(1.15)" : ""}`,
-            width: 22,
-            height: 36,
-            backgroundColor: a,
-            borderColor: "rgba(255,255,255,0.5)",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.6)"
-          }
-        },
-        /* @__PURE__ */ t.createElement("div", { style: { width: 10, height: 2, backgroundColor: "#fff", borderRadius: 2 } }),
-        /* @__PURE__ */ t.createElement("div", { style: { width: 10, height: 2, backgroundColor: "#fff", borderRadius: 2 } }),
-        /* @__PURE__ */ t.createElement("div", { style: { width: 10, height: 2, backgroundColor: "#fff", borderRadius: 2 } })
-      ),
-      me === e && /* @__PURE__ */ t.createElement(
-        "div",
-        {
-          className: "absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded text-[11px] font-mono whitespace-nowrap pointer-events-none",
-          style: { top: -30, backgroundColor: "rgba(0,0,0,0.85)", color: "#fff", zIndex: 30 }
-        },
-        e === "start" ? "▶ " : "◀ ",
-        f(r)
-      )
-    );
+  } catch (e) {
+    store.setState({ error: String(e) });
+    log(String(e));
+  }
+  log(t("export_done", "Export dokon\u010Den\xFD."));
+}
+async function cancelAll() {
+  shared.cancelFlag.current = true;
+  for (const j of store.getState().jobs) {
+    if (j.status === "running" && !j.id.startsWith("pending")) {
+      await api.cancelJob(j.id);
+    }
+  }
+}
+function resetAll() {
+  store.setState({
+    ...initialState,
+    restored: true,
+    outDir: store.getState().outDir
+  });
+}
+function Handle({ which }) {
+  const s = useStore();
+  const g = duration();
+  const time = which === "start" ? s.selStart : s.selEnd;
+  const color = which === "start" ? START_COLOR : END_COLOR;
+  const pct = g > 0 ? time / g * 100 : 0;
+  const onPointerDown = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    store.setState({ activeHandle: which });
+    const onMove = (ev) => {
+      const tSec = clientXToTime(ev.clientX);
+      if (which === "start") {
+        store.setState((st) => {
+          const v = Math.min(tSec, st.selEnd - 0.1);
+          return v >= 0 ? { selStart: v } : {};
+        });
+      } else {
+        store.setState((st) => {
+          const v = Math.max(tSec, st.selStart + 0.1);
+          return v <= g ? { selEnd: v } : {};
+        });
+      }
+      seek(tSec);
+    };
+    const onUp = () => {
+      store.setState({ activeHandle: null });
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
-  return /* @__PURE__ */ t.createElement("div", { className: "p-6" }, /* @__PURE__ */ t.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, o("video", "Video")), /* @__PURE__ */ t.createElement(
-    "button",
-    {
-      onClick: Ae,
-      disabled: m,
-      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
-    },
-    s ? o("change_video", "Zmeniť video") : o("pick_video", "Vybrať video")
-  )), s && /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("p", { className: "text-xs font-mono text-text-dim break-all" }, Y(s.path), " · ", f(g), s.info ? ` · ${s.info.width}×${s.info.height} · ${s.info.codec}` : ""), /* @__PURE__ */ t.createElement("div", { ref: ye, className: "rounded-xl overflow-hidden border border-border bg-black" }, /* @__PURE__ */ t.createElement(Ge, { src: s.path })), /* @__PURE__ */ t.createElement("div", { className: "pt-3 pb-3" }, /* @__PURE__ */ t.createElement("div", { className: "relative" }, /* @__PURE__ */ t.createElement(
-    "canvas",
-    {
-      ref: Ne,
-      className: "block w-full h-16 rounded-lg border border-border bg-black"
-    }
-  ), /* @__PURE__ */ t.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
-      ref: Ee,
-      onPointerDown: Oe,
-      className: "absolute inset-0 cursor-crosshair select-none touch-none"
+      onPointerDown,
+      className: "absolute z-20 cursor-ew-resize touch-none",
+      style: { left: `calc(${pct}% - 11px)`, width: 22, top: -8, bottom: -8 }
     },
-    x.map((e, r) => /* @__PURE__ */ t.createElement(
+    /* @__PURE__ */ react_shim_default.createElement(
       "div",
       {
-        key: e.id,
+        className: "absolute left-1/2 -translate-x-1/2 rounded",
+        style: { top: 0, bottom: 0, width: 4, backgroundColor: color, boxShadow: "0 0 6px rgba(0,0,0,0.8)" }
+      }
+    ),
+    /* @__PURE__ */ react_shim_default.createElement(
+      "div",
+      {
+        className: "absolute left-1/2 flex flex-col items-center justify-center gap-[3px] rounded-md border",
+        style: {
+          top: "50%",
+          transform: `translate(-50%, -50%)${s.activeHandle === which ? " scale(1.15)" : ""}`,
+          width: 22,
+          height: 36,
+          backgroundColor: color,
+          borderColor: "rgba(255,255,255,0.5)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.6)"
+        }
+      },
+      /* @__PURE__ */ react_shim_default.createElement("div", { style: { width: 10, height: 2, backgroundColor: "#fff", borderRadius: 2 } }),
+      /* @__PURE__ */ react_shim_default.createElement("div", { style: { width: 10, height: 2, backgroundColor: "#fff", borderRadius: 2 } }),
+      /* @__PURE__ */ react_shim_default.createElement("div", { style: { width: 10, height: 2, backgroundColor: "#fff", borderRadius: 2 } })
+    ),
+    s.activeHandle === which && /* @__PURE__ */ react_shim_default.createElement(
+      "div",
+      {
+        className: "absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded text-[11px] font-mono whitespace-nowrap pointer-events-none",
+        style: { top: -30, backgroundColor: "rgba(0,0,0,0.85)", color: "#fff", zIndex: 30 }
+      },
+      which === "start" ? "\u25B6 " : "\u25C0 ",
+      fmtTime(time)
+    )
+  );
+}
+function clientXToTime(clientX) {
+  const el = shared.stripEl;
+  const g = duration();
+  if (!el || g <= 0) return 0;
+  const rect = el.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * g;
+}
+function Timeline() {
+  const s = useStore();
+  const canvasRef = useRef2(null);
+  const stripRef = useRef2(null);
+  const g = duration();
+  const pct = (time) => `${g > 0 ? time / g * 100 : 0}%`;
+  useEffect2(() => {
+    if (!s.video || g <= 0) return;
+    let disposed = false;
+    let pollTimer = null;
+    let stopTimer = null;
+    const startPainting = (src) => {
+      const canvas = canvasRef.current;
+      if (!canvas || disposed) return;
+      const W = 960;
+      const H = 56;
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      const v = document.createElement("video");
+      v.muted = true;
+      v.preload = "auto";
+      const tileW = W / THUMB_COUNT;
+      const paintTile = (i) => {
+        if (disposed || i >= THUMB_COUNT) return;
+        const time = Math.min(Math.max(0.05, (i + 0.5) / THUMB_COUNT * g), Math.max(0.05, g - 0.05));
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          v.removeEventListener("seeked", onSeeked);
+          try {
+            const vw = v.videoWidth;
+            const vh = v.videoHeight;
+            if (vw && vh && !disposed) {
+              const scale = Math.max(tileW / vw, H / vh);
+              const dw = vw * scale;
+              const dh = vh * scale;
+              ctx.drawImage(v, i * tileW + (tileW - dw) / 2, (H - dh) / 2, dw, dh);
+            }
+          } catch {
+          }
+          paintTile(i + 1);
+        };
+        const onSeeked = () => finish();
+        v.addEventListener("seeked", onSeeked);
+        setTimeout(finish, 900);
+        try {
+          v.currentTime = time;
+        } catch {
+          finish();
+        }
+      };
+      v.addEventListener("loadeddata", () => paintTile(0));
+      v.addEventListener("error", () => {
+      });
+      v.src = src;
+    };
+    pollTimer = setInterval(() => {
+      if (disposed) {
+        pollTimer && clearInterval(pollTimer);
+        return;
+      }
+      const vid = getVideoEl();
+      if (vid && vid.src) {
+        pollTimer && clearInterval(pollTimer);
+        startPainting(vid.src);
+      }
+    }, 500);
+    stopTimer = setTimeout(() => {
+      pollTimer && clearInterval(pollTimer);
+    }, 3e4);
+    return () => {
+      disposed = true;
+      pollTimer && clearInterval(pollTimer);
+      stopTimer && clearTimeout(stopTimer);
+    };
+  }, [s.video?.path, g]);
+  const onStripPointerDown = (e) => {
+    if (!s.video || busy()) return;
+    e.preventDefault();
+    const dragState = { startX: e.clientX, moved: false };
+    seek(clientXToTime(e.clientX));
+    const onMove = (ev) => {
+      if (!dragState.moved && Math.abs(ev.clientX - dragState.startX) < 4) return;
+      dragState.moved = true;
+      store.setState({ scrubbing: true });
+      seek(clientXToTime(ev.clientX));
+    };
+    const onUp = (ev) => {
+      store.setState({ scrubbing: false });
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const tSec = clientXToTime(ev.clientX);
+      if (!dragState.moved) {
+        const st = store.getState();
+        if (Math.abs(tSec - st.selStart) <= Math.abs(tSec - st.selEnd)) {
+          store.setState({ selStart: Math.min(tSec, st.selEnd - 0.1) });
+        } else {
+          store.setState({ selEnd: Math.max(tSec, st.selStart + 0.1) });
+        }
+      }
+      seek(tSec);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  if (!s.video) {
+    return /* @__PURE__ */ react_shim_default.createElement("div", { className: "h-full flex items-center justify-center" }, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-xs text-text-dim" }, t("no_video_timeline", "Najprv vyber video.")));
+  }
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "h-full flex flex-col px-3 py-2 gap-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "relative flex-1 min-h-0" }, /* @__PURE__ */ react_shim_default.createElement(
+    "canvas",
+    {
+      ref: canvasRef,
+      className: "block w-full h-full rounded-lg border border-border bg-black"
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement(
+    "div",
+    {
+      ref: (el) => {
+        stripRef.current = el;
+        shared.stripEl = el;
+      },
+      onPointerDown: onStripPointerDown,
+      className: "absolute inset-0 cursor-crosshair select-none touch-none"
+    },
+    s.segments.map((seg, i) => /* @__PURE__ */ react_shim_default.createElement(
+      "div",
+      {
+        key: seg.id,
         className: "absolute top-0 bottom-0 pointer-events-none",
-        style: { left: S(e.start), width: S(e.end - e.start), backgroundColor: Q[r % Q.length], opacity: 0.4 }
+        style: {
+          left: pct(seg.start),
+          width: pct(seg.end - seg.start),
+          backgroundColor: SEG_COLORS[i % SEG_COLORS.length],
+          opacity: 0.4
+        }
       }
     )),
-    /* @__PURE__ */ t.createElement(
+    /* @__PURE__ */ react_shim_default.createElement(
       "div",
       {
         className: "absolute top-0 bottom-0 pointer-events-none",
         style: {
-          left: S(l),
-          width: S(u - l),
+          left: pct(s.selStart),
+          width: pct(s.selEnd - s.selStart),
           backgroundColor: "rgba(255,255,255,0.12)",
-          borderLeft: `2px solid ${Pe}`,
-          borderRight: `2px solid ${De}`
+          borderLeft: `2px solid ${START_COLOR}`,
+          borderRight: `2px solid ${END_COLOR}`
         }
       }
     ),
-    /* @__PURE__ */ t.createElement(
+    /* @__PURE__ */ react_shim_default.createElement(
       "div",
       {
-        className: `absolute w-[2px] bg-white pointer-events-none z-10 ${ie ? "" : "transition-[left] duration-150"}`,
-        style: { left: S(z), top: -6, bottom: -6, boxShadow: "0 0 4px rgba(0,0,0,0.9)" }
+        className: `absolute w-[2px] bg-white pointer-events-none z-10 ${s.scrubbing ? "" : "transition-[left] duration-150"}`,
+        style: { left: pct(s.playhead), top: -6, bottom: -6, boxShadow: "0 0 4px rgba(0,0,0,0.9)" }
       }
     ),
-    ie && /* @__PURE__ */ t.createElement(
+    s.scrubbing && /* @__PURE__ */ react_shim_default.createElement(
       "div",
       {
         className: "absolute px-2 py-0.5 rounded text-[11px] font-mono pointer-events-none -translate-x-1/2 z-30",
-        style: { left: S(z), top: -32, backgroundColor: "rgba(0,0,0,0.85)", color: "#fff" }
+        style: { left: pct(s.playhead), top: -32, backgroundColor: "rgba(0,0,0,0.85)", color: "#fff" }
       },
-      f(z)
+      fmtTime(s.playhead)
     ),
-    /* @__PURE__ */ t.createElement(Me, { which: "start", time: l }),
-    /* @__PURE__ */ t.createElement(Me, { which: "end", time: u })
-  )), /* @__PURE__ */ t.createElement("div", { className: "mt-1 flex justify-between items-center" }, /* @__PURE__ */ t.createElement("p", { className: "text-[10px] text-text-dim" }, o("timeline_hint", "Podrž myš na ose a ťahaj pre živý náhľad. Klik nastaví bližšiu značku.")), /* @__PURE__ */ t.createElement("span", { className: "text-[11px] font-mono text-text-dim" }, f(z), " / ", f(g)))), /* @__PURE__ */ t.createElement("div", { className: "grid grid-cols-3 gap-3 items-end" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1" }, o("start", "Štart")), /* @__PURE__ */ t.createElement(
-    "input",
-    {
-      defaultValue: f(l),
-      key: `s-${l.toFixed(2)}`,
-      onBlur: (e) => Xe(e.target.value),
-      disabled: m,
-      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50 disabled:opacity-40"
-    }
-  )), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1" }, o("end", "Koniec")), /* @__PURE__ */ t.createElement(
-    "input",
-    {
-      defaultValue: f(u),
-      key: `e-${u.toFixed(2)}`,
-      onBlur: (e) => He(e.target.value),
-      disabled: m,
-      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50 disabled:opacity-40"
-    }
-  )), /* @__PURE__ */ t.createElement("div", { className: "flex items-center justify-between gap-2" }, /* @__PURE__ */ t.createElement("span", { className: "text-xs text-text-dim font-mono" }, f(u - l)), /* @__PURE__ */ t.createElement(
+    /* @__PURE__ */ react_shim_default.createElement(Handle, { which: "start" }),
+    /* @__PURE__ */ react_shim_default.createElement(Handle, { which: "end" })
+  )), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center shrink-0" }, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("timeline_hint", "Podr\u017E my\u0161 na ose a \u0165ahaj pre \u017Eiv\xFD n\xE1h\u013Ead. Klik nastav\xED bli\u017E\u0161iu zna\u010Dku.")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[11px] font-mono text-text-dim" }, fmtTime(s.playhead), " / ", fmtTime(g))));
+}
+if (api.registerBottomPanel) {
+  api.registerBottomPanel(Timeline);
+}
+function Cutter() {
+  const s = useStore();
+  const saveTimer = useRef2(null);
+  const g = duration();
+  const isBusy = busy();
+  const totalDur = useMemo2(() => s.segments.reduce((a, seg) => a + (seg.end - seg.start), 0), [s.segments]);
+  useEffect2(() => {
+    api.invoke("get_last_output_dir").then((dir) => {
+      if (dir) store.setState({ outDir: dir });
+    }).catch(() => {
+    });
+    (async () => {
+      try {
+        const cfg = await api.invoke("get_module_config", { id: api.moduleId });
+        const sess = cfg?.session;
+        if (!sess) {
+          store.setState({ restored: true });
+          return;
+        }
+        const patch = {
+          selStart: sess.selStart ?? 0,
+          selEnd: sess.selEnd ?? 0,
+          segments: (sess.segments ?? []).map((seg) => ({ id: uid(), start: seg.start, end: seg.end })),
+          mergeAfter: !!sess.mergeAfter,
+          withMusic: !!sess.withMusic,
+          music: sess.music ?? null,
+          loopMusic: sess.loopMusic !== false
+        };
+        if (sess.mode === "copy" || sess.mode === "precise") patch.mode = sess.mode;
+        if (sess.outputName) patch.outputName = sess.outputName;
+        if (sess.videoPath) {
+          let info = null;
+          try {
+            info = await api.invoke("get_video_info", { path: sess.videoPath });
+          } catch {
+          }
+          if (info) {
+            patch.video = { path: sess.videoPath, info };
+            log(`${t("loaded", "Na\u010D\xEDtan\xE9")}: ${baseName(sess.videoPath)} (${fmtTime(info.duration)})`);
+          }
+        }
+        store.setState(patch);
+      } catch {
+      }
+      store.setState({ restored: true });
+    })();
+  }, []);
+  useEffect2(() => {
+    if (!s.restored || isBusy) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const st = store.getState();
+      const session = {
+        videoPath: st.video?.path ?? null,
+        selStart: st.selStart,
+        selEnd: st.selEnd,
+        segments: st.segments.map((seg) => ({ start: seg.start, end: seg.end })),
+        mode: st.mode,
+        mergeAfter: st.mergeAfter,
+        withMusic: st.withMusic,
+        music: st.music,
+        loopMusic: st.loopMusic,
+        outputName: st.outputName
+      };
+      api.invoke("set_module_config", { id: api.moduleId, config: { session } }).catch(() => {
+      });
+    }, 600);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [s.video, s.selStart, s.selEnd, s.segments, s.mode, s.mergeAfter, s.withMusic, s.music, s.loopMusic, s.outputName, s.restored, isBusy]);
+  useEffect2(() => {
+    if (!s.video) return;
+    const id = setInterval(() => {
+      const v = getVideoEl();
+      if (!v) return;
+      const st = store.getState();
+      if (!st.scrubbing && !st.activeHandle && !isNaN(v.currentTime)) {
+        store.setState({ playhead: v.currentTime });
+      }
+      if (duration() <= 0 && v.duration && isFinite(v.duration)) {
+        store.setState((cur) => ({
+          videoDuration: v.duration,
+          selEnd: cur.selEnd <= 0 ? v.duration : cur.selEnd
+        }));
+      }
+    }, 200);
+    return () => clearInterval(id);
+  }, [s.video?.path, g]);
+  const PlayerShell = api.PlayerShell;
+  const setStart = (str) => store.setState((st) => ({ selStart: Math.max(0, Math.min(parseTime(str), st.selEnd - 0.1)) }));
+  const setEnd = (str) => store.setState((st) => ({ selEnd: Math.min(duration(), Math.max(parseTime(str), st.selStart + 0.1)) }));
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, t("video", "Video")), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: Be,
-      disabled: m || u - l < 0.1,
+      onClick: pickVideo,
+      disabled: isBusy,
+      className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
+    },
+    s.video ? t("change_video", "Zmeni\u0165 video") : t("pick_video", "Vybra\u0165 video")
+  )), s.video && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-xs font-mono text-text-dim break-all" }, baseName(s.video.path), " \xB7 ", fmtTime(g), s.video.info ? ` \xB7 ${s.video.info.width}\xD7${s.video.info.height} \xB7 ${s.video.info.codec}` : ""), /* @__PURE__ */ react_shim_default.createElement(
+    "div",
+    {
+      ref: (el) => {
+        shared.playerBox = el;
+      },
+      className: "rounded-xl overflow-hidden border border-border bg-black"
+    },
+    /* @__PURE__ */ react_shim_default.createElement(PlayerShell, { src: s.video.path })
+  ), !api.registerBottomPanel && /* @__PURE__ */ react_shim_default.createElement("div", { className: "h-28" }, /* @__PURE__ */ react_shim_default.createElement(Timeline, null)), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-3 items-end" }, /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1" }, t("start", "\u0160tart")), /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      defaultValue: fmtTime(s.selStart),
+      key: `s-${s.selStart.toFixed(2)}`,
+      onBlur: (e) => setStart(e.target.value),
+      disabled: isBusy,
+      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50 disabled:opacity-40"
+    }
+  )), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1" }, t("end", "Koniec")), /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      defaultValue: fmtTime(s.selEnd),
+      key: `e-${s.selEnd.toFixed(2)}`,
+      onBlur: (e) => setEnd(e.target.value),
+      disabled: isBusy,
+      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm font-mono text-text outline-none focus:border-accent/50 disabled:opacity-40"
+    }
+  )), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between gap-2" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim font-mono" }, fmtTime(s.selEnd - s.selStart)), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: addSegment,
+      disabled: isBusy || s.selEnd - s.selStart < 0.1,
       className: "px-4 py-2 rounded-xl text-sm font-medium bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
     },
     "+ ",
-    o("add_cut", "Pridať úsek")
-  ))))), x.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold mb-3" }, o("segments", "Úseky"), " (", x.length, ") · ", f(we)), /* @__PURE__ */ t.createElement("div", { className: "space-y-1.5" }, x.map((e, r) => /* @__PURE__ */ t.createElement("div", { key: e.id, className: "flex items-center gap-3 px-3 py-2 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ t.createElement("span", { className: "w-2.5 h-2.5 rounded-full", style: { backgroundColor: Q[r % Q.length] } }), /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium" }, o("segment", "Úsek"), " ", r + 1), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim" }, f(e.start), " → ", f(e.end)), /* @__PURE__ */ t.createElement("span", { className: "text-xs text-text-dim" }, "(", f(e.end - e.start), ")"), /* @__PURE__ */ t.createElement(
+    t("add_cut", "Prida\u0165 \xFAsek")
+  ))))), s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-3" }, t("segments", "\xDAseky"), " (", s.segments.length, ") \xB7 ", fmtTime(totalDur)), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-1.5" }, s.segments.map((seg, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: seg.id, className: "flex items-center gap-3 px-3 py-2 bg-bg rounded-lg border border-border" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-2.5 h-2.5 rounded-full", style: { backgroundColor: SEG_COLORS[i % SEG_COLORS.length] } }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm font-medium" }, t("segment", "\xDAsek"), " ", i + 1), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs font-mono text-text-dim" }, fmtTime(seg.start), " \u2192 ", fmtTime(seg.end)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs text-text-dim" }, "(", fmtTime(seg.end - seg.start), ")"), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: () => Ue(e.id),
-      disabled: m,
+      onClick: () => store.setState((st) => ({ segments: st.segments.filter((x) => x.id !== seg.id) })),
+      disabled: isBusy,
       className: "ml-auto px-2 py-1 rounded text-error hover:bg-error/10 text-xs disabled:opacity-30"
     },
-    "✕"
-  ))))), x.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ t.createElement("h2", { className: "text-lg font-semibold" }, o("output", "Výstup")), /* @__PURE__ */ t.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, o("cut_mode", "Režim strihu")), /* @__PURE__ */ t.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ t.createElement(
+    "\u2715"
+  ))))), s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, t("output", "V\xFDstup")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("cut_mode", "Re\u017Eim strihu")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: () => ee("copy"),
-      disabled: m,
-      className: `flex-1 px-3 py-2.5 text-sm ${P === "copy" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
+      onClick: () => store.setState({ mode: "copy" }),
+      disabled: isBusy,
+      className: `flex-1 px-3 py-2.5 text-sm ${s.mode === "copy" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
     },
-    o("mode_copy", "Rýchly (bez prekódovania)")
-  ), /* @__PURE__ */ t.createElement(
+    t("mode_copy", "R\xFDchly (bez prek\xF3dovania)")
+  ), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: () => ee("precise"),
-      disabled: m,
-      className: `flex-1 px-3 py-2.5 text-sm ${P === "precise" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
+      onClick: () => store.setState({ mode: "precise" }),
+      disabled: isBusy,
+      className: `flex-1 px-3 py-2.5 text-sm ${s.mode === "precise" ? "bg-accent text-white" : "bg-bg text-text-dim hover:bg-bg-card-hover"}`
     },
-    o("mode_precise", "Presný (prekódovanie)")
-  )), /* @__PURE__ */ t.createElement("p", { className: "mt-1 text-[10px] text-text-dim" }, o("mode_hint", "Rýchly = bez re-enkódu (keyframe). Presný = pomalší, na frame."))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, o("output_name", "Názov súboru")), /* @__PURE__ */ t.createElement(
+    t("mode_precise", "Presn\xFD (prek\xF3dovanie)")
+  )), /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-1 text-[10px] text-text-dim" }, t("mode_hint", "R\xFDchly = bez re-enk\xF3du (keyframe). Presn\xFD = pomal\u0161\xED, na frame."))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("output_name", "N\xE1zov s\xFAboru")), /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
-      value: B,
-      onChange: (e) => xe(e.target.value),
-      disabled: m,
+      value: s.outputName,
+      onChange: (e) => store.setState({ outputName: e.target.value }),
+      disabled: isBusy,
       className: "w-full px-3 py-2.5 bg-bg rounded-xl border border-border text-sm text-text outline-none focus:border-accent/50"
     }
-  ))), /* @__PURE__ */ t.createElement("div", null, /* @__PURE__ */ t.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, o("output_dir", "Výstupný priečinok")), /* @__PURE__ */ t.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ t.createElement(
+  ))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("output_dir", "V\xFDstupn\xFD prie\u010Dinok")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: async () => {
-        const e = await p.pickDirectory();
-        e && re(e);
+        const dir = await api.pickDirectory();
+        if (dir) store.setState({ outDir: dir });
       },
-      disabled: m,
+      disabled: isBusy,
       className: "px-4 py-2.5 rounded-xl text-sm bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
     },
-    U ? o("change", "Zmeniť") : o("browse", "Vybrať…")
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-xs font-mono text-text-dim truncate flex-1" }, U || o("default_output", "(predvolený priečinok)")), U && /* @__PURE__ */ t.createElement("button", { onClick: () => re(""), disabled: m, className: "px-2 py-1 text-error hover:bg-error/10 rounded" }, "✕"))), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ t.createElement(
+    s.outDir ? t("change", "Zmeni\u0165") : t("browse", "Vybra\u0165\u2026")
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-xs font-mono text-text-dim truncate flex-1" }, s.outDir || t("default_output", "(predvolen\xFD prie\u010Dinok)")), s.outDir && /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ outDir: "" }),
+      disabled: isBusy,
+      className: "px-2 py-1 text-error hover:bg-error/10 rounded"
+    },
+    "\u2715"
+  ))), /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: D,
-      onChange: (e) => pe(e.target.checked),
-      disabled: m,
+      checked: s.mergeAfter,
+      onChange: (e) => store.setState({ mergeAfter: e.target.checked }),
+      disabled: isBusy,
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-sm" }, o("merge_after", "Úseky aj spojiť do jedného súboru"))), /* @__PURE__ */ t.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ t.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("merge_after", "\xDAseky aj spoji\u0165 do jedn\xE9ho s\xFAboru"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: F,
-      onChange: (e) => te(e.target.checked),
-      disabled: m,
+      checked: s.withMusic,
+      onChange: (e) => store.setState({ withMusic: e.target.checked }),
+      disabled: isBusy,
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ t.createElement("span", { className: "text-sm" }, o("music", "Hudba"))), F && /* @__PURE__ */ t.createElement("div", { className: "space-y-2 pl-7" }, /* @__PURE__ */ t.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ t.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("music", "Hudba"))), s.withMusic && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pl-7" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: async () => {
-        const e = await p.pickFiles(et, !1);
-        e && !Array.isArray(e) && X(e);
+        const f = await api.pickFiles(AUDIO_FILTERS, false);
+        if (f && !Array.isArray(f)) store.setState({ music: f });
       },
-      disabled: m,
+      disabled: isBusy,
       className: "px-3 py-1.5 rounded-lg text-xs bg-bg-card-hover text-text-dim border border-border hover:text-text transition-colors"
     },
-    M ? Y(M) : o("pick_music", "Vybrať hudbu")
-  ), M && /* @__PURE__ */ t.createElement("button", { onClick: () => X(null), disabled: m, className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs" }, "✕"), /* @__PURE__ */ t.createElement("label", { className: "flex items-center gap-2 text-xs text-text-dim" }, /* @__PURE__ */ t.createElement(
+    s.music ? baseName(s.music) : t("pick_music", "Vybra\u0165 hudbu")
+  ), s.music && /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ music: null }),
+      disabled: isBusy,
+      className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs"
+    },
+    "\u2715"
+  ), /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-2 text-xs text-text-dim" }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: H,
-      onChange: (e) => be(e.target.checked),
-      disabled: m,
+      checked: s.loopMusic,
+      onChange: (e) => store.setState({ loopMusic: e.target.checked }),
+      disabled: isBusy,
       className: "w-3.5 h-3.5 accent-[#6366f1]"
     }
-  ), o("loop_music", "Slučka (opakovať hudbu)"))), /* @__PURE__ */ t.createElement("p", { className: "text-[10px] text-text-dim" }, o("music_note", "Hudba sa pridá ku každému výstupu. Končí spolu s videom; ak je kratšia a slučka je vypnutá, video sa skráti na dĺžku hudby."))))), ge && /* @__PURE__ */ t.createElement("div", { className: "bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error" }, ge), x.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, W.length > 0 ? /* @__PURE__ */ t.createElement(t.Fragment, null, /* @__PURE__ */ t.createElement("div", { className: "space-y-3" }, W.map((e) => /* @__PURE__ */ t.createElement("div", { key: e.id }, /* @__PURE__ */ t.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ t.createElement("span", { className: "text-sm font-medium truncate" }, e.label), /* @__PURE__ */ t.createElement(
+  ), t("loop_music", "Slu\u010Dka (opakova\u0165 hudbu)"))), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("music_note", "Hudba sa prid\xE1 ku ka\u017Ed\xE9mu v\xFDstupu. Kon\u010D\xED spolu s videom; ak je krat\u0161ia a slu\u010Dka je vypnut\xE1, video sa skr\xE1ti na d\u013A\u017Eku hudby."))))), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-error/10 border border-error/30 rounded-2xl p-4 text-sm text-error" }, s.error), s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6 space-y-4" }, s.jobs.length > 0 ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, s.jobs.map((job) => /* @__PURE__ */ react_shim_default.createElement("div", { key: job.id }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm font-medium truncate" }, job.label), /* @__PURE__ */ react_shim_default.createElement(
     "span",
     {
-      className: `text-xs font-mono ${e.status === "error" ? "text-error" : e.status === "done" ? "text-success" : "text-text-dim"}`
+      className: `text-xs font-mono ${job.status === "error" ? "text-error" : job.status === "done" ? "text-success" : "text-text-dim"}`
     },
-    e.status === "running" ? e.progress >= 0 ? `${Math.round(e.progress)}%${e.message ? ` · ${e.message}` : ""}` : e.message || "…" : e.status === "done" ? "✓" : e.status === "cancelled" ? o("cancelled", "zrušené") : e.status === "error" ? o("error", "chyba") : e.message
-  )), /* @__PURE__ */ t.createElement("div", { className: "w-full h-2 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ t.createElement(
+    job.status === "running" ? job.progress >= 0 ? `${Math.round(job.progress)}%${job.message ? ` \xB7 ${job.message}` : ""}` : job.message || "\u2026" : job.status === "done" ? "\u2713" : job.status === "cancelled" ? t("cancelled", "zru\u0161en\xE9") : job.status === "error" ? t("error", "chyba") : job.message
+  )), /* @__PURE__ */ react_shim_default.createElement("div", { className: "w-full h-2 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
-      className: `h-full rounded-full transition-all duration-300 ${e.status === "error" ? "bg-error" : e.status === "done" ? "bg-success" : "bg-accent"}`,
-      style: { width: e.status === "done" ? "100%" : `${Math.max(2, Math.min(100, e.progress))}%` }
+      className: `h-full rounded-full transition-all duration-300 ${job.status === "error" ? "bg-error" : job.status === "done" ? "bg-success" : "bg-accent"}`,
+      style: {
+        width: job.status === "done" ? "100%" : `${Math.max(2, Math.min(100, job.progress))}%`
+      }
     }
-  ))))), /* @__PURE__ */ t.createElement("div", { className: "flex gap-2" }, m && /* @__PURE__ */ t.createElement(
+  ))))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-2" }, isBusy && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: Ke,
+      onClick: cancelAll,
       className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
     },
-    o("cancel_all", "Zrušiť všetko")
-  ), !m && /* @__PURE__ */ t.createElement(
+    t("cancel_all", "Zru\u0161i\u0165 v\u0161etko")
+  ), !isBusy && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: Ze,
+      onClick: resetAll,
       className: "px-4 py-2.5 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
     },
-    o("new_cut", "Nové strihanie")
-  ))) : /* @__PURE__ */ t.createElement(
+    t("new_cut", "Nov\xE9 strihanie")
+  ))) : /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
-      onClick: qe,
-      disabled: m || !s,
+      onClick: exportAll,
+      disabled: isBusy || !s.video,
       className: "w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
     },
-    o("export", "Exportovať"),
+    t("export", "Exportova\u0165"),
     " (",
-    x.length,
+    s.segments.length,
     " ",
-    o("pieces", "dielov"),
-    " · ",
-    f(we),
+    t("pieces", "dielov"),
+    " \xB7 ",
+    fmtTime(totalDur),
     ")"
-  )), fe.length > 0 && /* @__PURE__ */ t.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ t.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, o("log", "Log")), /* @__PURE__ */ t.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, fe.map((e, r) => /* @__PURE__ */ t.createElement("div", { key: r }, e))))));
+  )), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-4" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line))))));
 }
+var index_default = Cutter;
 export {
-  tt as default
+  index_default as default
 };
