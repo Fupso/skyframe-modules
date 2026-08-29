@@ -1,4 +1,4 @@
-// skyframe.filters v1.1.0 — Filtre
+// skyframe.filters v1.1.1 — Filtre
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
 // priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
 // (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
@@ -167,6 +167,7 @@ function analyzePhoto(file) {
       resolve({
         avgColor: { r: Math.round(avgR * 255), g: Math.round(avgG * 255), b: Math.round(avgB * 255) },
         style,
+        thumb: canvas.toDataURL("image/jpeg", 0.7),
       });
     };
     img.src = URL.createObjectURL(file);
@@ -244,13 +245,22 @@ function PresetCard({ preset }) {
       >
         ✕
       </button>
-      <div
-        style={{
-          width: 34, height: 34, borderRadius: "50%", margin: "4px auto 6px",
-          backgroundColor: `rgb(${preset.avgColor.r},${preset.avgColor.g},${preset.avgColor.b})`,
-          border: "2px solid rgba(255,255,255,0.15)",
-        }}
-      />
+      {preset.thumb ? (
+        <img
+          src={preset.thumb}
+          alt={preset.name}
+          draggable={false}
+          style={{ width: "100%", height: 44, objectFit: "cover", borderRadius: 8, margin: "2px 0 6px" }}
+        />
+      ) : (
+        <div
+          style={{
+            width: 34, height: 34, borderRadius: "50%", margin: "4px auto 6px",
+            backgroundColor: `rgb(${preset.avgColor.r},${preset.avgColor.g},${preset.avgColor.b})`,
+            border: "2px solid rgba(255,255,255,0.15)",
+          }}
+        />
+      )}
       <p className="text-[11px] truncate">{preset.name}</p>
     </div>
   );
@@ -390,6 +400,7 @@ function Filters() {
       name: st.presetName.trim(),
       style: st.tempAnalysis.style,
       avgColor: st.tempAnalysis.avgColor,
+      thumb: st.tempAnalysis.thumb || null,
       favorite: false,
       createdAt: new Date().toISOString(),
     };

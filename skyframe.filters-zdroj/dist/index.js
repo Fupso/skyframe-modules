@@ -131,7 +131,8 @@ function analyzePhoto(file) {
       };
       resolve({
         avgColor: { r: Math.round(avgR * 255), g: Math.round(avgG * 255), b: Math.round(avgB * 255) },
-        style
+        style,
+        thumb: canvas.toDataURL("image/jpeg", 0.7)
       });
     };
     img.src = URL.createObjectURL(file);
@@ -197,7 +198,15 @@ function PresetCard({ preset }) {
       },
       "\u2715"
     ),
-    /* @__PURE__ */ react_shim_default.createElement(
+    preset.thumb ? /* @__PURE__ */ react_shim_default.createElement(
+      "img",
+      {
+        src: preset.thumb,
+        alt: preset.name,
+        draggable: false,
+        style: { width: "100%", height: 44, objectFit: "cover", borderRadius: 8, margin: "2px 0 6px" }
+      }
+    ) : /* @__PURE__ */ react_shim_default.createElement(
       "div",
       {
         style: {
@@ -288,6 +297,7 @@ function Filters() {
       name: st.presetName.trim(),
       style: st.tempAnalysis.style,
       avgColor: st.tempAnalysis.avgColor,
+      thumb: st.tempAnalysis.thumb || null,
       favorite: false,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
