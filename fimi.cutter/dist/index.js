@@ -600,7 +600,7 @@ function SidePanel() {
   const isBusy = busy();
   const totalDur = s.segments.reduce((a, seg) => a + (seg.end - seg.start), 0);
   const g = duration();
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3 px-1" }, s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, t("output", "V\xFDstup")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("cut_mode", "Re\u017Eim strihu")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3 px-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold" }, t("output", "V\xFDstup")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("cut_mode", "Re\u017Eim strihu")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ mode: "copy" }),
@@ -689,7 +689,7 @@ function SidePanel() {
       disabled: isBusy,
       className: "w-3.5 h-3.5 accent-[#6366f1]"
     }
-  ), t("loop_music", "Slu\u010Dka (opakova\u0165 hudbu)"))), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("music_note", "Hudba sa prid\xE1 ku ka\u017Ed\xE9mu v\xFDstupu. Kon\u010D\xED spolu s videom; ak je krat\u0161ia a slu\u010Dka je vypnut\xE1, video sa skr\xE1ti na d\u013A\u017Eku hudby."))))), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-error/10 border border-error/30 rounded-lg p-3 text-xs text-error" }, s.error), s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, s.jobs.length > 0 ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, s.jobs.map((job) => /* @__PURE__ */ react_shim_default.createElement("div", { key: job.id }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm font-medium truncate" }, job.label), /* @__PURE__ */ react_shim_default.createElement(
+  ), t("loop_music", "Slu\u010Dka (opakova\u0165 hudbu)"))), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("music_note", "Hudba sa prid\xE1 ku ka\u017Ed\xE9mu v\xFDstupu. Kon\u010D\xED spolu s videom; ak je krat\u0161ia a slu\u010Dka je vypnut\xE1, video sa skr\xE1ti na d\u013A\u017Eku hudby."))))), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-error/10 border border-error/30 rounded-lg p-3 text-xs text-error" }, s.error), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, s.jobs.length > 0 ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, s.jobs.map((job) => /* @__PURE__ */ react_shim_default.createElement("div", { key: job.id }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center mb-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm font-medium truncate" }, job.label), /* @__PURE__ */ react_shim_default.createElement(
     "span",
     {
       className: `text-xs font-mono ${job.status === "error" ? "text-error" : job.status === "done" ? "text-success" : "text-text-dim"}`
@@ -721,7 +721,7 @@ function SidePanel() {
     "button",
     {
       onClick: exportAll,
-      disabled: isBusy || !s.video,
+      disabled: isBusy || !s.video || s.segments.length === 0,
       className: "w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
     },
     t("export", "Exportova\u0165"),

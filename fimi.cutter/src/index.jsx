@@ -662,7 +662,7 @@ function SidePanel() {
   return (
     <div className="space-y-3 px-1">
         {/* Výstup */}
-        {s.segments.length > 0 && (
+        {(
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">{t("output", "Výstup")}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -797,7 +797,7 @@ function SidePanel() {
         )}
 
         {/* Export / úlohy */}
-        {s.segments.length > 0 && (
+        {(
           <div className="space-y-3">
             {s.jobs.length > 0 ? (
               <>
@@ -858,7 +858,7 @@ function SidePanel() {
             ) : (
               <button
                 onClick={exportAll}
-                disabled={isBusy || !s.video}
+                disabled={isBusy || !s.video || s.segments.length === 0}
                 className="w-full px-4 py-3 rounded-xl text-sm font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40"
               >
                 {t("export", "Exportovať")} ({s.segments.length} {t("pieces", "dielov")} · {fmtTime(totalDur)})
