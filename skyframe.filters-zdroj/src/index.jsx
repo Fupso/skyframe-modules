@@ -1,4 +1,4 @@
-// skyframe.filters v2.2.0 — Filtre
+// skyframe.filters v2.2.2 — Filtre
 // NOVÉ: podpora fotiek — „Pridať súbor“ berie video aj fotku (všetky bežné formáty).
 // NOVÉ: AI maska oblohy (ONNX U^2-Net v core) — prepínač jednoduchá (luma) / AI.
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
@@ -776,7 +776,7 @@ function Filters() {
     let dead = false;
     (async () => {
       try {
-        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0 });
+        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0, maxWidth: 1920 });
         if (dead) return;
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
         store.setState({ photoUrl: url });

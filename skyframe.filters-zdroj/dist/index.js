@@ -570,7 +570,7 @@ function Filters() {
     let dead = false;
     (async () => {
       try {
-        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0 });
+        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0, maxWidth: 1920 });
         if (dead) return;
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
         store.setState({ photoUrl: url });
