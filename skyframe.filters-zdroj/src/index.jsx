@@ -1,4 +1,4 @@
-// skyframe.filters v1.3.0 — Filtre
+// skyframe.filters v1.4.0 — Filtre
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
 // priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
 // (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
@@ -226,6 +226,20 @@ function buildVf(style, intensity) {
   return `${lut},${eq}`;
 }
 
+/** Komplexný ffmpeg graf pre režim "len svetlé partie" — luma maska cez alpha kanál.
+ *  [0:v] sa rozdelí: jedna vetva sa tónuje, druhá robí luma masku (jas > ~55 %),
+ *  tónovaná vetva sa prekryje cez originál len tam, kde je maska. */
+function buildSkyGraph(style, intensity) {
+  const sc = scaledStyle(style, intensity);
+  const ch = (name, c) => {
+    const off = Math.round(c.intercept * 255);
+    const sign = off >= 0 ? "+" : "";
+    return `${name}='clip(val${sign}${off}\\,0\\,255)'`;
+  };
+  const lut = `lutrgb=${ch("r", sc.channels.r)}:${ch("g", sc.channels.g)}:${ch("b", sc.channels.b)}`;
+  return `[0:v]split=3[base][t][mm];[t]${lut}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[v]`;
+}
+
 function watchJob(jobId) {
   return new Promise((resolve) => {
     let unlisten;
@@ -257,6 +271,7 @@ async function exportVideo() {
       outputName: null,
       outputDir: null,
       moduleId: api.moduleId,
+      filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
     });
     store.setState({
       job: { id: jobId, status: "running", progress: 0, message: "", result: null },
@@ -420,9 +435,6 @@ function SidePanel() {
         {/* Export — vypáli filter do videa */}
         {s.activeStyle && (
           <div className="space-y-2 pt-2 border-t border-border">
-            {s.skyOnly && (
-              <p className="text-[10px] text-text-dim">{t("sky_export_note", "Export zatiaľ aplikuje tón na celé video.")}</p>
-            )}
             {!s.job || s.job.status !== "running" ? (
               <button
                 onClick={() => void exportVideo()}

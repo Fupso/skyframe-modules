@@ -167,6 +167,16 @@ function buildVf(style, intensity) {
   const eq = `eq=brightness=${((s.css.brightness - 100) / 100 * 0.5).toFixed(3)}:contrast=${(s.css.contrast / 100).toFixed(3)}:saturation=${(s.css.saturate / 100).toFixed(3)}`;
   return `${lut},${eq}`;
 }
+function buildSkyGraph(style, intensity) {
+  const sc = scaledStyle(style, intensity);
+  const ch = (name, c) => {
+    const off = Math.round(c.intercept * 255);
+    const sign = off >= 0 ? "+" : "";
+    return `${name}='clip(val${sign}${off}\\,0\\,255)'`;
+  };
+  const lut = `lutrgb=${ch("r", sc.channels.r)}:${ch("g", sc.channels.g)}:${ch("b", sc.channels.b)}`;
+  return `[0:v]split=3[base][t][mm];[t]${lut}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[v]`;
+}
 function watchJob(jobId) {
   return new Promise((resolve) => {
     let unlisten;
@@ -193,7 +203,8 @@ async function exportVideo() {
       quality: "21",
       outputName: null,
       outputDir: null,
-      moduleId: api.moduleId
+      moduleId: api.moduleId,
+      filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null
     });
     store.setState({
       job: { id: jobId, status: "running", progress: 0, message: "", result: null }
@@ -321,7 +332,7 @@ function SidePanel() {
       onChange: (e) => store.setState({ skyOnly: e.target.checked }),
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len svetl\xE9 partie (obloha)"))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, s.skyOnly && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("sky_export_note", "Export zatia\u013E aplikuje t\xF3n na cel\xE9 video.")), !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len svetl\xE9 partie (obloha)"))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => void exportVideo(),
