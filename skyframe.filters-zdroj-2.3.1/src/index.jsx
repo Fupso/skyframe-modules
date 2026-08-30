@@ -432,6 +432,39 @@ async function exportVideo() {
   }
 }
 
+/**
+ * Pripečenie úprav pre ostatné moduly — použije sa v maskovaných režimoch
+ * (len obloha / AI maska), ktoré sa do edit chainu reťaziť nedajú.
+ * Vypáli aktuálny stav fotky do TEMP priečinka core (nie do výstupov!)
+ * a výsledok nastaví ako aktívne médium — Portrét a ďalšie moduly potom
+ * pracujú už s filtrovanou fotkou. Nezväzujú sa žiadne súbory navyše.
+ */
+async function bakeForModules() {
+  const s = store.getState();
+  if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
+  store.setState({ job: { id: "bake", status: "running", progress: -1, message: "", result: null } });
+  try {
+    const paths = await api.invoke("get_app_paths", {});
+    const outDir = `${paths.temp_dir}/chain`;
+    const vf = buildVf(s.activeStyle, s.intensity);
+    const result = (s.skyOnly && s.aiMask)
+      ? await api.invoke("ai_sky_photo_export", {
+          input: s.videoPath, vf, outputName: "chain_baked", outputDir: outDir,
+        })
+      : await api.invoke("filter_image", {
+          input: s.videoPath,
+          vf,
+          filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
+          outputName: "chain_baked",
+          outputDir: outDir,
+        });
+    store.setState({ job: { id: "bake", status: "done", progress: 100, message: "", result } });
+    if (api.setActiveMedia) api.setActiveMedia(result);
+  } catch (e) {
+    store.setState({ job: { id: "bake", status: "error", progress: 0, message: String(e), result: null } });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Toolbar
 // ---------------------------------------------------------------------------
@@ -888,7 +921,7 @@ function Filters() {
               ) : isPhoto ? (
                 s.photoUrl ? (
                   <div
-                    className="rounded-xl overflow-hidden border border-border bg-black"
+                    className="rounded-xl overflow-hidden border border-border bg-black relative"
                     style={{
                       // mimo skyOnly má náhľad filter vypálený cez ffmpeg (edit chain) —
                       // presne zodpovedá exportu; skyOnly ostáva na rýchlom SVG náhľade
@@ -896,6 +929,19 @@ function Filters() {
                     }}
                   >
                     <img src={s.photoUrl} alt="" style={{ width: "100%", display: "block" }} draggable={false} />
+                    {/* Maskovaný režim (obloha/AI) sa reťaziť nedá — ponúkni pripečenie */}
+                    {s.skyOnly && s.activeStyle && (
+                      <button
+                        onClick={() => void bakeForModules()}
+                        disabled={s.job?.status === "running"}
+                        className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-xs bg-black/70 text-white border border-white/20 hover:bg-black/90 disabled:opacity-50"
+                        title={t("bake_hint", "Maskované úpravy sa nezdieľajú automaticky — pripečí aktuálny stav ako nové aktívne médium (do tempu, nič sa neukladá).")}
+                      >
+                        📌 {s.job?.id === "bake" && s.job?.status === "running"
+                          ? t("baking", "Pripečujem…")
+                          : t("bake_for_modules", "Pripečiť pre ostatné moduly")}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border bg-black py-16 text-center">

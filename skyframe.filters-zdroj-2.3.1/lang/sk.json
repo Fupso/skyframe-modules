@@ -61,5 +61,8 @@
   "ai_preview_label": "AI náhľad — statická snímka z 1. sekundy",
   "pick_file": "Pridať súbor",
   "change_file": "Iný súbor",
-  "loading_photo": "Načítavam fotku…"
+  "loading_photo": "Načítavam fotku…",
+  "bake_for_modules": "Pripečiť pre ostatné moduly",
+  "baking": "Pripečujem…",
+  "bake_hint": "Maskované úpravy sa nezdieľajú automaticky — pripečí aktuálny stav ako nové aktívne médium (do tempu, nič sa neukladá)."
 }

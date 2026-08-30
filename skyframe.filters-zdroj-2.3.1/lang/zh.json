@@ -61,5 +61,8 @@
   "ai_preview_label": "AI 预览——第 1 秒的静态帧",
   "pick_file": "添加文件",
   "change_file": "更换文件",
-  "loading_photo": "正在加载照片…"
+  "loading_photo": "正在加载照片…",
+  "bake_for_modules": "为其他模块烘焙",
+  "baking": "烘焙中…",
+  "bake_hint": "蒙版调整不会自动共享——将当前状态烘焙为新的活动媒体（存入临时目录，不保存任何文件）。"
 }

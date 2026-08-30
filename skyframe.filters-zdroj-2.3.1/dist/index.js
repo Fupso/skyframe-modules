@@ -374,6 +374,32 @@ async function exportVideo() {
     });
   }
 }
+async function bakeForModules() {
+  const s = store.getState();
+  if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
+  store.setState({ job: { id: "bake", status: "running", progress: -1, message: "", result: null } });
+  try {
+    const paths = await api.invoke("get_app_paths", {});
+    const outDir = `${paths.temp_dir}/chain`;
+    const vf = buildVf(s.activeStyle, s.intensity);
+    const result = s.skyOnly && s.aiMask ? await api.invoke("ai_sky_photo_export", {
+      input: s.videoPath,
+      vf,
+      outputName: "chain_baked",
+      outputDir: outDir
+    }) : await api.invoke("filter_image", {
+      input: s.videoPath,
+      vf,
+      filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
+      outputName: "chain_baked",
+      outputDir: outDir
+    });
+    store.setState({ job: { id: "bake", status: "done", progress: 100, message: "", result } });
+    if (api.setActiveMedia) api.setActiveMedia(result);
+  } catch (e) {
+    store.setState({ job: { id: "bake", status: "error", progress: 0, message: String(e), result: null } });
+  }
+}
 if (api.registerToolbar) {
   api.registerToolbar([
     {
@@ -646,14 +672,25 @@ function Filters() {
   ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "absolute bottom-2 left-2 px-2 py-1 rounded text-[10px] bg-black/70 text-white" }, "\u{1F916} ", t("ai_preview_label", "AI n\xE1h\u013Ead \u2014 statick\xE1 sn\xEDmka z 1. sekundy"))) : isPhoto ? s.photoUrl ? /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
-      className: "rounded-xl overflow-hidden border border-border bg-black",
+      className: "rounded-xl overflow-hidden border border-border bg-black relative",
       style: {
         // mimo skyOnly má náhľad filter vypálený cez ffmpeg (edit chain) —
         // presne zodpovedá exportu; skyOnly ostáva na rýchlom SVG náhľade
         filter: s.skyOnly && s.activeStyle ? `url(#${SKY_FILTER_ID})` : ""
       }
     },
-    /* @__PURE__ */ react_shim_default.createElement("img", { src: s.photoUrl, alt: "", style: { width: "100%", display: "block" }, draggable: false })
+    /* @__PURE__ */ react_shim_default.createElement("img", { src: s.photoUrl, alt: "", style: { width: "100%", display: "block" }, draggable: false }),
+    s.skyOnly && s.activeStyle && /* @__PURE__ */ react_shim_default.createElement(
+      "button",
+      {
+        onClick: () => void bakeForModules(),
+        disabled: s.job?.status === "running",
+        className: "absolute top-2 right-2 px-3 py-1.5 rounded-lg text-xs bg-black/70 text-white border border-white/20 hover:bg-black/90 disabled:opacity-50",
+        title: t("bake_hint", "Maskovan\xE9 \xFApravy sa nezdie\u013Eaj\xFA automaticky \u2014 pripe\u010D\xED aktu\xE1lny stav ako nov\xE9 akt\xEDvne m\xE9dium (do tempu, ni\u010D sa neuklad\xE1).")
+      },
+      "\u{1F4CC} ",
+      s.job?.id === "bake" && s.job?.status === "running" ? t("baking", "Pripe\u010Dujem\u2026") : t("bake_for_modules", "Pripe\u010Di\u0165 pre ostatn\xE9 moduly")
+    )
   ) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "rounded-xl border border-border bg-black py-16 text-center" }, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-sm text-text-dim" }, "\u23F3 ", t("loading_photo", "Na\u010D\xEDtavam fotku\u2026"))) : /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {

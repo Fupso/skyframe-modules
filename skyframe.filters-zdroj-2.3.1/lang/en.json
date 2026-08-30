@@ -61,5 +61,8 @@
   "ai_preview_label": "AI preview — static frame from second 1",
   "pick_file": "Add file",
   "change_file": "Different file",
-  "loading_photo": "Loading photo…"
+  "loading_photo": "Loading photo…",
+  "bake_for_modules": "Bake for other modules",
+  "baking": "Baking…",
+  "bake_hint": "Masked adjustments are not shared automatically — bakes the current state as new active media (to temp, nothing is saved)."
 }

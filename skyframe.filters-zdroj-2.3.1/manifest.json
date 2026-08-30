@@ -1,7 +1,7 @@
 {
   "id": "skyframe.filters",
   "name": "Filtre",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "author": "SkyFrame Community",
   "description": "Filtre a farebné štýly pre video aj fotky — presný náhľad (WYSIWYG), zdieľané úpravy s ostatnými modulmi, AI maska oblohy.",
   "icon": "🎨",

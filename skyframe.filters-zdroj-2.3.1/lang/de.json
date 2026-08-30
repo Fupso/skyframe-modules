@@ -61,5 +61,8 @@
   "ai_preview_label": "AI-Vorschau — statischer Frame ab Sekunde 1",
   "pick_file": "Datei hinzufügen",
   "change_file": "Andere Datei",
-  "loading_photo": "Foto wird geladen…"
+  "loading_photo": "Foto wird geladen…",
+  "bake_for_modules": "Für andere Module einbrennen",
+  "baking": "Einbrennen…",
+  "bake_hint": "Maskierte Anpassungen werden nicht automatisch geteilt — brennt den aktuellen Stand als neues aktives Medium ein (in Temp, nichts wird gespeichert)."
 }
