@@ -1,4 +1,4 @@
-// ../mbuild/react-shim.mjs
+// react-shim.mjs
 var R = window.React;
 var react_shim_default = R;
 var useState = R.useState;
@@ -9,7 +9,7 @@ var useCallback = R.useCallback;
 var useSyncExternalStore = R.useSyncExternalStore;
 var Fragment = R.Fragment;
 
-// src/index.jsx
+// filters2/src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
@@ -109,7 +109,9 @@ var initialState = {
   fromActiveMedia: false,
   job: null,
   // {id, status, progress, message, result} | null
-  restored: false
+  restored: false,
+  chainTick: 0
+  // zvýši sa pri zmene edit chainu (iný modul upravil svoje kroky)
 };
 var state = { ...initialState };
 var listeners = /* @__PURE__ */ new Set();
@@ -315,18 +317,19 @@ function watchJob(jobId) {
 async function exportVideo() {
   const s = store.getState();
   if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
-  const vf = buildVf(s.activeStyle, s.intensity);
+  const ownVf = buildVf(s.activeStyle, s.intensity);
   if (isPhotoPath(s.videoPath)) {
     store.setState({ job: { id: "photo", status: "running", progress: -1, message: "", result: null } });
+    const chainVf = !s.skyOnly && api.getEditChainVf ? api.getEditChainVf() || ownVf : ownVf;
     try {
       const result = s.skyOnly && s.aiMask ? await api.invoke("ai_sky_photo_export", {
         input: s.videoPath,
-        vf,
+        vf: ownVf,
         outputName: null,
         outputDir: null
       }) : await api.invoke("filter_image", {
         input: s.videoPath,
-        vf,
+        vf: s.skyOnly ? ownVf : chainVf,
         filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
         outputName: null,
         outputDir: null
@@ -339,6 +342,7 @@ async function exportVideo() {
     return;
   }
   try {
+    const vf = ownVf;
     const jobId = s.skyOnly && s.aiMask ? await api.invoke("ai_sky_filter_video", {
       input: s.videoPath,
       vf,
@@ -568,9 +572,11 @@ function Filters() {
       return;
     }
     let dead = false;
+    const useChain = !s.skyOnly && api.getEditChainVf;
+    const vf = useChain ? api.getEditChainVf() || null : null;
     (async () => {
       try {
-        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0, maxWidth: 1920 });
+        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0, maxWidth: 1920, vf });
         if (dead) return;
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
         store.setState({ photoUrl: url });
@@ -581,7 +587,24 @@ function Filters() {
     return () => {
       dead = true;
     };
-  }, [s.videoPath, isPhoto]);
+  }, [s.videoPath, isPhoto, s.skyOnly, s.chainTick]);
+  useEffect2(() => {
+    if (!api.setEditStep) return;
+    const timer = setTimeout(() => {
+      if (isPhoto && s.activeStyle && !s.skyOnly) {
+        api.setEditStep({ vf: buildVf(s.activeStyle, s.intensity), label: "Filtre" });
+      } else {
+        api.setEditStep(null);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [isPhoto, s.activeStyle, s.intensity, s.skyOnly, s.videoPath]);
+  useEffect2(() => {
+    if (!api.onEditChain) return;
+    return api.onEditChain(() => {
+      store.setState({ chainTick: store.getState().chainTick + 1 });
+    });
+  }, []);
   const handleStylePhoto = async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -625,7 +648,9 @@ function Filters() {
     {
       className: "rounded-xl overflow-hidden border border-border bg-black",
       style: {
-        filter: s.skyOnly ? s.activeStyle ? `url(#${SKY_FILTER_ID})` : "" : fullFilterString(s.activeStyle, s.intensity)
+        // mimo skyOnly má náhľad filter vypálený cez ffmpeg (edit chain) —
+        // presne zodpovedá exportu; skyOnly ostáva na rýchlom SVG náhľade
+        filter: s.skyOnly && s.activeStyle ? `url(#${SKY_FILTER_ID})` : ""
       }
     },
     /* @__PURE__ */ react_shim_default.createElement("img", { src: s.photoUrl, alt: "", style: { width: "100%", display: "block" }, draggable: false })

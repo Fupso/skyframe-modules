@@ -1,8 +1,13 @@
-// skyframe.portret v1.0.0 — Portrét
+// skyframe.portret v1.1.0 — Portrét
 // Portrétové úpravy fotiek: jemnosť pleti, rozjasnenie, teplota, sýtosť,
 // vyostrenie, vignetácia. Fotka = aktívne médium z core (zdieľané s Filtre
 // a ďalšími modulmi) — prepneš modul a fotka tu už čaká, nič nevyberáš.
-// Náhľad naživo cez CSS filtre, export cez core filter_image (ffmpeg).
+//
+// EDIT CHAIN (krok 21): svoje nastavenia zapisuje do core ako ffmpeg krok.
+// Náhľad aj export používajú ZREŤAZENÝ filter všetkých modulov — vo Filtroch
+// nastavíš štýl, prepneš sem a fotku vidíš AJ so štýlom. Export je jeden,
+// výsledok jedna fotka. Náhľad sa renderuje cez ffmpeg (video_thumbnail s vf),
+// takže je IDENTICKÝ s exportom (WYSIWYG).
 
 import React from "react";
 
@@ -18,8 +23,10 @@ function isPhotoPath(p) {
 
 const PICK_FILTERS = [{ name: "Foto", extensions: PHOTO_EXT }];
 
-// Parametre úprav (východzie hodnoty = jemný prirodzený portrét)
-const DEFAULTS = { smooth: 30, brighten: 5, warmth: 10, saturation: 8, sharpen: 15, vignette: 0 };
+// Parametre úprav — východzie hodnoty sú NEUTRÁLNE (všetko 0). Dôležité:
+// modul zapisuje svoj krok do edit chainu len keď používateľ niečo zmení;
+// inak by sa jeho úpravy aplikovali aj keď ho nikdy neotvoril.
+const DEFAULTS = { smooth: 0, brighten: 0, warmth: 0, saturation: 0, sharpen: 0, vignette: 0 };
 
 const PRESETS = [
   { id: "natural",  nameKey: "preset_natural",  p: { smooth: 25, brighten: 5,  warmth: 5,   saturation: 5,   sharpen: 10, vignette: 0  } },
@@ -37,7 +44,8 @@ const initialState = {
   photoPath: null,
   photoUrl: "",
   params: { ...DEFAULTS },
-  job: null, // {status:"running"|"done"|"error", message, result}
+  chainTick: 0, // zvýši sa pri zmene edit chainu
+  job: null,    // {status:"running"|"done"|"error", message, result}
 };
 
 let state = { ...initialState };
@@ -58,18 +66,8 @@ function useStore() {
 }
 
 // ---------------------------------------------------------------------------
-// Prevod parametrov → CSS náhľad a ffmpeg vf reťazec
+// Prevod parametrov → ffmpeg vf fragment (vlastný krok modulu)
 // ---------------------------------------------------------------------------
-
-function cssFilter(p) {
-  const parts = [];
-  if (p.brighten) parts.push(`brightness(${(1 + (p.brighten / 100) * 0.35).toFixed(3)})`);
-  if (p.saturation) parts.push(`saturate(${(1 + p.saturation / 100).toFixed(3)})`);
-  if (p.warmth > 0) parts.push(`sepia(${(p.warmth / 100) * 0.35})`);
-  if (p.warmth < 0) parts.push(`hue-rotate(${(-p.warmth / 100) * 12}deg) saturate(${(1 + (-p.warmth / 100) * 0.08).toFixed(3)})`);
-  if (p.smooth) parts.push(`blur(${((p.smooth / 100) * 1.2).toFixed(2)}px)`);
-  return parts.join(" ") || "none";
-}
 
 function buildVf(p) {
   const chain = [];
@@ -111,7 +109,9 @@ async function pickPhoto() {
 async function exportPhoto() {
   const s = store.getState();
   if (!s.photoPath || s.job?.status === "running") return;
-  const vf = buildVf(s.params);
+  // Export = CELÝ edit chain (vlastné parametre + kroky ostatných modulov).
+  // Jeden export → jedna fotka s kompletným stavom.
+  const vf = api.getEditChainVf ? (api.getEditChainVf() || buildVf(s.params)) : buildVf(s.params);
   store.setState({ job: { status: "running", message: "", result: null } });
   try {
     const result = await api.invoke("filter_image", {
@@ -225,16 +225,39 @@ function Portret() {
     }
   }, []);
 
-  // Náhľad fotky cez video_thumbnail (v core funguje aj pre obrázky)
+  // Edit chain — zapíš svoj krok do core (debounce 250 ms pri ťahaní posuvníka)
+  useEffect(() => {
+    if (!api.setEditStep) return;
+    const timer = setTimeout(() => {
+      if (s.photoPath) {
+        api.setEditStep({ vf: buildVf(s.params), label: "Portrét" });
+      } else {
+        api.setEditStep(null);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [s.params, s.photoPath]);
+
+  // Iný modul zmenil svoje kroky → prekresli náhľad
+  useEffect(() => {
+    if (!api.onEditChain) return;
+    return api.onEditChain(() => {
+      store.setState({ chainTick: store.getState().chainTick + 1 });
+    });
+  }, []);
+
+  // Náhľad fotky cez video_thumbnail s KOMPLETNÝM edit chainom —
+  // ffmpeg render, takže náhľad je identický s exportom (WYSIWYG)
   useEffect(() => {
     if (!s.photoPath) {
       if (store.getState().photoUrl) store.setState({ photoUrl: "" });
       return;
     }
     let dead = false;
+    const vf = api.getEditChainVf ? (api.getEditChainVf() || null) : null;
     (async () => {
       try {
-        const bytes = await api.invoke("video_thumbnail", { path: s.photoPath, atSeconds: 0, maxWidth: 1920 });
+        const bytes = await api.invoke("video_thumbnail", { path: s.photoPath, atSeconds: 0, maxWidth: 1920, vf });
         if (dead) return;
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
         store.setState({ photoUrl: url });
@@ -243,7 +266,7 @@ function Portret() {
       }
     })();
     return () => { dead = true; };
-  }, [s.photoPath]);
+  }, [s.photoPath, s.chainTick]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#111" }}>
@@ -253,7 +276,7 @@ function Portret() {
             src={s.photoUrl}
             alt=""
             draggable={false}
-            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", filter: cssFilter(s.params) }}
+            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         ) : (
           <div style={{ textAlign: "center", opacity: 0.7 }}>

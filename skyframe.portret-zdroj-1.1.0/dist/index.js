@@ -9,7 +9,7 @@ var useCallback = R.useCallback;
 var useSyncExternalStore = R.useSyncExternalStore;
 var Fragment = R.Fragment;
 
-// src/index.jsx
+// portret/src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
@@ -19,7 +19,7 @@ function isPhotoPath(p) {
   return PHOTO_EXT.includes(p.split(".").pop().toLowerCase());
 }
 var PICK_FILTERS = [{ name: "Foto", extensions: PHOTO_EXT }];
-var DEFAULTS = { smooth: 30, brighten: 5, warmth: 10, saturation: 8, sharpen: 15, vignette: 0 };
+var DEFAULTS = { smooth: 0, brighten: 0, warmth: 0, saturation: 0, sharpen: 0, vignette: 0 };
 var PRESETS = [
   { id: "natural", nameKey: "preset_natural", p: { smooth: 25, brighten: 5, warmth: 5, saturation: 5, sharpen: 10, vignette: 0 } },
   { id: "softskin", nameKey: "preset_softskin", p: { smooth: 60, brighten: 10, warmth: 8, saturation: 4, sharpen: 5, vignette: 0 } },
@@ -31,6 +31,8 @@ var initialState = {
   photoPath: null,
   photoUrl: "",
   params: { ...DEFAULTS },
+  chainTick: 0,
+  // zvýši sa pri zmene edit chainu
   job: null
   // {status:"running"|"done"|"error", message, result}
 };
@@ -49,15 +51,6 @@ var store = {
 };
 function useStore() {
   return useSyncExternalStore2(store.subscribe, store.getState);
-}
-function cssFilter(p) {
-  const parts = [];
-  if (p.brighten) parts.push(`brightness(${(1 + p.brighten / 100 * 0.35).toFixed(3)})`);
-  if (p.saturation) parts.push(`saturate(${(1 + p.saturation / 100).toFixed(3)})`);
-  if (p.warmth > 0) parts.push(`sepia(${p.warmth / 100 * 0.35})`);
-  if (p.warmth < 0) parts.push(`hue-rotate(${-p.warmth / 100 * 12}deg) saturate(${(1 + -p.warmth / 100 * 0.08).toFixed(3)})`);
-  if (p.smooth) parts.push(`blur(${(p.smooth / 100 * 1.2).toFixed(2)}px)`);
-  return parts.join(" ") || "none";
 }
 function buildVf(p) {
   const chain = [];
@@ -93,7 +86,7 @@ async function pickPhoto() {
 async function exportPhoto() {
   const s = store.getState();
   if (!s.photoPath || s.job?.status === "running") return;
-  const vf = buildVf(s.params);
+  const vf = api.getEditChainVf ? api.getEditChainVf() || buildVf(s.params) : buildVf(s.params);
   store.setState({ job: { status: "running", message: "", result: null } });
   try {
     const result = await api.invoke("filter_image", {
@@ -165,14 +158,32 @@ function Portret() {
     }
   }, []);
   useEffect2(() => {
+    if (!api.setEditStep) return;
+    const timer = setTimeout(() => {
+      if (s.photoPath) {
+        api.setEditStep({ vf: buildVf(s.params), label: "Portr\xE9t" });
+      } else {
+        api.setEditStep(null);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [s.params, s.photoPath]);
+  useEffect2(() => {
+    if (!api.onEditChain) return;
+    return api.onEditChain(() => {
+      store.setState({ chainTick: store.getState().chainTick + 1 });
+    });
+  }, []);
+  useEffect2(() => {
     if (!s.photoPath) {
       if (store.getState().photoUrl) store.setState({ photoUrl: "" });
       return;
     }
     let dead = false;
+    const vf = api.getEditChainVf ? api.getEditChainVf() || null : null;
     (async () => {
       try {
-        const bytes = await api.invoke("video_thumbnail", { path: s.photoPath, atSeconds: 0, maxWidth: 1920 });
+        const bytes = await api.invoke("video_thumbnail", { path: s.photoPath, atSeconds: 0, maxWidth: 1920, vf });
         if (dead) return;
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
         store.setState({ photoUrl: url });
@@ -183,14 +194,14 @@ function Portret() {
     return () => {
       dead = true;
     };
-  }, [s.photoPath]);
+  }, [s.photoPath, s.chainTick]);
   return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%", background: "#111" } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" } }, s.photoUrl ? /* @__PURE__ */ react_shim_default.createElement(
     "img",
     {
       src: s.photoUrl,
       alt: "",
       draggable: false,
-      style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", filter: cssFilter(s.params) }
+      style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }
     }
   ) : /* @__PURE__ */ react_shim_default.createElement("div", { style: { textAlign: "center", opacity: 0.7 } }, /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 14, marginBottom: 12 } }, t("no_photo", "\u017Diadna fotka \u2014 pridaj fotku, alebo ju najprv otvor vo Filtroch a prepni sem.")), /* @__PURE__ */ react_shim_default.createElement(
     "button",

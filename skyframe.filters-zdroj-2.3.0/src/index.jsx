@@ -93,6 +93,7 @@ const initialState = {
   fromActiveMedia: false,
   job: null,            // {id, status, progress, message, result} | null
   restored: false,
+  chainTick: 0,         // zvýši sa pri zmene edit chainu (iný modul upravil svoje kroky)
 };
 
 let state = { ...initialState };
@@ -367,19 +368,22 @@ function watchJob(jobId) {
 async function exportVideo() {
   const s = store.getState();
   if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
-  const vf = buildVf(s.activeStyle, s.intensity);
+  const ownVf = buildVf(s.activeStyle, s.intensity);
 
   // --- Fotka: priamy export (žiadny job, je to jedna snímka) ---
   if (isPhotoPath(s.videoPath)) {
     store.setState({ job: { id: "photo", status: "running", progress: -1, message: "", result: null } });
+    // Mimo skyOnly exportujeme CELÝ edit chain (vlastný štýl + kroky ostatných
+    // modulov, napr. Portrétu) — jeden export = jedna fotka s kompletným stavom.
+    const chainVf = (!s.skyOnly && api.getEditChainVf) ? (api.getEditChainVf() || ownVf) : ownVf;
     try {
       const result = (s.skyOnly && s.aiMask)
         ? await api.invoke("ai_sky_photo_export", {
-            input: s.videoPath, vf, outputName: null, outputDir: null,
+            input: s.videoPath, vf: ownVf, outputName: null, outputDir: null,
           })
         : await api.invoke("filter_image", {
             input: s.videoPath,
-            vf,
+            vf: s.skyOnly ? ownVf : chainVf,
             filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
             outputName: null,
             outputDir: null,
@@ -393,6 +397,7 @@ async function exportVideo() {
   }
 
   try {
+    const vf = ownVf;
     const jobId = (s.skyOnly && s.aiMask)
       ? await api.invoke("ai_sky_filter_video", {
           input: s.videoPath,
@@ -766,7 +771,10 @@ function Filters() {
     }
   }, []);
 
-  // Fotka → náhľad cez video_thumbnail (funguje aj pre obrázky)
+  // Fotka → náhľad cez video_thumbnail (funguje aj pre obrázky).
+  // Mimo režimu "len obloha" sa náhľad renderuje cez ffmpeg s kompletným
+  // edit chainom (vlastný štýl + kroky ostatných modulov) → náhľad je
+  // IDENTICKÝ s exportom. V režime skyOnly ostáva rýchly SVG náhľad.
   const isPhoto = isPhotoPath(s.videoPath);
   useEffect(() => {
     if (!s.videoPath || !isPhoto) {
@@ -774,9 +782,11 @@ function Filters() {
       return;
     }
     let dead = false;
+    const useChain = !s.skyOnly && api.getEditChainVf;
+    const vf = useChain ? (api.getEditChainVf() || null) : null;
     (async () => {
       try {
-        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0, maxWidth: 1920 });
+        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0, maxWidth: 1920, vf });
         if (dead) return;
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
         store.setState({ photoUrl: url });
@@ -785,7 +795,29 @@ function Filters() {
       }
     })();
     return () => { dead = true; };
-  }, [s.videoPath, isPhoto]);
+  }, [s.videoPath, isPhoto, s.skyOnly, s.chainTick]);
+
+  // Edit chain — zapíš svoj krok (štýl) do core, nech ho vidia ostatné moduly.
+  // Len pre fotky mimo režimu "len obloha" (maskovaný export sa reťaziť nedá).
+  useEffect(() => {
+    if (!api.setEditStep) return;
+    const timer = setTimeout(() => {
+      if (isPhoto && s.activeStyle && !s.skyOnly) {
+        api.setEditStep({ vf: buildVf(s.activeStyle, s.intensity), label: "Filtre" });
+      } else {
+        api.setEditStep(null);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [isPhoto, s.activeStyle, s.intensity, s.skyOnly, s.videoPath]);
+
+  // Iný modul zmenil svoje kroky → prekresli náhľad
+  useEffect(() => {
+    if (!api.onEditChain) return;
+    return api.onEditChain(() => {
+      store.setState({ chainTick: store.getState().chainTick + 1 });
+    });
+  }, []);
 
   const handleStylePhoto = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -858,11 +890,9 @@ function Filters() {
                   <div
                     className="rounded-xl overflow-hidden border border-border bg-black"
                     style={{
-                      filter: s.skyOnly
-                        ? s.activeStyle
-                          ? `url(#${SKY_FILTER_ID})`
-                          : ""
-                        : fullFilterString(s.activeStyle, s.intensity),
+                      // mimo skyOnly má náhľad filter vypálený cez ffmpeg (edit chain) —
+                      // presne zodpovedá exportu; skyOnly ostáva na rýchlom SVG náhľade
+                      filter: s.skyOnly && s.activeStyle ? `url(#${SKY_FILTER_ID})` : "",
                     }}
                   >
                     <img src={s.photoUrl} alt="" style={{ width: "100%", display: "block" }} draggable={false} />
