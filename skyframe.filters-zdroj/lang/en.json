@@ -49,5 +49,17 @@
   "style_portrait": "Warm portrait",
   "style_arctic": "Arctic",
   "my_styles": "My styles",
-  "builtin_styles": "Built-in styles"
+  "builtin_styles": "Built-in styles",
+  "ai_no_license": "AI mask requires an AI license (key is set in core settings).",
+  "ai_missing": "AI mask needs a one-time component download (~185 MB).",
+  "ai_downloading": "Downloading AI…",
+  "ai_mask": "AI mask (more precise)",
+  "ai_preview": "AI preview (frame at 1 s)",
+  "ai_preview_loading": "Computing AI preview…",
+  "ai_export_note": "Export with AI mask is slower — the mask is computed from video frames.",
+  "back_to_video": "Back to video",
+  "ai_preview_label": "AI preview — static frame from second 1",
+  "pick_file": "Add file",
+  "change_file": "Different file",
+  "loading_photo": "Loading photo…"
 }

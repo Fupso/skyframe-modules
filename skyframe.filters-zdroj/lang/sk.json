@@ -49,5 +49,17 @@
   "style_portrait": "Teplý portrét",
   "style_arctic": "Arktická",
   "my_styles": "Moje štýly",
-  "builtin_styles": "Vstavané štýly"
+  "builtin_styles": "Vstavané štýly",
+  "ai_no_license": "AI maska vyžaduje AI licenciu (kľúč sa zadáva v nastaveniach core).",
+  "ai_missing": "AI maska potrebuje jednorazovo stiahnuť komponenty (~185 MB).",
+  "ai_downloading": "Sťahujem AI…",
+  "ai_mask": "AI maska (presnejšia)",
+  "ai_preview": "AI náhľad (snímka 1 s)",
+  "ai_preview_loading": "Počítam AI náhľad…",
+  "ai_export_note": "Export s AI maskou je pomalší — maska sa počíta zo snímok videa.",
+  "back_to_video": "Späť na video",
+  "ai_preview_label": "AI náhľad — statická snímka z 1. sekundy",
+  "pick_file": "Pridať súbor",
+  "change_file": "Iný súbor",
+  "loading_photo": "Načítavam fotku…"
 }

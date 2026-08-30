@@ -1,4 +1,6 @@
-// skyframe.filters v1.5.0 — Filtre
+// skyframe.filters v2.2.0 — Filtre
+// NOVÉ: podpora fotiek — „Pridať súbor“ berie video aj fotku (všetky bežné formáty).
+// NOVÉ: AI maska oblohy (ONNX U^2-Net v core) — prepínač jednoduchá (luma) / AI.
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
 // priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
 // (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
@@ -11,7 +13,16 @@ const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
 const { useState, useEffect, useRef, useSyncExternalStore } = React;
 
-const VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
+const MEDIA_FILTERS = [
+  { name: "Subor", extensions: ["mp4", "mov", "mkv", "avi", "jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"] },
+];
+
+const PHOTO_EXT = ["jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"];
+function isPhotoPath(p) {
+  if (!p) return false;
+  const e = p.split(".").pop().toLowerCase();
+  return PHOTO_EXT.includes(e);
+}
 
 // ---------------------------------------------------------------------------
 // Vstavané štýly (20) — vždy dostupné, nezmazateľné. Používateľské štýly
@@ -66,7 +77,13 @@ const initialState = {
   activeStyle: null,    // {channels:{r,g,b:{slope,intercept}}, css:{brightness,contrast,saturate}} | null
   activePresetId: null,
   intensity: 80,        // sila štýlu v % (mierni kanálové posuny aj css)
-  skyOnly: false,       // aplikovať tón len na svetlé partie (obloha) — luma maska
+  skyOnly: false,       // aplikovať tón len na oblohu
+  aiMask: false,        // obloha cez AI model (presnejšia; vyžaduje AI licenciu + model)
+  aiStatus: null,       // {licensed, runtimeInstalled, modelInstalled} | null (null = core bez AI)
+  aiJob: null,          // job sťahovania AI komponentov
+  aiPreviewUrl: "",     // blob URL AI náhľadu (statická snímka)
+  aiPreviewLoading: false,
+  photoUrl: "",        // blob URL náhľadu fotky (ak je médium fotka)
   presets: [],          // {id, name, style, avgColor, favorite, createdAt}[]
   showNewStyle: false,
   analyzing: false,
@@ -190,7 +207,7 @@ function ChannelFilterDefs({ style, intensity, filterId = MAIN_FILTER_ID }) {
 }
 
 async function pickVideo() {
-  const f = await api.pickFiles(VIDEO_FILTERS, false);
+  const f = await api.pickFiles(MEDIA_FILTERS, false);
   if (f && !Array.isArray(f)) {
     store.setState({ videoPath: f, fromActiveMedia: false });
     if (api.setActiveMedia) api.setActiveMedia(f);
@@ -284,6 +301,51 @@ function buildSkyGraph(style, intensity) {
   return `[0:v]split=3[base][t][mm];[t]${lut}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[v]`;
 }
 
+/** Obnoví stav AI z core (starý core bez AI commandov → null). */
+async function refreshAiStatus() {
+  try {
+    const st = await api.invoke("ai_status", {});
+    store.setState({ aiStatus: st });
+  } catch {
+    store.setState({ aiStatus: null });
+  }
+}
+
+/** Stiahne AI komponent (runtime/model) ako job s progresom. */
+async function ensureAi(kind) {
+  const cmd = kind === "runtime" ? "ensure_ai_runtime" : "ensure_ai_model";
+  try {
+    const jobId = await api.invoke(cmd, kind === "model" ? { modelId: "skyseg" } : {});
+    if (!jobId) { await refreshAiStatus(); return; } // už nainštalované
+    store.setState({ aiJob: { id: jobId, status: "running", progress: 0, message: "", result: null } });
+    let unlisten;
+    api.listenJob(jobId, (job) => {
+      store.setState({ aiJob: job });
+      if (job.status !== "running") { unlisten?.(); refreshAiStatus(); }
+    }).then((u) => { unlisten = u; });
+  } catch (e) {
+    store.setState({ aiJob: { id: "error", status: "error", progress: 0, message: String(e), result: null } });
+  }
+}
+
+/** AI náhľad: core vráti JPEG snímku s filtrom len na oblohe. */
+async function loadAiPreview() {
+  const s = store.getState();
+  if (!s.videoPath || !s.activeStyle || s.aiPreviewLoading) return;
+  store.setState({ aiPreviewLoading: true });
+  try {
+    const bytes = await api.invoke("ai_sky_preview", {
+      input: s.videoPath,
+      atSeconds: 1.0,
+      vf: buildVf(s.activeStyle, s.intensity),
+    });
+    const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
+    store.setState({ aiPreviewUrl: url, aiPreviewLoading: false });
+  } catch (e) {
+    store.setState({ aiPreviewLoading: false, job: { id: "error", status: "error", progress: 0, message: String(e), result: null } });
+  }
+}
+
 function watchJob(jobId) {
   return new Promise((resolve) => {
     let unlisten;
@@ -306,8 +368,42 @@ async function exportVideo() {
   const s = store.getState();
   if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
   const vf = buildVf(s.activeStyle, s.intensity);
+
+  // --- Fotka: priamy export (žiadny job, je to jedna snímka) ---
+  if (isPhotoPath(s.videoPath)) {
+    store.setState({ job: { id: "photo", status: "running", progress: -1, message: "", result: null } });
+    try {
+      const result = (s.skyOnly && s.aiMask)
+        ? await api.invoke("ai_sky_photo_export", {
+            input: s.videoPath, vf, outputName: null, outputDir: null,
+          })
+        : await api.invoke("filter_image", {
+            input: s.videoPath,
+            vf,
+            filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
+            outputName: null,
+            outputDir: null,
+          });
+      store.setState({ job: { id: "photo", status: "done", progress: 100, message: "", result } });
+      if (api.setActiveMedia) api.setActiveMedia(result);
+    } catch (e) {
+      store.setState({ job: { id: "photo", status: "error", progress: 0, message: String(e), result: null } });
+    }
+    return;
+  }
+
   try {
-    const jobId = await api.invoke("filter_video", {
+    const jobId = (s.skyOnly && s.aiMask)
+      ? await api.invoke("ai_sky_filter_video", {
+          input: s.videoPath,
+          vf,
+          maskFps: 3,
+          quality: "21",
+          outputName: null,
+          outputDir: null,
+          moduleId: api.moduleId,
+        })
+      : await api.invoke("filter_video", {
       input: s.videoPath,
       vf,
       af: null,
@@ -473,11 +569,88 @@ function SidePanel() {
             <input
               type="checkbox"
               checked={s.skyOnly}
-              onChange={(e) => store.setState({ skyOnly: e.target.checked })}
+              onChange={(e) => store.setState({ skyOnly: e.target.checked, aiPreviewUrl: "" })}
               className="w-4 h-4 accent-[#6366f1]"
             />
-            <span className="text-sm">{t("sky_only", "Len svetlé partie (obloha)")}</span>
+            <span className="text-sm">{t("sky_only", "Len obloha")}</span>
           </label>
+        )}
+
+        {/* AI maska — prepínač jednoduchá/AI + stiahnutie komponentov */}
+        {s.activeStyle && s.skyOnly && s.aiStatus && (
+          <div className="ml-1 pl-3 border-l-2 border-accent/30 space-y-2">
+            {!s.aiStatus.licensed ? (
+              <p className="text-[11px] text-text-dim">
+                🔒 {t("ai_no_license", "AI maska vyžaduje AI licenciu — aktivuj trial alebo kľúč v AI centre (✨ vľavo).")}
+              </p>
+            ) : !(s.aiStatus.runtimeInstalled && s.aiStatus.modelInstalled) ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-text-dim">
+                  🤖 {t("ai_missing", "AI maska potrebuje jednorazovo stiahnuť komponenty (~185 MB).")}
+                </p>
+                {s.aiJob?.status === "running" ? (
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[11px]">{t("ai_downloading", "Sťahujem AI…")}</span>
+                      <span className="text-[11px] font-mono text-text-dim">{Math.round(s.aiJob.progress)}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-bg rounded-full overflow-hidden border border-border">
+                      <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${Math.max(2, Math.min(100, s.aiJob.progress))}%` }} />
+                    </div>
+                    <p className="text-[10px] text-text-dim mt-1">{s.aiJob.message}</p>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    {!s.aiStatus.runtimeInstalled && (
+                      <button
+                        onClick={() => void ensureAi("runtime")}
+                        className="flex-1 px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20"
+                      >
+                        ⬇️ Runtime (~14 MB)
+                      </button>
+                    )}
+                    {!s.aiStatus.modelInstalled && (
+                      <button
+                        onClick={() => void ensureAi("model")}
+                        className="flex-1 px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20"
+                      >
+                        ⬇️ Model (~170 MB)
+                      </button>
+                    )}
+                  </div>
+                )}
+                {s.aiJob?.status === "error" && (
+                  <p className="text-[10px] text-error break-all">✗ {s.aiJob.message}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={s.aiMask}
+                    onChange={(e) => store.setState({ aiMask: e.target.checked, aiPreviewUrl: "" })}
+                    className="w-4 h-4 accent-[#6366f1]"
+                  />
+                  <span className="text-sm">🤖 {t("ai_mask", "AI maska (presnejšia)")}</span>
+                </label>
+                {s.aiMask && (
+                  <>
+                    <button
+                      onClick={() => void loadAiPreview()}
+                      disabled={s.aiPreviewLoading || !s.videoPath}
+                      className="w-full px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 disabled:opacity-40"
+                    >
+                      {s.aiPreviewLoading ? `⏳ ${t("ai_preview_loading", "Počítam AI náhľad…")}` : `🔍 ${t("ai_preview", "AI náhľad (snímka 1 s)")}`}
+                    </button>
+                    <p className="text-[10px] text-text-dim">
+                      {t("ai_export_note", "Export s AI maskou je pomalší (maska sa počíta zo snímok videa).")}
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Export — vypáli filter do videa */}
@@ -577,6 +750,7 @@ function Filters() {
         }
       } catch {}
       store.setState({ restored: true });
+      refreshAiStatus();
     })();
 
     // Aktívne médium z core (napr. výstup Spájača)
@@ -591,6 +765,27 @@ function Filters() {
       return off;
     }
   }, []);
+
+  // Fotka → náhľad cez video_thumbnail (funguje aj pre obrázky)
+  const isPhoto = isPhotoPath(s.videoPath);
+  useEffect(() => {
+    if (!s.videoPath || !isPhoto) {
+      if (store.getState().photoUrl) store.setState({ photoUrl: "" });
+      return;
+    }
+    let dead = false;
+    (async () => {
+      try {
+        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0 });
+        if (dead) return;
+        const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
+        store.setState({ photoUrl: url });
+      } catch (e) {
+        if (!dead) store.setState({ photoUrl: "", job: { id: "err", status: "error", progress: 0, message: String(e), result: null } });
+      }
+    })();
+    return () => { dead = true; };
+  }, [s.videoPath, isPhoto]);
 
   const handleStylePhoto = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -633,7 +828,7 @@ function Filters() {
               onClick={pickVideo}
               className="px-4 py-2 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
             >
-              {s.videoPath ? `🔄 ${t("change_video", "Iné video")}` : `🎬 ${t("pick_video", "Vybrať video")}`}
+              {s.videoPath ? `🔄 ${t("change_file", "Iný súbor")}` : `📁 ${t("pick_file", "Pridať súbor")}`}
             </button>
           </div>
 
@@ -645,26 +840,60 @@ function Filters() {
                 </p>
               )}
               {/* Filter sa aplikuje na obal — filtruje video vnútri PlayerShell */}
-              <div
-                className="rounded-xl overflow-hidden border border-border bg-black"
-                style={{
-                  filter: s.skyOnly
-                    ? s.activeStyle
-                      ? `url(#${SKY_FILTER_ID})`
-                      : ""
-                    : fullFilterString(s.activeStyle, s.intensity),
-                }}
-              >
-                <PlayerShell src={s.videoPath} />
-              </div>
+              {s.aiPreviewUrl ? (
+                <div className="rounded-xl overflow-hidden border border-border bg-black relative">
+                  <img src={s.aiPreviewUrl} alt="AI náhľad" style={{ width: "100%", display: "block" }} />
+                  <button
+                    onClick={() => store.setState({ aiPreviewUrl: "" })}
+                    className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-xs bg-black/70 text-white border border-white/20 hover:bg-black/90"
+                  >
+                    ▶ {t("back_to_video", "Späť na video")}
+                  </button>
+                  <span className="absolute bottom-2 left-2 px-2 py-1 rounded text-[10px] bg-black/70 text-white">
+                    🤖 {t("ai_preview_label", "AI náhľad — statická snímka z 1. sekundy")}
+                  </span>
+                </div>
+              ) : isPhoto ? (
+                s.photoUrl ? (
+                  <div
+                    className="rounded-xl overflow-hidden border border-border bg-black"
+                    style={{
+                      filter: s.skyOnly
+                        ? s.activeStyle
+                          ? `url(#${SKY_FILTER_ID})`
+                          : ""
+                        : fullFilterString(s.activeStyle, s.intensity),
+                    }}
+                  >
+                    <img src={s.photoUrl} alt="" style={{ width: "100%", display: "block" }} draggable={false} />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border bg-black py-16 text-center">
+                    <p className="text-sm text-text-dim">⏳ {t("loading_photo", "Načítavam fotku…")}</p>
+                  </div>
+                )
+              ) : (
+                <div
+                  className="rounded-xl overflow-hidden border border-border bg-black"
+                  style={{
+                    filter: s.skyOnly
+                      ? s.activeStyle
+                        ? `url(#${SKY_FILTER_ID})`
+                        : ""
+                      : fullFilterString(s.activeStyle, s.intensity),
+                  }}
+                >
+                  <PlayerShell src={s.videoPath} />
+                </div>
+              )}
             </>
           ) : (
             <div
               onClick={pickVideo}
               className="rounded-xl border border-dashed border-border hover:border-accent/40 transition-colors cursor-pointer py-16 text-center"
             >
-              <div className="text-5xl mb-3">🎬</div>
-              <p className="text-sm font-medium">{t("pick_video", "Vybrať video")}</p>
+              <div className="text-5xl mb-3">📁</div>
+              <p className="text-sm font-medium">{t("pick_file", "Pridať súbor")}</p>
               <p className="text-xs text-text-dim mt-1">
                 {t("hint_active", "Alebo najprv spoj videá v Spájači — výstup sa tu objaví sám.")}
               </p>

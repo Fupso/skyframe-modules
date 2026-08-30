@@ -1,4 +1,4 @@
-// ../merger-build/react-shim.js
+// ../mbuild/react-shim.mjs
 var R = window.React;
 var react_shim_default = R;
 var useState = R.useState;
@@ -13,7 +13,15 @@ var Fragment = R.Fragment;
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
-var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
+var MEDIA_FILTERS = [
+  { name: "Subor", extensions: ["mp4", "mov", "mkv", "avi", "jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"] }
+];
+var PHOTO_EXT = ["jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"];
+function isPhotoPath(p) {
+  if (!p) return false;
+  const e = p.split(".").pop().toLowerCase();
+  return PHOTO_EXT.includes(e);
+}
 function mkStyle(r, g, b, brightness, contrast, saturate) {
   return {
     channels: { r: { slope: 1, intercept: r }, g: { slope: 1, intercept: g }, b: { slope: 1, intercept: b } },
@@ -78,7 +86,18 @@ var initialState = {
   intensity: 80,
   // sila štýlu v % (mierni kanálové posuny aj css)
   skyOnly: false,
-  // aplikovať tón len na svetlé partie (obloha) — luma maska
+  // aplikovať tón len na oblohu
+  aiMask: false,
+  // obloha cez AI model (presnejšia; vyžaduje AI licenciu + model)
+  aiStatus: null,
+  // {licensed, runtimeInstalled, modelInstalled} | null (null = core bez AI)
+  aiJob: null,
+  // job sťahovania AI komponentov
+  aiPreviewUrl: "",
+  // blob URL AI náhľadu (statická snímka)
+  aiPreviewLoading: false,
+  photoUrl: "",
+  // blob URL náhľadu fotky (ak je médium fotka)
   presets: [],
   // {id, name, style, avgColor, favorite, createdAt}[]
   showNewStyle: false,
@@ -154,7 +173,7 @@ function ChannelFilterDefs({ style, intensity, filterId = MAIN_FILTER_ID }) {
   return /* @__PURE__ */ react_shim_default.createElement("svg", { width: "0", height: "0", style: { position: "absolute" }, "aria-hidden": "true" }, /* @__PURE__ */ react_shim_default.createElement("filter", { id: filterId, colorInterpolationFilters: "sRGB" }, /* @__PURE__ */ react_shim_default.createElement("feComponentTransfer", null, /* @__PURE__ */ react_shim_default.createElement("feFuncR", { type: "linear", slope: s.channels.r.slope.toFixed(4), intercept: s.channels.r.intercept.toFixed(4) }), /* @__PURE__ */ react_shim_default.createElement("feFuncG", { type: "linear", slope: s.channels.g.slope.toFixed(4), intercept: s.channels.g.intercept.toFixed(4) }), /* @__PURE__ */ react_shim_default.createElement("feFuncB", { type: "linear", slope: s.channels.b.slope.toFixed(4), intercept: s.channels.b.intercept.toFixed(4) }))));
 }
 async function pickVideo() {
-  const f = await api.pickFiles(VIDEO_FILTERS, false);
+  const f = await api.pickFiles(MEDIA_FILTERS, false);
   if (f && !Array.isArray(f)) {
     store.setState({ videoPath: f, fromActiveMedia: false });
     if (api.setActiveMedia) api.setActiveMedia(f);
@@ -232,6 +251,53 @@ function buildSkyGraph(style, intensity) {
   const lut = `lutrgb=${ch("r", sc.channels.r)}:${ch("g", sc.channels.g)}:${ch("b", sc.channels.b)}`;
   return `[0:v]split=3[base][t][mm];[t]${lut}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[v]`;
 }
+async function refreshAiStatus() {
+  try {
+    const st = await api.invoke("ai_status", {});
+    store.setState({ aiStatus: st });
+  } catch {
+    store.setState({ aiStatus: null });
+  }
+}
+async function ensureAi(kind) {
+  const cmd = kind === "runtime" ? "ensure_ai_runtime" : "ensure_ai_model";
+  try {
+    const jobId = await api.invoke(cmd, kind === "model" ? { modelId: "skyseg" } : {});
+    if (!jobId) {
+      await refreshAiStatus();
+      return;
+    }
+    store.setState({ aiJob: { id: jobId, status: "running", progress: 0, message: "", result: null } });
+    let unlisten;
+    api.listenJob(jobId, (job) => {
+      store.setState({ aiJob: job });
+      if (job.status !== "running") {
+        unlisten?.();
+        refreshAiStatus();
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+  } catch (e) {
+    store.setState({ aiJob: { id: "error", status: "error", progress: 0, message: String(e), result: null } });
+  }
+}
+async function loadAiPreview() {
+  const s = store.getState();
+  if (!s.videoPath || !s.activeStyle || s.aiPreviewLoading) return;
+  store.setState({ aiPreviewLoading: true });
+  try {
+    const bytes = await api.invoke("ai_sky_preview", {
+      input: s.videoPath,
+      atSeconds: 1,
+      vf: buildVf(s.activeStyle, s.intensity)
+    });
+    const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
+    store.setState({ aiPreviewUrl: url, aiPreviewLoading: false });
+  } catch (e) {
+    store.setState({ aiPreviewLoading: false, job: { id: "error", status: "error", progress: 0, message: String(e), result: null } });
+  }
+}
 function watchJob(jobId) {
   return new Promise((resolve) => {
     let unlisten;
@@ -250,8 +316,38 @@ async function exportVideo() {
   const s = store.getState();
   if (!s.videoPath || !s.activeStyle || s.job?.status === "running") return;
   const vf = buildVf(s.activeStyle, s.intensity);
+  if (isPhotoPath(s.videoPath)) {
+    store.setState({ job: { id: "photo", status: "running", progress: -1, message: "", result: null } });
+    try {
+      const result = s.skyOnly && s.aiMask ? await api.invoke("ai_sky_photo_export", {
+        input: s.videoPath,
+        vf,
+        outputName: null,
+        outputDir: null
+      }) : await api.invoke("filter_image", {
+        input: s.videoPath,
+        vf,
+        filterComplex: s.skyOnly ? buildSkyGraph(s.activeStyle, s.intensity) : null,
+        outputName: null,
+        outputDir: null
+      });
+      store.setState({ job: { id: "photo", status: "done", progress: 100, message: "", result } });
+      if (api.setActiveMedia) api.setActiveMedia(result);
+    } catch (e) {
+      store.setState({ job: { id: "photo", status: "error", progress: 0, message: String(e), result: null } });
+    }
+    return;
+  }
   try {
-    const jobId = await api.invoke("filter_video", {
+    const jobId = s.skyOnly && s.aiMask ? await api.invoke("ai_sky_filter_video", {
+      input: s.videoPath,
+      vf,
+      maskFps: 3,
+      quality: "21",
+      outputName: null,
+      outputDir: null,
+      moduleId: api.moduleId
+    }) : await api.invoke("filter_video", {
       input: s.videoPath,
       vf,
       af: null,
@@ -383,10 +479,40 @@ function SidePanel() {
     {
       type: "checkbox",
       checked: s.skyOnly,
-      onChange: (e) => store.setState({ skyOnly: e.target.checked }),
+      onChange: (e) => store.setState({ skyOnly: e.target.checked, aiPreviewUrl: "" }),
       className: "w-4 h-4 accent-[#6366f1]"
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len svetl\xE9 partie (obloha)"))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, t("sky_only", "Len obloha"))), s.activeStyle && s.skyOnly && s.aiStatus && /* @__PURE__ */ react_shim_default.createElement("div", { className: "ml-1 pl-3 border-l-2 border-accent/30 space-y-2" }, !s.aiStatus.licensed ? /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] text-text-dim" }, "\u{1F512} ", t("ai_no_license", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj trial alebo k\u013E\xFA\u010D v AI centre (\u2728 v\u013Eavo).")) : !(s.aiStatus.runtimeInstalled && s.aiStatus.modelInstalled) ? /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] text-text-dim" }, "\u{1F916} ", t("ai_missing", "AI maska potrebuje jednorazovo stiahnu\u0165 komponenty (~185 MB).")), s.aiJob?.status === "running" ? /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between items-center mb-1" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[11px]" }, t("ai_downloading", "S\u0165ahujem AI\u2026")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-[11px] font-mono text-text-dim" }, Math.round(s.aiJob.progress), "%")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "w-full h-1.5 bg-bg rounded-full overflow-hidden border border-border" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "h-full rounded-full bg-accent transition-all duration-300", style: { width: `${Math.max(2, Math.min(100, s.aiJob.progress))}%` } })), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim mt-1" }, s.aiJob.message)) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-2" }, !s.aiStatus.runtimeInstalled && /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => void ensureAi("runtime"),
+      className: "flex-1 px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20"
+    },
+    "\u2B07\uFE0F Runtime (~14 MB)"
+  ), !s.aiStatus.modelInstalled && /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => void ensureAi("model"),
+      className: "flex-1 px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20"
+    },
+    "\u2B07\uFE0F Model (~170 MB)"
+  )), s.aiJob?.status === "error" && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-error break-all" }, "\u2717 ", s.aiJob.message)) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "flex items-center gap-3 cursor-pointer" }, /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: s.aiMask,
+      onChange: (e) => store.setState({ aiMask: e.target.checked, aiPreviewUrl: "" }),
+      className: "w-4 h-4 accent-[#6366f1]"
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-sm" }, "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)"))), s.aiMask && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => void loadAiPreview(),
+      disabled: s.aiPreviewLoading || !s.videoPath,
+      className: "w-full px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 disabled:opacity-40"
+    },
+    s.aiPreviewLoading ? `\u23F3 ${t("ai_preview_loading", "Po\u010D\xEDtam AI n\xE1h\u013Ead\u2026")}` : `\u{1F50D} ${t("ai_preview", "AI n\xE1h\u013Ead (sn\xEDmka 1 s)")}`
+  ), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("ai_export_note", "Export s AI maskou je pomal\u0161\xED (maska sa po\u010D\xEDta zo sn\xEDmok videa)."))))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => void exportVideo(),
@@ -422,6 +548,7 @@ function Filters() {
       } catch {
       }
       store.setState({ restored: true });
+      refreshAiStatus();
     })();
     if (api.getActiveMedia) {
       const active = api.getActiveMedia();
@@ -434,6 +561,27 @@ function Filters() {
       return off;
     }
   }, []);
+  const isPhoto = isPhotoPath(s.videoPath);
+  useEffect2(() => {
+    if (!s.videoPath || !isPhoto) {
+      if (store.getState().photoUrl) store.setState({ photoUrl: "" });
+      return;
+    }
+    let dead = false;
+    (async () => {
+      try {
+        const bytes = await api.invoke("video_thumbnail", { path: s.videoPath, atSeconds: 0 });
+        if (dead) return;
+        const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
+        store.setState({ photoUrl: url });
+      } catch (e) {
+        if (!dead) store.setState({ photoUrl: "", job: { id: "err", status: "error", progress: 0, message: String(e), result: null } });
+      }
+    })();
+    return () => {
+      dead = true;
+    };
+  }, [s.videoPath, isPhoto]);
   const handleStylePhoto = async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -463,8 +611,25 @@ function Filters() {
       onClick: pickVideo,
       className: "px-4 py-2 rounded-xl text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
     },
-    s.videoPath ? `\u{1F504} ${t("change_video", "In\xE9 video")}` : `\u{1F3AC} ${t("pick_video", "Vybra\u0165 video")}`
-  )), s.videoPath ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, s.fromActiveMedia && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] text-text-dim mb-2" }, "\u{1F517} ", t("from_active", "Akt\xEDvne m\xE9dium"), ": ", /* @__PURE__ */ react_shim_default.createElement("span", { className: "font-mono" }, baseName(s.videoPath))), /* @__PURE__ */ react_shim_default.createElement(
+    s.videoPath ? `\u{1F504} ${t("change_file", "In\xFD s\xFAbor")}` : `\u{1F4C1} ${t("pick_file", "Prida\u0165 s\xFAbor")}`
+  )), s.videoPath ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, s.fromActiveMedia && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] text-text-dim mb-2" }, "\u{1F517} ", t("from_active", "Akt\xEDvne m\xE9dium"), ": ", /* @__PURE__ */ react_shim_default.createElement("span", { className: "font-mono" }, baseName(s.videoPath))), s.aiPreviewUrl ? /* @__PURE__ */ react_shim_default.createElement("div", { className: "rounded-xl overflow-hidden border border-border bg-black relative" }, /* @__PURE__ */ react_shim_default.createElement("img", { src: s.aiPreviewUrl, alt: "AI n\xE1h\u013Ead", style: { width: "100%", display: "block" } }), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => store.setState({ aiPreviewUrl: "" }),
+      className: "absolute top-2 right-2 px-3 py-1.5 rounded-lg text-xs bg-black/70 text-white border border-white/20 hover:bg-black/90"
+    },
+    "\u25B6 ",
+    t("back_to_video", "Sp\xE4\u0165 na video")
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { className: "absolute bottom-2 left-2 px-2 py-1 rounded text-[10px] bg-black/70 text-white" }, "\u{1F916} ", t("ai_preview_label", "AI n\xE1h\u013Ead \u2014 statick\xE1 sn\xEDmka z 1. sekundy"))) : isPhoto ? s.photoUrl ? /* @__PURE__ */ react_shim_default.createElement(
+    "div",
+    {
+      className: "rounded-xl overflow-hidden border border-border bg-black",
+      style: {
+        filter: s.skyOnly ? s.activeStyle ? `url(#${SKY_FILTER_ID})` : "" : fullFilterString(s.activeStyle, s.intensity)
+      }
+    },
+    /* @__PURE__ */ react_shim_default.createElement("img", { src: s.photoUrl, alt: "", style: { width: "100%", display: "block" }, draggable: false })
+  ) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "rounded-xl border border-border bg-black py-16 text-center" }, /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-sm text-text-dim" }, "\u23F3 ", t("loading_photo", "Na\u010D\xEDtavam fotku\u2026"))) : /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
       className: "rounded-xl overflow-hidden border border-border bg-black",
@@ -479,8 +644,8 @@ function Filters() {
       onClick: pickVideo,
       className: "rounded-xl border border-dashed border-border hover:border-accent/40 transition-colors cursor-pointer py-16 text-center"
     },
-    /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-5xl mb-3" }, "\u{1F3AC}"),
-    /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-sm font-medium" }, t("pick_video", "Vybra\u0165 video")),
+    /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-5xl mb-3" }, "\u{1F4C1}"),
+    /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-sm font-medium" }, t("pick_file", "Prida\u0165 s\xFAbor")),
     /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-xs text-text-dim mt-1" }, t("hint_active", "Alebo najprv spoj vide\xE1 v Sp\xE1ja\u010Di \u2014 v\xFDstup sa tu objav\xED s\xE1m."))
   )), !api.registerSidePanel && /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement(SidePanel, null))), s.showNewStyle && /* @__PURE__ */ react_shim_default.createElement(
     "div",

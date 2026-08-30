@@ -49,5 +49,17 @@
   "style_portrait": "暖色人像",
   "style_arctic": "极地",
   "my_styles": "我的风格",
-  "builtin_styles": "内置风格"
+  "builtin_styles": "内置风格",
+  "ai_no_license": "AI 蒙版需要 AI 许可证（在核心设置中输入密钥）。",
+  "ai_missing": "AI 蒙版需要一次性下载组件（约 185 MB）。",
+  "ai_downloading": "正在下载 AI…",
+  "ai_mask": "AI 蒙版（更精确）",
+  "ai_preview": "AI 预览（第 1 秒帧）",
+  "ai_preview_loading": "正在计算 AI 预览…",
+  "ai_export_note": "使用 AI 蒙版导出较慢——蒙版按视频帧计算。",
+  "back_to_video": "返回视频",
+  "ai_preview_label": "AI 预览——第 1 秒的静态帧",
+  "pick_file": "添加文件",
+  "change_file": "更换文件",
+  "loading_photo": "正在加载照片…"
 }
