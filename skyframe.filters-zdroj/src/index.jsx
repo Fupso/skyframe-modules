@@ -1,4 +1,4 @@
-// skyframe.filters v1.4.0 — Filtre
+// skyframe.filters v1.5.0 — Filtre
 // Farebné štýly pre video odvodené priamo z referenčnej fotky (~80 % zhoda):
 // priemerná farba fotky sa prenáša na kanály R/G/B cez SVG feComponentTransfer
 // (naživo na prehrávači), jas/kontrast/sýtosť zo štatistiky fotky.
@@ -12,6 +12,50 @@ const t = (k, f) => api.t(k, f);
 const { useState, useEffect, useRef, useSyncExternalStore } = React;
 
 const VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
+
+// ---------------------------------------------------------------------------
+// Vstavané štýly (20) — vždy dostupné, nezmazateľné. Používateľské štýly
+// z configu sa pridávajú k nim a prežívajú aktualizácie (config je mimo
+// adresára modulu od core kroku 13).
+// channels.intercept: -0.3..0.3 (posun kanála), css: brightness/contrast/saturate v %
+// ---------------------------------------------------------------------------
+
+function mkStyle(r, g, b, brightness, contrast, saturate) {
+  return {
+    channels: { r: { slope: 1, intercept: r }, g: { slope: 1, intercept: g }, b: { slope: 1, intercept: b } },
+    css: { brightness, contrast, saturate },
+  };
+}
+function mkAvg(r, g, b) {
+  const c = (v) => Math.max(0, Math.min(255, Math.round((0.5 + v) * 255)));
+  return { r: c(r), g: c(g), b: c(b) };
+}
+function builtin(id, r, g, b, br, ct, st) {
+  return { id: `builtin_${id}`, nameKey: `style_${id}`, style: mkStyle(r, g, b, br, ct, st), avgColor: mkAvg(r, g, b), builtin: true };
+}
+
+const BUILTIN_PRESETS = [
+  builtin("sunset",      0.14, -0.02, -0.08, 104, 106, 122),  // západ slnka — teplá oranžová
+  builtin("cinematic",   0.06, -0.02,  0.05, 100, 118, 108),  // kinofilm — teal & orange
+  builtin("cold_blue",  -0.10,  0.00,  0.12, 100, 104, 110),  // studená modrá
+  builtin("forest",     -0.04,  0.10, -0.04,  99, 108, 116),  // lesná zeleň
+  builtin("noir",        0.00,  0.00,  0.00, 100, 122,   0),  // čiernobiely noir
+  builtin("sepia",       0.12,  0.03, -0.10, 102, 100,  88),  // sépia klasika
+  builtin("pink_clouds", 0.15, -0.04,  0.07, 103, 102, 112),  // ružové oblaky
+  builtin("summer",      0.04,  0.02, -0.02, 108, 104, 126),  // letná jasnosť
+  builtin("winter_fog",  0.00,  0.01,  0.04, 107,  92,  82),  // zimná hmla
+  builtin("drama",       0.00,  0.00,  0.00,  97, 128, 118),  // dronový dráma kontrast
+  builtin("golden",      0.16,  0.04, -0.12, 104, 106, 116),  // zlatá hodinka
+  builtin("blue_hour",  -0.08, -0.02,  0.14,  96, 110, 108),  // modrá hodinka
+  builtin("vintage",     0.09,  0.03, -0.07, 105,  92,  90),  // vintage film
+  builtin("cyberpunk",   0.10, -0.08,  0.12,  99, 114, 124),  // cyberpunk magenta/cyan
+  builtin("emerald",    -0.06,  0.10,  0.06, 100, 108, 114),  // smaragdová
+  builtin("pastel",      0.02,  0.02,  0.02, 107,  94,  78),  // pastelová jemnosť
+  builtin("contrast",    0.00,  0.00,  0.00, 100, 134, 104),  // hlboký kontrast
+  builtin("fade",        0.03,  0.03,  0.03, 106,  88,  92),  // matný fade
+  builtin("portrait",    0.07,  0.00, -0.03, 102, 103, 110),  // teplý portrét
+  builtin("arctic",     -0.06,  0.02,  0.12, 104, 106, 100),  // arktická modrá
+];
 
 // ---------------------------------------------------------------------------
 // Modulový store
@@ -336,28 +380,32 @@ function PresetCard({ preset }) {
         isActive ? "border-accent bg-accent/10" : "border-border bg-bg hover:border-accent/40"
       }`}
     >
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          savePresets(s.presets.map((p) => (p.id === preset.id ? { ...p, favorite: !p.favorite } : p)));
-        }}
-        style={{ position: "absolute", top: 2, right: 4 }}
-        className="text-xs"
-        title={t("favorite", "Obľúbené")}
-      >
-        {isFav ? "⭐" : "☆"}
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          savePresets(s.presets.filter((p) => p.id !== preset.id));
-        }}
-        style={{ position: "absolute", top: 2, left: 4 }}
-        className="text-[10px] text-error"
-        title={t("delete", "Zmazať")}
-      >
-        ✕
-      </button>
+      {!preset.builtin && (
+        <>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              savePresets(s.presets.map((p) => (p.id === preset.id ? { ...p, favorite: !p.favorite } : p)));
+            }}
+            style={{ position: "absolute", top: 2, right: 4 }}
+            className="text-xs"
+            title={t("favorite", "Obľúbené")}
+          >
+            {isFav ? "⭐" : "☆"}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              savePresets(s.presets.filter((p) => p.id !== preset.id));
+            }}
+            style={{ position: "absolute", top: 2, left: 4 }}
+            className="text-[10px] text-error"
+            title={t("delete", "Zmazať")}
+          >
+            ✕
+          </button>
+        </>
+      )}
       {preset.thumb ? (
         <img
           src={preset.thumb}
@@ -374,7 +422,7 @@ function PresetCard({ preset }) {
           }}
         />
       )}
-      <p className="text-[11px] truncate">{preset.name}</p>
+      <p className="text-[11px] truncate">{preset.nameKey ? t(preset.nameKey, preset.nameKey) : preset.name}</p>
     </div>
   );
 }
@@ -482,19 +530,24 @@ function SidePanel() {
         </div>
       )}
 
-      <div>
-        <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
-          ✨ {t("all_styles", "Všetky štýly")} ({s.presets.length})
-        </h3>
-        {others.length ? (
+      {others.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
+            ✨ {t("my_styles", "Moje štýly")} ({others.length})
+          </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
             {others.map((p) => <PresetCard key={p.id} preset={p} />)}
           </div>
-        ) : (
-          !favorites.length && (
-            <p className="text-xs text-text-dim">{t("no_styles", "Zatiaľ žiadne štýly — pridaj prvý z fotky.")}</p>
-          )
-        )}
+        </div>
+      )}
+
+      <div>
+        <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2">
+          🎨 {t("builtin_styles", "Vstavané štýly")} ({BUILTIN_PRESETS.length})
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+          {BUILTIN_PRESETS.map((p) => <PresetCard key={p.id} preset={p} />)}
+        </div>
       </div>
     </div>
   );

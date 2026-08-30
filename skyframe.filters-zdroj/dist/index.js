@@ -14,6 +14,61 @@ var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
 var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
+function mkStyle(r, g, b, brightness, contrast, saturate) {
+  return {
+    channels: { r: { slope: 1, intercept: r }, g: { slope: 1, intercept: g }, b: { slope: 1, intercept: b } },
+    css: { brightness, contrast, saturate }
+  };
+}
+function mkAvg(r, g, b) {
+  const c = (v) => Math.max(0, Math.min(255, Math.round((0.5 + v) * 255)));
+  return { r: c(r), g: c(g), b: c(b) };
+}
+function builtin(id, r, g, b, br, ct, st) {
+  return { id: `builtin_${id}`, nameKey: `style_${id}`, style: mkStyle(r, g, b, br, ct, st), avgColor: mkAvg(r, g, b), builtin: true };
+}
+var BUILTIN_PRESETS = [
+  builtin("sunset", 0.14, -0.02, -0.08, 104, 106, 122),
+  // západ slnka — teplá oranžová
+  builtin("cinematic", 0.06, -0.02, 0.05, 100, 118, 108),
+  // kinofilm — teal & orange
+  builtin("cold_blue", -0.1, 0, 0.12, 100, 104, 110),
+  // studená modrá
+  builtin("forest", -0.04, 0.1, -0.04, 99, 108, 116),
+  // lesná zeleň
+  builtin("noir", 0, 0, 0, 100, 122, 0),
+  // čiernobiely noir
+  builtin("sepia", 0.12, 0.03, -0.1, 102, 100, 88),
+  // sépia klasika
+  builtin("pink_clouds", 0.15, -0.04, 0.07, 103, 102, 112),
+  // ružové oblaky
+  builtin("summer", 0.04, 0.02, -0.02, 108, 104, 126),
+  // letná jasnosť
+  builtin("winter_fog", 0, 0.01, 0.04, 107, 92, 82),
+  // zimná hmla
+  builtin("drama", 0, 0, 0, 97, 128, 118),
+  // dronový dráma kontrast
+  builtin("golden", 0.16, 0.04, -0.12, 104, 106, 116),
+  // zlatá hodinka
+  builtin("blue_hour", -0.08, -0.02, 0.14, 96, 110, 108),
+  // modrá hodinka
+  builtin("vintage", 0.09, 0.03, -0.07, 105, 92, 90),
+  // vintage film
+  builtin("cyberpunk", 0.1, -0.08, 0.12, 99, 114, 124),
+  // cyberpunk magenta/cyan
+  builtin("emerald", -0.06, 0.1, 0.06, 100, 108, 114),
+  // smaragdová
+  builtin("pastel", 0.02, 0.02, 0.02, 107, 94, 78),
+  // pastelová jemnosť
+  builtin("contrast", 0, 0, 0, 100, 134, 104),
+  // hlboký kontrast
+  builtin("fade", 0.03, 0.03, 0.03, 106, 88, 92),
+  // matný fade
+  builtin("portrait", 0.07, 0, -0.03, 102, 103, 110),
+  // teplý portrét
+  builtin("arctic", -0.06, 0.02, 0.12, 104, 106, 100)
+  // arktická modrá
+];
 var initialState = {
   videoPath: null,
   // cesta k videu (aktívne médium / výber)
@@ -253,7 +308,7 @@ function PresetCard({ preset }) {
       ),
       className: `rounded-xl border p-2 text-center transition-colors cursor-pointer relative ${isActive ? "border-accent bg-accent/10" : "border-border bg-bg hover:border-accent/40"}`
     },
-    /* @__PURE__ */ react_shim_default.createElement(
+    !preset.builtin && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement(
       "button",
       {
         onClick: (e) => {
@@ -265,8 +320,7 @@ function PresetCard({ preset }) {
         title: t("favorite", "Ob\u013E\xFAben\xE9")
       },
       isFav ? "\u2B50" : "\u2606"
-    ),
-    /* @__PURE__ */ react_shim_default.createElement(
+    ), /* @__PURE__ */ react_shim_default.createElement(
       "button",
       {
         onClick: (e) => {
@@ -278,7 +332,7 @@ function PresetCard({ preset }) {
         title: t("delete", "Zmaza\u0165")
       },
       "\u2715"
-    ),
+    )),
     preset.thumb ? /* @__PURE__ */ react_shim_default.createElement(
       "img",
       {
@@ -300,7 +354,7 @@ function PresetCard({ preset }) {
         }
       }
     ),
-    /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] truncate" }, preset.name)
+    /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] truncate" }, preset.nameKey ? t(preset.nameKey, preset.nameKey) : preset.name)
   );
 }
 function SidePanel() {
@@ -349,7 +403,7 @@ function SidePanel() {
     },
     "+ ",
     t("new_style", "Nov\xFD \u0161t\xFDl z fotky")
-  ), favorites.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, "\u2B50 ", t("favorites", "Ob\u013E\xFAben\xE9"), " (", favorites.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, favorites.map((p) => /* @__PURE__ */ react_shim_default.createElement(PresetCard, { key: p.id, preset: p })))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, "\u2728 ", t("all_styles", "V\u0161etky \u0161t\xFDly"), " (", s.presets.length, ")"), others.length ? /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, others.map((p) => /* @__PURE__ */ react_shim_default.createElement(PresetCard, { key: p.id, preset: p }))) : !favorites.length && /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-xs text-text-dim" }, t("no_styles", "Zatia\u013E \u017Eiadne \u0161t\xFDly \u2014 pridaj prv\xFD z fotky."))));
+  ), favorites.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, "\u2B50 ", t("favorites", "Ob\u013E\xFAben\xE9"), " (", favorites.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, favorites.map((p) => /* @__PURE__ */ react_shim_default.createElement(PresetCard, { key: p.id, preset: p })))), others.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, "\u2728 ", t("my_styles", "Moje \u0161t\xFDly"), " (", others.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, others.map((p) => /* @__PURE__ */ react_shim_default.createElement(PresetCard, { key: p.id, preset: p })))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, "\u{1F3A8} ", t("builtin_styles", "Vstavan\xE9 \u0161t\xFDly"), " (", BUILTIN_PRESETS.length, ")"), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, BUILTIN_PRESETS.map((p) => /* @__PURE__ */ react_shim_default.createElement(PresetCard, { key: p.id, preset: p })))));
 }
 if (api.registerSidePanel) {
   api.registerSidePanel(SidePanel);
