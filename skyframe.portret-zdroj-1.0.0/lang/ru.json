@@ -1,0 +1,23 @@
+{
+  "title": "Портрет",
+  "pick_file": "Добавить фото",
+  "change_file": "Другое фото",
+  "tool_open": "Открыть фото",
+  "tool_export": "Экспорт",
+  "no_photo": "Нет фото — добавьте фото или откройте его в «Фильтрах» и переключитесь сюда.",
+  "presets": "Пресеты",
+  "preset_natural": "Естественный",
+  "preset_softskin": "Мягкая кожа",
+  "preset_golden": "Золотой час",
+  "preset_studio": "Студия",
+  "preset_bw": "Ч/б",
+  "smooth": "Сглаживание кожи",
+  "brighten": "Осветление",
+  "warmth": "Теплота",
+  "saturation": "Насыщенность",
+  "sharpen": "Резкость",
+  "vignette": "Виньетка",
+  "reset": "Сбросить",
+  "export_photo": "Экспорт фото",
+  "exporting": "Экспорт…"
+}

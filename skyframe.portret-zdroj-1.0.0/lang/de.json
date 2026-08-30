@@ -1,0 +1,23 @@
+{
+  "title": "Porträt",
+  "pick_file": "Foto hinzufügen",
+  "change_file": "Anderes Foto",
+  "tool_open": "Foto öffnen",
+  "tool_export": "Exportieren",
+  "no_photo": "Kein Foto — füge eines hinzu oder öffne es zuerst in Filtern und wechsle hierher.",
+  "presets": "Voreinstellungen",
+  "preset_natural": "Natürlich",
+  "preset_softskin": "Weiche Haut",
+  "preset_golden": "Goldene Stunde",
+  "preset_studio": "Studio",
+  "preset_bw": "Schwarzweiß",
+  "smooth": "Hautglättung",
+  "brighten": "Aufhellen",
+  "warmth": "Wärme",
+  "saturation": "Sättigung",
+  "sharpen": "Schärfen",
+  "vignette": "Vignette",
+  "reset": "Zurücksetzen",
+  "export_photo": "Foto exportieren",
+  "exporting": "Exportiere…"
+}

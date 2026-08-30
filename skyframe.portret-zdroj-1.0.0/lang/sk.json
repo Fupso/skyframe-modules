@@ -1,0 +1,23 @@
+{
+  "title": "Portrét",
+  "pick_file": "Pridať fotku",
+  "change_file": "Iná fotka",
+  "tool_open": "Otvoriť fotku",
+  "tool_export": "Exportovať",
+  "no_photo": "Žiadna fotka — pridaj fotku, alebo ju najprv otvor vo Filtroch a prepni sem.",
+  "presets": "Predvoľby",
+  "preset_natural": "Prirodzený",
+  "preset_softskin": "Jemná pleť",
+  "preset_golden": "Zlatá hodinka",
+  "preset_studio": "Štúdio",
+  "preset_bw": "Čiernobiely",
+  "smooth": "Jemnosť pleti",
+  "brighten": "Rozjasnenie",
+  "warmth": "Teplota",
+  "saturation": "Sýtosť",
+  "sharpen": "Vyostrenie",
+  "vignette": "Vignetácia",
+  "reset": "Obnoviť predvolené",
+  "export_photo": "Exportovať fotku",
+  "exporting": "Exportujem…"
+}

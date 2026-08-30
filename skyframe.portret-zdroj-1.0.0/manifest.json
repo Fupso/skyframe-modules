@@ -1,0 +1,15 @@
+{
+  "id": "skyframe.portret",
+  "name": "Portrét",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "Portrétové úpravy fotiek — jemnosť pleti, teplota, vyostrenie, vignetácia. Zdieľá fotku s ostatnými modulmi.",
+  "icon": "🧑",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "min_core_version": "3.2.0"
+}

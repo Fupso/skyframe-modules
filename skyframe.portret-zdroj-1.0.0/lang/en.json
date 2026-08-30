@@ -1,0 +1,23 @@
+{
+  "title": "Portrait",
+  "pick_file": "Add photo",
+  "change_file": "Different photo",
+  "tool_open": "Open photo",
+  "tool_export": "Export",
+  "no_photo": "No photo — add one, or open it in Filters first and switch here.",
+  "presets": "Presets",
+  "preset_natural": "Natural",
+  "preset_softskin": "Soft skin",
+  "preset_golden": "Golden hour",
+  "preset_studio": "Studio",
+  "preset_bw": "Black & white",
+  "smooth": "Skin smoothing",
+  "brighten": "Brighten",
+  "warmth": "Warmth",
+  "saturation": "Saturation",
+  "sharpen": "Sharpen",
+  "vignette": "Vignette",
+  "reset": "Reset to defaults",
+  "export_photo": "Export photo",
+  "exporting": "Exporting…"
+}
