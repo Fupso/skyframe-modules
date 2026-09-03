@@ -1,4 +1,4 @@
-// react-shim.mjs
+// ../react-shim.mjs
 var R = window.React;
 var react_shim_default = R;
 var useState = R.useState;
@@ -9,7 +9,7 @@ var useCallback = R.useCallback;
 var useSyncExternalStore = R.useSyncExternalStore;
 var Fragment = R.Fragment;
 
-// filters2/src/index.jsx
+// src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
@@ -129,6 +129,8 @@ var store = {
 function useStore() {
   return useSyncExternalStore2(store.subscribe, store.getState);
 }
+var lastBakedPath = null;
+var bakeDirty = false;
 function baseName(p) {
   return p.split(/[\\/]/).pop() ?? p;
 }
@@ -394,6 +396,8 @@ async function bakeForModules() {
       outputName: "chain_baked",
       outputDir: outDir
     });
+    lastBakedPath = result;
+    bakeDirty = false;
     store.setState({ job: { id: "bake", status: "done", progress: 100, message: "", result } });
     if (api.setActiveMedia) api.setActiveMedia(result);
   } catch (e) {
@@ -542,7 +546,16 @@ function SidePanel() {
       className: "w-full px-2 py-1.5 rounded-lg text-[11px] bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 disabled:opacity-40"
     },
     s.aiPreviewLoading ? `\u23F3 ${t("ai_preview_loading", "Po\u010D\xEDtam AI n\xE1h\u013Ead\u2026")}` : `\u{1F50D} ${t("ai_preview", "AI n\xE1h\u013Ead (sn\xEDmka 1 s)")}`
-  ), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("ai_export_note", "Export s AI maskou je pomal\u0161\xED (maska sa po\u010D\xEDta zo sn\xEDmok videa)."))))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("ai_export_note", "Export s AI maskou je pomal\u0161\xED (maska sa po\u010D\xEDta zo sn\xEDmok videa)."))))), s.activeStyle && s.skyOnly && isPhotoPath(s.videoPath) && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-1 pt-2 border-t border-border" }, /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => void bakeForModules(),
+      disabled: s.job?.status === "running",
+      className: "w-full px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40"
+    },
+    "\u{1F4CC} ",
+    s.job?.id === "bake" && s.job?.status === "running" ? t("baking", "Pripe\u010Dujem\u2026") : t("bake_for_modules", "Pripe\u010Di\u0165 pre ostatn\xE9 moduly")
+  ), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[10px] text-text-dim" }, t("bake_hint", "Maskovan\xE9 \xFApravy sa nezdie\u013Eaj\xFA automaticky \u2014 pripe\u010D\xED aktu\xE1lny stav ako nov\xE9 akt\xEDvne m\xE9dium (do tempu, ni\u010D sa neuklad\xE1)."))), s.activeStyle && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2 pt-2 border-t border-border" }, !s.job || s.job.status !== "running" ? /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => void exportVideo(),
@@ -586,7 +599,7 @@ function Filters() {
     }
     if (api.onActiveMedia) {
       const off = api.onActiveMedia((path) => {
-        if (path) store.setState({ videoPath: path, fromActiveMedia: true });
+        if (path && path !== lastBakedPath) store.setState({ videoPath: path, fromActiveMedia: true });
       });
       return off;
     }
@@ -629,6 +642,18 @@ function Filters() {
     if (!api.onEditChain) return;
     return api.onEditChain(() => {
       store.setState({ chainTick: store.getState().chainTick + 1 });
+    });
+  }, []);
+  useEffect2(() => {
+    bakeDirty = true;
+  }, [s.activeStyle, s.intensity, s.skyOnly, s.aiMask, s.videoPath]);
+  useEffect2(() => {
+    if (!api.onModuleLeave) return;
+    return api.onModuleLeave(async () => {
+      const st = store.getState();
+      if (isPhotoPath(st.videoPath) && st.activeStyle && st.skyOnly && bakeDirty) {
+        await bakeForModules();
+      }
     });
   }, []);
   const handleStylePhoto = async (e) => {

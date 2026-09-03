@@ -115,6 +115,11 @@ function useStore() {
   return useSyncExternalStore(store.subscribe, store.getState);
 }
 
+// Auto-pripečenie (krok 22): pri odchode z modulu s maskovaným filtrom sa
+// aktuálny stav sám vypáli do tempu a stane sa aktívnym médiom.
+let lastBakedPath = null; // cesta vlastného pripečenia — ignorujeme ju v onActiveMedia
+let bakeDirty = false;    // od posledného pripečenia sa niečo zmenilo?
+
 // ---------------------------------------------------------------------------
 // Pomocné funkcie
 // ---------------------------------------------------------------------------
@@ -458,6 +463,8 @@ async function bakeForModules() {
           outputName: "chain_baked",
           outputDir: outDir,
         });
+    lastBakedPath = result;
+    bakeDirty = false;
     store.setState({ job: { id: "bake", status: "done", progress: 100, message: "", result } });
     if (api.setActiveMedia) api.setActiveMedia(result);
   } catch (e) {
@@ -691,6 +698,24 @@ function SidePanel() {
           </div>
         )}
 
+        {/* Pripečenie pre ostatné moduly — maskovaný režim sa nezdieľa automaticky */}
+        {s.activeStyle && s.skyOnly && isPhotoPath(s.videoPath) && (
+          <div className="space-y-1 pt-2 border-t border-border">
+            <button
+              onClick={() => void bakeForModules()}
+              disabled={s.job?.status === "running"}
+              className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40"
+            >
+              📌 {s.job?.id === "bake" && s.job?.status === "running"
+                ? t("baking", "Pripečujem…")
+                : t("bake_for_modules", "Pripečiť pre ostatné moduly")}
+            </button>
+            <p className="text-[10px] text-text-dim">
+              {t("bake_hint", "Maskované úpravy sa nezdieľajú automaticky — pripečí aktuálny stav ako nové aktívne médium (do tempu, nič sa neukladá).")}
+            </p>
+          </div>
+        )}
+
         {/* Export — vypáli filter do videa */}
         {s.activeStyle && (
           <div className="space-y-2 pt-2 border-t border-border">
@@ -798,7 +823,7 @@ function Filters() {
     }
     if (api.onActiveMedia) {
       const off = api.onActiveMedia((path) => {
-        if (path) store.setState({ videoPath: path, fromActiveMedia: true });
+        if (path && path !== lastBakedPath) store.setState({ videoPath: path, fromActiveMedia: true });
       });
       return off;
     }
@@ -849,6 +874,24 @@ function Filters() {
     if (!api.onEditChain) return;
     return api.onEditChain(() => {
       store.setState({ chainTick: store.getState().chainTick + 1 });
+    });
+  }, []);
+
+  // Zmena nastavení = pripečenie je zase potrebné
+  useEffect(() => {
+    bakeDirty = true;
+  }, [s.activeStyle, s.intensity, s.skyOnly, s.aiMask, s.videoPath]);
+
+  // Auto-pripečenie pri odchode z modulu: maskovaný filter (obloha/AI) sa
+  // nezdieľa cez chain, tak sa pri prepnutí tabu sám vypáli do tempu a
+  // ostatné moduly (Portrét…) dostanú hotovú fotku ako aktívne médium.
+  useEffect(() => {
+    if (!api.onModuleLeave) return;
+    return api.onModuleLeave(async () => {
+      const st = store.getState();
+      if (isPhotoPath(st.videoPath) && st.activeStyle && st.skyOnly && bakeDirty) {
+        await bakeForModules();
+      }
     });
   }, []);
 
