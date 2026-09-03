@@ -1,10 +1,7 @@
 {
   "title": "Portrét",
-  "pick_file": "Pridať fotku",
-  "change_file": "Iná fotka",
-  "tool_open": "Otvoriť fotku",
-  "tool_export": "Exportovať",
-  "no_photo": "Žiadna fotka — pridaj fotku, alebo ju najprv otvor vo Filtroch a prepni sem.",
+  "editor_tool_info": "Tento modul je nástroj SkyFrame Editora. Otvor Editor (ikona 🎛️ vľavo), nahraj súbor a tento nástroj nájdeš v pravom stĺpci.",
+  "tool_no_media": "V Editore nie je otvorený žiadny súbor.",
   "presets": "Predvoľby",
   "preset_natural": "Prirodzený",
   "preset_softskin": "Jemná pleť",
@@ -17,7 +14,5 @@
   "saturation": "Sýtosť",
   "sharpen": "Vyostrenie",
   "vignette": "Vignetácia",
-  "reset": "Obnoviť predvolené",
-  "export_photo": "Exportovať fotku",
-  "exporting": "Exportujem…"
+  "reset": "Obnoviť predvolené"
 }

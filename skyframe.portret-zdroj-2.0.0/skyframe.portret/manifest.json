@@ -1,0 +1,16 @@
+{
+  "id": "skyframe.portret",
+  "name": "Portrét",
+  "version": "2.0.0",
+  "author": "SkyFrame Community",
+  "description": "Portrétové úpravy — jemnosť pleti, teplota, vyostrenie. Nástroj SkyFrame Editora: kombinuje sa s ostatnými nástrojmi do jedného výstupu.",
+  "icon": "🧑",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": ["editor_tool"],
+  "min_core_version": "3.3.0"
+}

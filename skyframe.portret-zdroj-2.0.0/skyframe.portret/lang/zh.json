@@ -1,10 +1,7 @@
 {
   "title": "人像",
-  "pick_file": "添加照片",
-  "change_file": "更换照片",
-  "tool_open": "打开照片",
-  "tool_export": "导出",
-  "no_photo": "没有照片 — 请添加照片，或先在“滤镜”中打开再切换到这里。",
+  "editor_tool_info": "此模块是 SkyFrame 编辑器的工具。打开编辑器（左侧 🎛️ 图标），加载文件后即可在右栏找到此工具。",
+  "tool_no_media": "编辑器中未打开文件。",
   "presets": "预设",
   "preset_natural": "自然",
   "preset_softskin": "柔肤",
@@ -17,7 +14,5 @@
   "saturation": "饱和度",
   "sharpen": "锐化",
   "vignette": "暗角",
-  "reset": "恢复默认",
-  "export_photo": "导出照片",
-  "exporting": "导出中…"
+  "reset": "恢复默认"
 }

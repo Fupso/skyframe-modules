@@ -1,10 +1,7 @@
 {
   "title": "Porträt",
-  "pick_file": "Foto hinzufügen",
-  "change_file": "Anderes Foto",
-  "tool_open": "Foto öffnen",
-  "tool_export": "Exportieren",
-  "no_photo": "Kein Foto — füge eines hinzu oder öffne es zuerst in Filtern und wechsle hierher.",
+  "editor_tool_info": "Dieses Modul ist ein Werkzeug des SkyFrame Editors. Öffne den Editor (🎛️ links), lade eine Datei — das Werkzeug findest du in der rechten Spalte.",
+  "tool_no_media": "Im Editor ist keine Datei geöffnet.",
   "presets": "Voreinstellungen",
   "preset_natural": "Natürlich",
   "preset_softskin": "Weiche Haut",
@@ -17,7 +14,5 @@
   "saturation": "Sättigung",
   "sharpen": "Schärfen",
   "vignette": "Vignette",
-  "reset": "Zurücksetzen",
-  "export_photo": "Foto exportieren",
-  "exporting": "Exportiere…"
+  "reset": "Zurücksetzen"
 }
