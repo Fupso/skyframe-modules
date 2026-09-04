@@ -1,0 +1,32 @@
+{
+  "id": "skyframe.vstyles",
+  "name": "Štýly videa",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "AI štýlizácia videa a fotiek — anime, kreslený film, umelecké štýly. 14 modelov, každý sa stiahne až pri prvom použití.",
+  "icon": "🎬",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute",
+    "ai.run"
+  ],
+  "min_core_version": "3.4.0",
+  "ai_models": [
+    { "id": "style-hayao", "name": "Anime — Hayao", "size_mb": 4.2 },
+    { "id": "style-shinkai", "name": "Anime — Shinkai", "size_mb": 4.2 },
+    { "id": "style-hayao2", "name": "Anime — Hayao v2", "size_mb": 4.2 },
+    { "id": "style-shinkai2", "name": "Anime — Shinkai v2", "size_mb": 4.2 },
+    { "id": "style-hayao3", "name": "Anime — Hayao v3", "size_mb": 4.2 },
+    { "id": "style-ghibli", "name": "Ghibli portrét", "size_mb": 7.0 },
+    { "id": "style-skica", "name": "Skica portrétu", "size_mb": 4.2 },
+    { "id": "style-tvar", "name": "Anime tvár", "size_mb": 8.6 },
+    { "id": "style-cartoon", "name": "Kreslený film", "size_mb": 17.0 },
+    { "id": "style-mozaika", "name": "Mozaika", "size_mb": 6.6 },
+    { "id": "style-candy", "name": "Candy", "size_mb": 6.6 },
+    { "id": "style-dazd", "name": "Rain Princess", "size_mb": 6.6 },
+    { "id": "style-udnie", "name": "Udnie", "size_mb": 6.6 },
+    { "id": "style-pointil", "name": "Pointillizmus", "size_mb": 6.6 }
+  ]
+}
