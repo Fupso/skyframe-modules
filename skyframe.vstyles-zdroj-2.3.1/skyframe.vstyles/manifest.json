@@ -1,10 +1,10 @@
 {
   "id": "skyframe.vstyles",
   "name": "Štýly videa",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "author": "SkyFrame Community",
   "description": "AI štýlizácia videa a fotiek — nástroj SkyFrame Editora. Anime, kreslený film, umelecké štýly; štýl je prvý krok, potom filtre. 14 modelov, každý sa stiahne až pri prvom použití.",
-  "icon": "🎬",
+  "icon": "🎭",
   "entry_point": "index.js",
   "enabled": true,
   "permissions": [
