@@ -1,7 +1,7 @@
 {
   "id": "skyframe.vstyles",
   "name": "Štýly videa",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "SkyFrame Community",
   "description": "AI štýlizácia videa a fotiek — nástroj SkyFrame Editora. Anime, kreslený film, umelecké štýly; štýl je prvý krok, potom filtre. 14 modelov, každý sa stiahne až pri prvom použití.",
   "icon": "🎬",
@@ -50,9 +50,9 @@
       "size_mb": 4.2
     },
     {
-      "id": "style-tvar",
-      "name": "Anime tvár",
-      "size_mb": 8.6
+      "id": "style-jpanime",
+      "name": "Anime tvár (JP)",
+      "size_mb": 4.2
     },
     {
       "id": "style-cartoon",

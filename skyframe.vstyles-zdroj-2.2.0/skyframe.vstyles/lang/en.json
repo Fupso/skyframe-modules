@@ -25,7 +25,6 @@
   "style-hayao3": "Anime — Hayao v3",
   "style-ghibli": "Ghibli portrait",
   "style-skica": "Portrait sketch",
-  "style-tvar": "Anime face",
   "style-cartoon": "Cartoon film",
   "style-mozaika": "Mosaic",
   "style-candy": "Candy",
@@ -34,5 +33,6 @@
   "style-pointil": "Pointillism",
   "off": "Turn style off",
   "how": "Style is the first step of the stack — then add Filters or Portrait. Export is one file.",
-  "info": "Video Styles is an Editor tool — open the Editor (🎛️) and pick it on the right."
+  "info": "Video Styles is an Editor tool — open the Editor (🎛️) and pick it on the right.",
+  "style-jpanime": "Anime face (JP)"
 }

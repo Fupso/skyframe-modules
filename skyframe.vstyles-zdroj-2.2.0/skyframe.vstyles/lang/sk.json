@@ -25,7 +25,6 @@
   "style-hayao3": "Anime — Hayao v3",
   "style-ghibli": "Ghibli portrét",
   "style-skica": "Skica portrétu",
-  "style-tvar": "Anime tvár",
   "style-cartoon": "Kreslený film",
   "style-mozaika": "Mozaika",
   "style-candy": "Candy",
@@ -34,5 +33,6 @@
   "style-pointil": "Pointillizmus",
   "off": "Vypnúť štýl",
   "how": "Štýl je prvý krok zásobníka — potom môžeš pridať Filtre alebo Portrét. Export je jeden súbor.",
-  "info": "Štýly videa sú nástroj Editora — otvor Editor (🎛️) a vyber ich vpravo."
+  "info": "Štýly videa sú nástroj Editora — otvor Editor (🎛️) a vyber ich vpravo.",
+  "style-jpanime": "Anime tvár (JP)"
 }

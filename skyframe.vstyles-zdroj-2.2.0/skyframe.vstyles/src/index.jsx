@@ -16,7 +16,7 @@ const STYLES = [
   { id: "style-hayao3",   mb: 4.2 },
   { id: "style-ghibli",   mb: 7.0 },
   { id: "style-skica",    mb: 4.2 },
-  { id: "style-tvar",     mb: 8.6 },
+  { id: "style-jpanime",  mb: 4.2 },
   { id: "style-cartoon",  mb: 17.0 },
   { id: "style-mozaika",  mb: 6.6 },
   { id: "style-candy",    mb: 6.6 },

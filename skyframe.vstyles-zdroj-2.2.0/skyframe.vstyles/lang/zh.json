@@ -25,7 +25,6 @@
   "style-hayao3": "Anime — Hayao v3",
   "style-ghibli": "吉卜力人像",
   "style-skica": "人像素描",
-  "style-tvar": "动漫人脸",
   "style-cartoon": "卡通电影",
   "style-mozaika": "马赛克",
   "style-candy": "Candy",
@@ -34,5 +33,6 @@
   "style-pointil": "点彩画",
   "off": "关闭风格",
   "how": "风格是堆栈的第一步——然后可添加滤镜或人像。导出为单个文件。",
-  "info": "视频风格是编辑器工具——打开编辑器（🎛️）并在右侧选择。"
+  "info": "视频风格是编辑器工具——打开编辑器（🎛️）并在右侧选择。",
+  "style-jpanime": "日式动漫人脸"
 }
