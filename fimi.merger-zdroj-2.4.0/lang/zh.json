@@ -46,5 +46,19 @@
   "tool_add": "添加视频",
   "tool_start": "开始处理",
   "bad_response": "核心返回意外的响应。",
-  "close": "关闭"
+  "close": "关闭",
+  "transition": "片段间转场",
+  "transition_duration": "转场时长",
+  "transition_hint": "转场需要重新编码（比快速拼接慢），原片段音频将被音乐或静音替代。",
+  "tr_none": "无（硬切）",
+  "tr_fade": "淡入淡出（叠化）",
+  "tr_fadeblack": "黑场过渡",
+  "tr_dissolve": "溶解",
+  "tr_wipeleft": "左划",
+  "tr_wiperight": "右划",
+  "tr_wipeup": "上划",
+  "tr_wipedown": "下划",
+  "tr_slideup": "上滑",
+  "tr_slidedown": "下滑",
+  "tr_circleopen": "圆形展开"
 }

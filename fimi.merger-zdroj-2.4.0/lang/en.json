@@ -46,5 +46,19 @@
   "tool_add": "Add videos",
   "tool_start": "Start processing",
   "bad_response": "Unexpected response from core.",
-  "close": "Close"
+  "close": "Close",
+  "transition": "Transition between clips",
+  "transition_duration": "Transition duration",
+  "transition_hint": "Transitions require re-encoding (slower than fast concat) and the original clip audio is replaced by music or silence.",
+  "tr_none": "None (hard cut)",
+  "tr_fade": "Fade (crossfade)",
+  "tr_fadeblack": "Fade through black",
+  "tr_dissolve": "Dissolve",
+  "tr_wipeleft": "Wipe left",
+  "tr_wiperight": "Wipe right",
+  "tr_wipeup": "Wipe up",
+  "tr_wipedown": "Wipe down",
+  "tr_slideup": "Slide up",
+  "tr_slidedown": "Slide down",
+  "tr_circleopen": "Circle open"
 }

@@ -46,5 +46,19 @@
   "tool_add": "Pridať videá",
   "tool_start": "Spustiť spracovanie",
   "bad_response": "Neočakávaná odpoveď z core.",
-  "close": "Zavrieť"
+  "close": "Zavrieť",
+  "transition": "Prechod medzi klipmi",
+  "transition_duration": "Dĺžka prechodu",
+  "transition_hint": "Prechody vyžadujú prekódovanie (pomalšie než rýchle spojenie) a pôvodný zvuk klipov sa nahradí hudbou alebo tichom.",
+  "tr_none": "Žiadna (tvrdý strih)",
+  "tr_fade": "Fade (krížové prelínanie)",
+  "tr_fadeblack": "Fade cez čiernu",
+  "tr_dissolve": "Dissolve",
+  "tr_wipeleft": "Wipe vľavo",
+  "tr_wiperight": "Wipe vpravo",
+  "tr_wipeup": "Wipe hore",
+  "tr_wipedown": "Wipe dole",
+  "tr_slideup": "Slide hore",
+  "tr_slidedown": "Slide dole",
+  "tr_circleopen": "Kruhový prechod"
 }
