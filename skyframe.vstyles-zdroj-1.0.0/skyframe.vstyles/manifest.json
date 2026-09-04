@@ -12,7 +12,7 @@
     "ffmpeg.execute",
     "ai.run"
   ],
-  "min_core_version": "3.4.0",
+  "min_core_version": "3.3.1",
   "ai_models": [
     { "id": "style-hayao", "name": "Anime — Hayao", "size_mb": 4.2 },
     { "id": "style-shinkai", "name": "Anime — Shinkai", "size_mb": 4.2 },
