@@ -37,5 +37,15 @@
   "no_custom": "Пока нет — создайте свой из фото кнопкой выше.",
   "delete_preset": "Удалить фильтр",
   "custom_prefix": "Из фото",
-  "photos": "Фото"
+  "photos": "Фото",
+  "grade_section": "Кривые и цвета",
+  "curve_reset": "Сброс кривой",
+  "curve_hint": "клик = точка · двойной клик = удалить",
+  "wheel_shadows": "Тени",
+  "wheel_midtones": "Средние",
+  "wheel_highlights": "Света",
+  "wheel_hint": "тяните точку · двойной клик = сброс",
+  "save_grade": "Сохранить как свой фильтр",
+  "grade_only": "Цветокоррекция",
+  "custom_grade_prefix": "Коррекция"
 }

@@ -37,5 +37,15 @@
   "no_custom": "Zatiaľ žiadne — vytvor si vlastný z fotky tlačidlom vyššie.",
   "delete_preset": "Zmazať filter",
   "custom_prefix": "Z fotky",
-  "photos": "Fotky"
+  "photos": "Fotky",
+  "grade_section": "Krivky a farby",
+  "curve_reset": "Reset krivky",
+  "curve_hint": "klik = bod · dvojklik = zmazať",
+  "wheel_shadows": "Tiene",
+  "wheel_midtones": "Stredy",
+  "wheel_highlights": "Svetlá",
+  "wheel_hint": "ťahaj bodku · dvojklik = reset kolieska",
+  "save_grade": "Uložiť ako vlastný filter",
+  "grade_only": "Farebná úprava",
+  "custom_grade_prefix": "Úprava"
 }

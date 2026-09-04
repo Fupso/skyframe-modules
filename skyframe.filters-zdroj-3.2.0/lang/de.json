@@ -37,5 +37,15 @@
   "no_custom": "Noch keine — erstelle oben einen eigenen aus einem Foto.",
   "delete_preset": "Filter löschen",
   "custom_prefix": "Aus Foto",
-  "photos": "Fotos"
+  "photos": "Fotos",
+  "grade_section": "Kurven & Farben",
+  "curve_reset": "Kurve zurücksetzen",
+  "curve_hint": "Klick = Punkt · Doppelklick = löschen",
+  "wheel_shadows": "Schatten",
+  "wheel_midtones": "Mitten",
+  "wheel_highlights": "Lichter",
+  "wheel_hint": "Punkt ziehen · Doppelklick = Rad-Reset",
+  "save_grade": "Als eigenen Filter speichern",
+  "grade_only": "Farbkorrektur",
+  "custom_grade_prefix": "Korrektur"
 }

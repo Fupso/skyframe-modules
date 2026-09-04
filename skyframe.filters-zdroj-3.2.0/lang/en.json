@@ -37,5 +37,15 @@
   "no_custom": "None yet — create your own from a photo using the button above.",
   "delete_preset": "Delete filter",
   "custom_prefix": "From photo",
-  "photos": "Photos"
+  "photos": "Photos",
+  "grade_section": "Curves & colors",
+  "curve_reset": "Reset curve",
+  "curve_hint": "click = add point · double-click = delete",
+  "wheel_shadows": "Shadows",
+  "wheel_midtones": "Midtones",
+  "wheel_highlights": "Highlights",
+  "wheel_hint": "drag the dot · double-click = reset wheel",
+  "save_grade": "Save as custom filter",
+  "grade_only": "Color grade",
+  "custom_grade_prefix": "Grade"
 }

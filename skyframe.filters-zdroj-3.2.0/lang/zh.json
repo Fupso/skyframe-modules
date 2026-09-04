@@ -37,5 +37,15 @@
   "no_custom": "暂无——可使用上方按钮从照片创建。",
   "delete_preset": "删除滤镜",
   "custom_prefix": "来自照片",
-  "photos": "照片"
+  "photos": "照片",
+  "grade_section": "曲线与色彩",
+  "curve_reset": "重置曲线",
+  "curve_hint": "单击=添加点 · 双击=删除",
+  "wheel_shadows": "阴影",
+  "wheel_midtones": "中间调",
+  "wheel_highlights": "高光",
+  "wheel_hint": "拖动圆点 · 双击=重置色轮",
+  "save_grade": "保存为自定义滤镜",
+  "grade_only": "调色",
+  "custom_grade_prefix": "调色"
 }
