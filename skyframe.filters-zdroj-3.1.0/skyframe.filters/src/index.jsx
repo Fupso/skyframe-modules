@@ -1,7 +1,13 @@
-// skyframe.filters v3.0.0 — Filtre (nástroj SkyFrame Editora)
+// skyframe.filters v3.1.0 — Filtre (nástroj SkyFrame Editora)
 // Čistý nástroj: žiadny vlastný náhľad ani export. Štýl sa zapíše ako krok
 // do zásobníka úprav v core — náhľad aj export robí Editor jednou vetvou
 // (WYSIWYG) a kombinuje ho s ostatnými nástrojmi (Portrét…).
+//
+// Nové v 3.1.0:
+//   - miniatúry filtrov = reálny obrázok s aplikovaným filtrom (nie farebný štvorček)
+//   - „Filter z fotky" — vyber referenčnú fotku, modul z nej odvodí farebný štýl
+//     a uloží ho medzi vlastné filtre
+//   - rollovateľný zoznam, rozbaľovacie sekcie: Vlastné (hore) / Vstavané
 //
 // Krok môže byť:
 //   - vf:    jednoduchý filter (štýl na celú snímku)
@@ -24,12 +30,9 @@ function mkStyle(r, g, b, brightness, contrast, saturate) {
     css: { brightness, contrast, saturate },
   };
 }
-function mkAvg(r, g, b) {
-  const c = (v) => Math.max(0, Math.min(255, Math.round((0.5 + v) * 255)));
-  return { r: c(r), g: c(g), b: c(b) };
-}
+
 function builtin(id, r, g, b, br, ct, st) {
-  return { id: `builtin_${id}`, nameKey: `style_${id}`, style: mkStyle(r, g, b, br, ct, st), avgColor: mkAvg(r, g, b), builtin: true };
+  return { id: `builtin_${id}`, nameKey: `style_${id}`, style: mkStyle(r, g, b, br, ct, st), builtin: true };
 }
 
 const BUILTIN_PRESETS = [
@@ -71,6 +74,11 @@ const initialState = {
   maskFor: "",          // pre ktoré médium je maska
   maskLoading: false,
   presets: [],          // používateľské štýly z configu
+  baseThumb: null,      // HTMLImageElement ukážkovej fotky
+  thumbs: {},           // presetId -> dataURL miniatúry s filtrom
+  photoBusy: false,     // prebieha analýza fotky
+  openCustom: true,     // rozbalená sekcia vlastných filtrov
+  openBuiltin: false,   // rozbalená sekcia vstavaných filtrov
 };
 
 let state = { ...initialState };
@@ -136,8 +144,138 @@ function presetName(p) {
 }
 
 // ---------------------------------------------------------------------------
+// Miniatúry — reálny obrázok s aplikovaným filtrom (canvas, rovnaká
+// matematika ako lutEq: najprv offset kanálov, potom jas/kontrast/sýtosť)
+// ---------------------------------------------------------------------------
+
+const THUMB_W = 300;
+const THUMB_H = 200;
+
+function applyStyleToPixels(data, style) {
+  const or = style.channels.r.intercept * 255;
+  const og = style.channels.g.intercept * 255;
+  const ob = style.channels.b.intercept * 255;
+  const br = ((style.css.brightness - 100) / 100) * 0.5 * 255;
+  const ct = style.css.contrast / 100;
+  const st = style.css.saturate / 100;
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i] + or, g = data[i + 1] + og, b = data[i + 2] + ob;
+    r += br; g += br; b += br;
+    r = (r - 128) * ct + 128; g = (g - 128) * ct + 128; b = (b - 128) * ct + 128;
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = l + (r - l) * st; g = l + (g - l) * st; b = l + (b - l) * st;
+    data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
+    data[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g;
+    data[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+  }
+}
+
+/** Vyrobí dataURL miniatúru: baseImg s aplikovaným štýlom. */
+function makeThumb(baseImg, style) {
+  const cv = document.createElement("canvas");
+  cv.width = THUMB_W; cv.height = THUMB_H;
+  const ctx = cv.getContext("2d");
+  // cover-crop 3:2
+  const ir = baseImg.width / baseImg.height, tr = THUMB_W / THUMB_H;
+  let sw = baseImg.width, sh = baseImg.height, sx = 0, sy = 0;
+  if (ir > tr) { sw = baseImg.height * tr; sx = (baseImg.width - sw) / 2; }
+  else { sh = baseImg.width / tr; sy = (baseImg.height - sh) / 2; }
+  ctx.drawImage(baseImg, sx, sy, sw, sh, 0, 0, THUMB_W, THUMB_H);
+  const id = ctx.getImageData(0, 0, THUMB_W, THUMB_H);
+  applyStyleToPixels(id.data, style);
+  ctx.putImageData(id, 0, 0);
+  return cv.toDataURL("image/jpeg", 0.82);
+}
+
+// ---------------------------------------------------------------------------
+// Filter z fotky — analýza farebného štýlu referenčnej fotky
+// ---------------------------------------------------------------------------
+
+async function loadImageFromPath(path) {
+  const url = api.fileSrc ? api.fileSrc(path) : path;
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+/** Z fotky odvodí štýl {channels, css}: posun kanálov z priemerov,
+ *  jas z luminancie, sýtosť z farebnosti (Hasler–Süsstrunk). */
+function analyzePhotoStyle(img) {
+  const S = 128; // malá vzorka stačí
+  const cv = document.createElement("canvas");
+  const k = Math.min(1, S / Math.max(img.width, img.height));
+  cv.width = Math.max(8, Math.round(img.width * k));
+  cv.height = Math.max(8, Math.round(img.height * k));
+  const ctx = cv.getContext("2d");
+  ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+  let sr = 0, sg = 0, sb = 0, n = d.length / 4;
+  let srg = 0, syb = 0, srg2 = 0, syb2 = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    sr += r; sg += g; sb += b;
+    const rg = r - g, yb = 0.5 * (r + g) - b;
+    srg += rg; syb += yb; srg2 += rg * rg; syb2 += yb * yb;
+  }
+  const mr = sr / n, mg = sg / n, mb = sb / n;
+  const luma = (0.299 * mr + 0.587 * mg + 0.114 * mb) / 255;
+  // farebnosť (Hasler–Süsstrunk)
+  const mrg = srg / n, myb = syb / n;
+  const vrg = srg2 / n - mrg * mrg, vyb = syb2 / n - myb * myb;
+  const cf = Math.sqrt(Math.max(0, vrg) + Math.max(0, vyb)) + 0.3 * Math.sqrt(mrg * mrg + myb * myb);
+
+  const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+  const SOFT = 0.55; // posuny stlmíme, aby filter nebol extrémny
+  const style = mkStyle(
+    cl((mr / 255 - 0.5) * SOFT, -0.18, 0.18),
+    cl((mg / 255 - 0.5) * SOFT, -0.18, 0.18),
+    cl((mb / 255 - 0.5) * SOFT, -0.18, 0.18),
+    Math.round(cl(100 + (luma - 0.45) * 45, 90, 114)),
+    106,
+    Math.round(cl(88 + (cf - 18) * 1.6, 85, 135)),
+  );
+  return style;
+}
+
+// ---------------------------------------------------------------------------
+// Uloženie vlastných štýlov do configu modulu
+// ---------------------------------------------------------------------------
+
+async function savePresets(presets) {
+  try {
+    await api.invoke("set_module_config", { id: api.moduleId, config: { presets } });
+  } catch (e) {
+    console.error("[filtre] ukladanie štýlov:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Panel nástroja
 // ---------------------------------------------------------------------------
+
+function Section({ title, open, onToggle, count, children }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        onClick={onToggle}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 6,
+          fontSize: 11, textTransform: "uppercase", opacity: 0.75,
+          background: "none", border: "none", cursor: "pointer", padding: "4px 0",
+          color: "inherit",
+        }}
+      >
+        <span style={{ display: "inline-block", transition: "transform 120ms", transform: open ? "rotate(90deg)" : "none" }}>▶</span>
+        <span>{title}</span>
+        <span style={{ opacity: 0.6 }}>({count})</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
 
 function ToolPanel() {
   const s = useStore();
@@ -150,7 +288,7 @@ function ToolPanel() {
     }
   }, []);
 
-  // AI stav + používateľské štýly
+  // AI stav + používateľské štýly + ukážková fotka pre miniatúry
   useEffect(() => {
     (async () => {
       try {
@@ -165,8 +303,32 @@ function ToolPanel() {
           store.setState({ presets: cfg.presets.filter((p) => p && p.style && p.style.channels) });
         }
       } catch {}
+      if (api.readModuleFile) {
+        try {
+          const bytes = await api.readModuleFile("assets/preview-base.jpg");
+          const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+          const img = await new Promise((res, rej) => {
+            const im = new Image();
+            im.onload = () => res(im); im.onerror = rej; im.src = url;
+          });
+          store.setState({ baseThumb: img });
+        } catch { /* bez miniatúr sa zobrazia len názvy */ }
+      }
     })();
   }, []);
+
+  // Miniatúry vstavaných + vlastných štýlov (raz na štýl)
+  useEffect(() => {
+    if (!s.baseThumb) return;
+    const all = [...BUILTIN_PRESETS, ...s.presets];
+    const missing = all.filter((p) => !s.thumbs[p.id]);
+    if (!missing.length) return;
+    const next = { ...s.thumbs };
+    for (const p of missing) {
+      try { next[p.id] = makeThumb(s.baseThumb, p.style); } catch {}
+    }
+    store.setState({ thumbs: next });
+  }, [s.baseThumb, s.presets]);
 
   // AI maska: spočítaj raz na médium (core cachuje súbor)
   useEffect(() => {
@@ -218,11 +380,87 @@ function ToolPanel() {
     }
   };
 
-  const allPresets = [...BUILTIN_PRESETS, ...s.presets];
+  // ➕ Filter z fotky
+  const addFromPhoto = async () => {
+    if (s.photoBusy || !api.pickFiles) return;
+    const picked = await api.pickFiles(
+      [{ name: t("photos", "Fotky"), extensions: ["jpg", "jpeg", "png", "webp", "bmp"] }],
+      false,
+    );
+    const path = Array.isArray(picked) ? picked[0] : picked;
+    if (!path) return;
+    store.setState({ photoBusy: true });
+    try {
+      const img = await loadImageFromPath(path);
+      const style = analyzePhotoStyle(img);
+      const st = store.getState();
+      const id = `custom_${Date.now()}`;
+      const name = `${t("custom_prefix", "Z fotky")} ${st.presets.length + 1}`;
+      const photoPath = path;
+      const thumb = makeThumb(st.baseThumb || img, style); // ak nie je base, aspoň samotná fotka
+      const presets = [...st.presets, { id, name, style, photoPath }];
+      store.setState({ presets, thumbs: { ...st.thumbs, [id]: thumb }, openCustom: true });
+      savePresets(presets);
+    } catch (e) {
+      console.error("[filtre] filter z fotky:", e);
+    } finally {
+      store.setState({ photoBusy: false });
+    }
+  };
+
+  const removePreset = (id) => {
+    const presets = store.getState().presets.filter((p) => p.id !== id);
+    const patch = { presets };
+    if (s.activePresetId === id) {
+      patch.activeStyle = null; patch.activePresetId = null; patch.activePresetName = null;
+    }
+    store.setState(patch);
+    savePresets(presets);
+  };
+
   const ai = s.aiStatus;
 
+  const card = (p) => {
+    const active = s.activePresetId === p.id;
+    const thumb = s.thumbs[p.id];
+    return (
+      <div key={p.id} style={{ position: "relative" }}>
+        <button
+          onClick={() => pick(p)}
+          style={{
+            width: "100%",
+            border: active ? "2px solid #6366f1" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10, padding: 4, background: "rgba(255,255,255,0.04)",
+            cursor: "pointer", textAlign: "center",
+          }}
+        >
+          {thumb ? (
+            <img
+              src={thumb} alt={presetName(p)} draggable={false}
+              style={{ width: "100%", aspectRatio: "3/2", objectFit: "cover", borderRadius: 6, display: "block", marginBottom: 4 }}
+            />
+          ) : (
+            <div style={{ width: "100%", aspectRatio: "3/2", borderRadius: 6, marginBottom: 4, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, opacity: 0.4 }}>…</div>
+          )}
+          <span style={{ fontSize: 11 }}>{presetName(p)}</span>
+        </button>
+        {!p.builtin && (
+          <button
+            onClick={() => removePreset(p.id)}
+            title={t("delete_preset", "Zmazať filter")}
+            style={{
+              position: "absolute", top: 6, right: 6, width: 20, height: 20,
+              borderRadius: 6, border: "none", cursor: "pointer",
+              background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 11, lineHeight: 1,
+            }}
+          >✕</button>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div style={{ padding: 12 }}>
+    <div style={{ padding: 12, display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {!s.media && (
         <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
           {t("tool_no_media", "V Editore nie je otvorený žiadny súbor.")}
@@ -230,7 +468,7 @@ function ToolPanel() {
       )}
 
       {/* Intenzita */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
           <span>{t("intensity", "Intenzita")}</span>
           <span>{s.intensity} %</span>
@@ -278,34 +516,49 @@ function ToolPanel() {
         </div>
       )}
 
-      {/* Štýly */}
-      <div style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6, margin: "10px 0 8px" }}>
-        {t("styles", "Štýly")}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {allPresets.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => pick(p)}
-            style={{
-              border: s.activePresetId === p.id ? "2px solid #6366f1" : "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 10, padding: 6, background: "rgba(255,255,255,0.04)", cursor: "pointer", textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                height: 36, borderRadius: 6, marginBottom: 4,
-                background: `rgb(${p.avgColor.r},${p.avgColor.g},${p.avgColor.b})`,
-              }}
-            />
-            <span style={{ fontSize: 11 }}>{presetName(p)}</span>
-          </button>
-        ))}
+      {/* ➕ Filter z fotky */}
+      <button
+        className="w-full mb-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
+        onClick={() => void addFromPhoto()}
+        disabled={s.photoBusy}
+      >
+        {s.photoBusy ? `⏳ ${t("photo_analyzing", "Analyzujem fotku…")}` : `➕ ${t("add_from_photo", "Nový filter z fotky")}`}
+      </button>
+
+      {/* Rollovateľný zoznam filtrov v sekciách */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
+        <Section
+          title={t("custom_filters", "Vlastné filtre")}
+          count={s.presets.length}
+          open={s.openCustom}
+          onToggle={() => store.setState({ openCustom: !s.openCustom })}
+        >
+          {s.presets.length === 0 ? (
+            <p style={{ fontSize: 11, opacity: 0.6, margin: "4px 0 8px" }}>
+              {t("no_custom", "Zatiaľ žiadne — vytvor si vlastný z fotky tlačidlom vyššie.")}
+            </p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {s.presets.map(card)}
+            </div>
+          )}
+        </Section>
+
+        <Section
+          title={t("builtin_filters", "Vstavané filtre")}
+          count={BUILTIN_PRESETS.length}
+          open={s.openBuiltin}
+          onToggle={() => store.setState({ openBuiltin: !s.openBuiltin })}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {BUILTIN_PRESETS.map(card)}
+          </div>
+        </Section>
       </div>
 
       {s.activeStyle && (
         <button
-          className="w-full mt-3 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
+          className="w-full mt-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
           onClick={() => store.setState({ activeStyle: null, activePresetId: null, activePresetName: null })}
         >
           ✕ {t("clear_style", "Zrušiť filter")}

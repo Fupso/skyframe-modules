@@ -29,5 +29,13 @@
   "style_contrast": "Kontrast",
   "style_fade": "Fade",
   "style_portrait": "Portrét",
-  "style_arctic": "Arktická"
+  "style_arctic": "Arktická",
+  "custom_filters": "Vlastné filtre",
+  "builtin_filters": "Vstavané filtre",
+  "add_from_photo": "Nový filter z fotky",
+  "photo_analyzing": "Analyzujem fotku…",
+  "no_custom": "Zatiaľ žiadne — vytvor si vlastný z fotky tlačidlom vyššie.",
+  "delete_preset": "Zmazať filter",
+  "custom_prefix": "Z fotky",
+  "photos": "Fotky"
 }

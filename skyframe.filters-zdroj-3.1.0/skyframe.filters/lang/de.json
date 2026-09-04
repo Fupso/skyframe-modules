@@ -29,5 +29,13 @@
   "style_contrast": "Kontrast",
   "style_fade": "Fade",
   "style_portrait": "Porträt",
-  "style_arctic": "Arktis"
+  "style_arctic": "Arktis",
+  "custom_filters": "Eigene Filter",
+  "builtin_filters": "Eingebaute Filter",
+  "add_from_photo": "Neuer Filter aus Foto",
+  "photo_analyzing": "Foto wird analysiert…",
+  "no_custom": "Noch keine — erstelle oben einen eigenen aus einem Foto.",
+  "delete_preset": "Filter löschen",
+  "custom_prefix": "Aus Foto",
+  "photos": "Fotos"
 }

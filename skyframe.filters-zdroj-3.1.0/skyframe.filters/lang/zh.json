@@ -29,5 +29,13 @@
   "style_contrast": "对比",
   "style_fade": "褪色",
   "style_portrait": "人像",
-  "style_arctic": "极地"
+  "style_arctic": "极地",
+  "custom_filters": "自定义滤镜",
+  "builtin_filters": "内置滤镜",
+  "add_from_photo": "从照片新建滤镜",
+  "photo_analyzing": "正在分析照片…",
+  "no_custom": "暂无——可使用上方按钮从照片创建。",
+  "delete_preset": "删除滤镜",
+  "custom_prefix": "来自照片",
+  "photos": "照片"
 }

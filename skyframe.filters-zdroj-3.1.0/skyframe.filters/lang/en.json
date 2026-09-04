@@ -29,5 +29,13 @@
   "style_contrast": "Contrast",
   "style_fade": "Fade",
   "style_portrait": "Portrait",
-  "style_arctic": "Arctic"
+  "style_arctic": "Arctic",
+  "custom_filters": "Custom filters",
+  "builtin_filters": "Built-in filters",
+  "add_from_photo": "New filter from photo",
+  "photo_analyzing": "Analyzing photo…",
+  "no_custom": "None yet — create your own from a photo using the button above.",
+  "delete_preset": "Delete filter",
+  "custom_prefix": "From photo",
+  "photos": "Photos"
 }

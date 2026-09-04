@@ -29,5 +29,13 @@
   "style_contrast": "Контраст",
   "style_fade": "Фейд",
   "style_portrait": "Портрет",
-  "style_arctic": "Арктика"
+  "style_arctic": "Арктика",
+  "custom_filters": "Свои фильтры",
+  "builtin_filters": "Встроенные фильтры",
+  "add_from_photo": "Новый фильтр из фото",
+  "photo_analyzing": "Анализирую фото…",
+  "no_custom": "Пока нет — создайте свой из фото кнопкой выше.",
+  "delete_preset": "Удалить фильтр",
+  "custom_prefix": "Из фото",
+  "photos": "Фото"
 }
