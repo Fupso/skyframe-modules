@@ -34,5 +34,8 @@
   "off": "关闭风格",
   "how": "风格是堆栈的第一步——然后可添加滤镜或人像。导出为单个文件。",
   "info": "视频风格是编辑器工具——打开编辑器（🎛️）并在右侧选择。",
-  "style-jpanime": "日式动漫人脸"
+  "style-jpanime": "日式动漫人脸",
+  "style-paprika": "电影动漫 — 红辣椒",
+  "style-hayao-hd": "动漫 — 宫崎 HD",
+  "style-shinkai-hd": "动漫 — 新海 HD"
 }

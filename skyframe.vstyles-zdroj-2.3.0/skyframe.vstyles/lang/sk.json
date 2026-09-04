@@ -34,5 +34,8 @@
   "off": "Vypnúť štýl",
   "how": "Štýl je prvý krok zásobníka — potom môžeš pridať Filtre alebo Portrét. Export je jeden súbor.",
   "info": "Štýly videa sú nástroj Editora — otvor Editor (🎛️) a vyber ich vpravo.",
-  "style-jpanime": "Anime tvár (JP)"
+  "style-jpanime": "Anime tvár (JP)",
+  "style-paprika": "Filmový anime — Paprika",
+  "style-hayao-hd": "Anime — Hayao HD",
+  "style-shinkai-hd": "Anime — Shinkai HD"
 }

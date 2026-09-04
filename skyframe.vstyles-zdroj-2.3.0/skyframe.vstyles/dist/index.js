@@ -14,6 +14,9 @@ var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2 } = react_shim_default;
 var STYLES = [
+  { id: "style-paprika", mb: 8.6 },
+  { id: "style-hayao-hd", mb: 8.6 },
+  { id: "style-shinkai-hd", mb: 8.6 },
   { id: "style-hayao", mb: 4.2 },
   { id: "style-shinkai", mb: 4.2 },
   { id: "style-hayao2", mb: 4.2 },
@@ -21,7 +24,7 @@ var STYLES = [
   { id: "style-hayao3", mb: 4.2 },
   { id: "style-ghibli", mb: 7 },
   { id: "style-skica", mb: 4.2 },
-  { id: "style-jpanime", mb: 4.2 },
+  { id: "style-jpanime", mb: 6.1 },
   { id: "style-cartoon", mb: 17 },
   { id: "style-mozaika", mb: 6.6 },
   { id: "style-candy", mb: 6.6 },

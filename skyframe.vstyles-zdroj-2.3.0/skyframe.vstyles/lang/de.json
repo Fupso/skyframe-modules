@@ -34,5 +34,8 @@
   "off": "Stil aus",
   "how": "Stil ist der erste Schritt — danach Filter oder Porträt. Export ist eine Datei.",
   "info": "Videostile ist ein Editor-Werkzeug — öffne den Editor (🎛️) und wähle es rechts.",
-  "style-jpanime": "Anime-Gesicht (JP)"
+  "style-jpanime": "Anime-Gesicht (JP)",
+  "style-paprika": "Kino-Anime — Paprika",
+  "style-hayao-hd": "Anime — Hayao HD",
+  "style-shinkai-hd": "Anime — Shinkai HD"
 }

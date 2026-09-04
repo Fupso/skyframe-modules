@@ -9,6 +9,9 @@ const t = (k, f) => api.t(k, f);
 const { useState, useEffect } = React;
 
 const STYLES = [
+  { id: "style-paprika",  mb: 8.6 },
+  { id: "style-hayao-hd", mb: 8.6 },
+  { id: "style-shinkai-hd", mb: 8.6 },
   { id: "style-hayao",    mb: 4.2 },
   { id: "style-shinkai",  mb: 4.2 },
   { id: "style-hayao2",   mb: 4.2 },
@@ -16,7 +19,7 @@ const STYLES = [
   { id: "style-hayao3",   mb: 4.2 },
   { id: "style-ghibli",   mb: 7.0 },
   { id: "style-skica",    mb: 4.2 },
-  { id: "style-jpanime",  mb: 4.2 },
+  { id: "style-jpanime",  mb: 6.1 },
   { id: "style-cartoon",  mb: 17.0 },
   { id: "style-mozaika",  mb: 6.6 },
   { id: "style-candy",    mb: 6.6 },

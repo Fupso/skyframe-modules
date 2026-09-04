@@ -1,7 +1,7 @@
 {
   "id": "skyframe.vstyles",
   "name": "Štýly videa",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "author": "SkyFrame Community",
   "description": "AI štýlizácia videa a fotiek — nástroj SkyFrame Editora. Anime, kreslený film, umelecké štýly; štýl je prvý krok, potom filtre. 14 modelov, každý sa stiahne až pri prvom použití.",
   "icon": "🎬",
@@ -14,6 +14,21 @@
   ],
   "min_core_version": "3.3.1",
   "ai_models": [
+    {
+      "id": "style-paprika",
+      "name": "Filmový anime — Paprika",
+      "size_mb": 8.6
+    },
+    {
+      "id": "style-hayao-hd",
+      "name": "Anime — Hayao HD",
+      "size_mb": 8.6
+    },
+    {
+      "id": "style-shinkai-hd",
+      "name": "Anime — Shinkai HD",
+      "size_mb": 8.6
+    },
     {
       "id": "style-hayao",
       "name": "Anime — Hayao",
@@ -52,7 +67,7 @@
     {
       "id": "style-jpanime",
       "name": "Anime tvár (JP)",
-      "size_mb": 4.2
+      "size_mb": 6.1
     },
     {
       "id": "style-cartoon",

@@ -34,5 +34,8 @@
   "off": "Turn style off",
   "how": "Style is the first step of the stack — then add Filters or Portrait. Export is one file.",
   "info": "Video Styles is an Editor tool — open the Editor (🎛️) and pick it on the right.",
-  "style-jpanime": "Anime face (JP)"
+  "style-jpanime": "Anime face (JP)",
+  "style-paprika": "Cinematic anime — Paprika",
+  "style-hayao-hd": "Anime — Hayao HD",
+  "style-shinkai-hd": "Anime — Shinkai HD"
 }
