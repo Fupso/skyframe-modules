@@ -16,7 +16,7 @@
   "export_photo": "导出照片",
   "export_video": "导出视频",
   "cancel": "取消",
-  "hint_media": "请先在上方选择文件，或在编辑器中打开媒体。",
+  "hint_media": "在编辑器中打开照片或视频——风格将应用于它。",
   "save_as": "另存为…",
   "style-hayao": "Anime — Hayao",
   "style-shinkai": "Anime — Shinkai",
@@ -31,5 +31,8 @@
   "style-candy": "Candy",
   "style-dazd": "雨中公主",
   "style-udnie": "Udnie",
-  "style-pointil": "点彩画"
+  "style-pointil": "点彩画",
+  "off": "关闭风格",
+  "how": "风格是堆栈的第一步——然后可添加滤镜或人像。导出为单个文件。",
+  "info": "视频风格是编辑器工具——打开编辑器（🎛️）并在右侧选择。"
 }

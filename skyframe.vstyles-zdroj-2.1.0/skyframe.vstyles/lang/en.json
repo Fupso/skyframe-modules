@@ -16,7 +16,7 @@
   "export_photo": "Export photo",
   "export_video": "Export video",
   "cancel": "Cancel",
-  "hint_media": "Pick a file above first, or open media in the Editor.",
+  "hint_media": "Open a photo or video in the Editor — the style applies to it.",
   "save_as": "Save as…",
   "style-hayao": "Anime — Hayao",
   "style-shinkai": "Anime — Shinkai",
@@ -31,5 +31,8 @@
   "style-candy": "Candy",
   "style-dazd": "Rain Princess",
   "style-udnie": "Udnie",
-  "style-pointil": "Pointillism"
+  "style-pointil": "Pointillism",
+  "off": "Turn style off",
+  "how": "Style is the first step of the stack — then add Filters or Portrait. Export is one file.",
+  "info": "Video Styles is an Editor tool — open the Editor (🎛️) and pick it on the right."
 }

@@ -16,7 +16,7 @@
   "export_photo": "Exportovať fotku",
   "export_video": "Exportovať video",
   "cancel": "Zrušiť",
-  "hint_media": "Najprv vyber súbor hore, alebo otvor médium v Editore.",
+  "hint_media": "Otvor fotku alebo video v Editore — štýl sa aplikuje naň.",
   "save_as": "Uložiť ako…",
   "style-hayao": "Anime — Hayao",
   "style-shinkai": "Anime — Shinkai",
@@ -31,5 +31,8 @@
   "style-candy": "Candy",
   "style-dazd": "Rain Princess",
   "style-udnie": "Udnie",
-  "style-pointil": "Pointillizmus"
+  "style-pointil": "Pointillizmus",
+  "off": "Vypnúť štýl",
+  "how": "Štýl je prvý krok zásobníka — potom môžeš pridať Filtre alebo Portrét. Export je jeden súbor.",
+  "info": "Štýly videa sú nástroj Editora — otvor Editor (🎛️) a vyber ich vpravo."
 }

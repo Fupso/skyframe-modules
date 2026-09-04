@@ -16,7 +16,7 @@
   "export_photo": "Foto exportieren",
   "export_video": "Video exportieren",
   "cancel": "Abbrechen",
-  "hint_media": "Wähle zuerst oben eine Datei oder öffne ein Medium im Editor.",
+  "hint_media": "Öffne ein Foto oder Video im Editor — der Stil wird darauf angewendet.",
   "save_as": "Speichern unter…",
   "style-hayao": "Anime — Hayao",
   "style-shinkai": "Anime — Shinkai",
@@ -31,5 +31,8 @@
   "style-candy": "Candy",
   "style-dazd": "Rain Princess",
   "style-udnie": "Udnie",
-  "style-pointil": "Pointillismus"
+  "style-pointil": "Pointillismus",
+  "off": "Stil aus",
+  "how": "Stil ist der erste Schritt — danach Filter oder Porträt. Export ist eine Datei.",
+  "info": "Videostile ist ein Editor-Werkzeug — öffne den Editor (🎛️) und wähle es rechts."
 }
