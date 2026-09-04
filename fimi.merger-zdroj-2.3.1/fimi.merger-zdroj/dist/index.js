@@ -1,4 +1,4 @@
-// ../../merger-build/react-shim.js
+// ../../../../tmp/merger-build/react-shim.js
 var R = window.React;
 var react_shim_default = R;
 var useState = R.useState;
@@ -15,19 +15,6 @@ var t = (k, f) => api.t(k, f);
 var { useState: useState2, useEffect: useEffect2, useMemo: useMemo2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
 var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
 var AUDIO_FILTERS = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac"] }];
-var TRANSITIONS = [
-  { id: "none", key: "tr_none", fallback: "\u017Diadna (tvrd\xFD strih)" },
-  { id: "fade", key: "tr_fade", fallback: "Fade (kr\xED\u017Eov\xE9 prel\xEDnanie)" },
-  { id: "fadeblack", key: "tr_fadeblack", fallback: "Fade cez \u010Diernu" },
-  { id: "dissolve", key: "tr_dissolve", fallback: "Dissolve" },
-  { id: "wipeleft", key: "tr_wipeleft", fallback: "Wipe v\u013Eavo" },
-  { id: "wiperight", key: "tr_wiperight", fallback: "Wipe vpravo" },
-  { id: "wipeup", key: "tr_wipeup", fallback: "Wipe hore" },
-  { id: "wipedown", key: "tr_wipedown", fallback: "Wipe dole" },
-  { id: "slideup", key: "tr_slideup", fallback: "Slide hore" },
-  { id: "slidedown", key: "tr_slidedown", fallback: "Slide dole" },
-  { id: "circleopen", key: "tr_circleopen", fallback: "Kruhov\xFD prechod" }
-];
 var PRESETS = [
   { id: "youtube_4k", label: "YouTube 4K" },
   { id: "youtube_1080", label: "YouTube 1080p" },
@@ -54,8 +41,6 @@ var initialState = {
   musicEnabled: false,
   music: null,
   loopMusic: true,
-  transition: "none",
-  transitionDur: 0.8,
   convertAfter: false,
   preset: "youtube_1080",
   preview: null,
@@ -215,9 +200,7 @@ async function startMerge() {
         music: s.musicEnabled ? s.music : null,
         moduleId: api.moduleId,
         outputDir: s.outDir || null,
-        loopMusic: s.loopMusic,
-        transition: s.transition !== "none" ? s.transition : null,
-        transitionDur: s.transitionDur
+        loopMusic: s.loopMusic
       });
       store.setState((st) => {
         const jobs = [...st.jobs];
@@ -455,28 +438,7 @@ function SidePanel() {
       disabled: isBusy,
       className: "w-3.5 h-3.5 accent-[#6366f1]"
     }
-  ), t("loop_music", "Opakova\u0165 hudbu (slu\u010Dka)")))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider px-1" }, t("transition", "Prechod medzi klipmi")), /* @__PURE__ */ react_shim_default.createElement(
-    "select",
-    {
-      value: s.transition,
-      onChange: (e) => store.setState({ transition: e.target.value }),
-      disabled: isBusy,
-      className: "w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
-    },
-    TRANSITIONS.map((tr) => /* @__PURE__ */ react_shim_default.createElement("option", { key: tr.id, value: tr.id }, t(tr.key, tr.fallback)))
-  ), s.transition !== "none" && /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-between text-xs text-text-dim" }, /* @__PURE__ */ react_shim_default.createElement("span", null, t("transition_duration", "D\u013A\u017Eka prechodu")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "font-mono" }, s.transitionDur.toFixed(1), " s")), /* @__PURE__ */ react_shim_default.createElement(
-    "input",
-    {
-      type: "range",
-      min: 0.2,
-      max: 2,
-      step: 0.1,
-      value: s.transitionDur,
-      onChange: (e) => store.setState({ transitionDur: parseFloat(e.target.value) }),
-      disabled: isBusy,
-      className: "w-full accent-[#6366f1]"
-    }
-  ), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-[11px] text-text-dim leading-snug" }, t("transition_hint", "Prechody vy\u017Eaduj\xFA prek\xF3dovanie (pomal\u0161ie ne\u017E r\xFDchle spojenie) a p\xF4vodn\xFD zvuk klipov sa nahrad\xED hudbou alebo tichom.")))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider px-1" }, t("output", "V\xFDstup")), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("merge_mode", "Re\u017Eim sp\xE1jania")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement(
+  ), t("loop_music", "Opakova\u0165 hudbu (slu\u010Dka)")))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider px-1" }, t("output", "V\xFDstup")), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim mb-1.5" }, t("merge_mode", "Re\u017Eim sp\xE1jania")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex rounded-xl border border-border overflow-hidden" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ mode: "flights" }),
@@ -611,9 +573,6 @@ function Merger() {
           patch.loopMusic = sess.loopMusic !== false;
           patch.convertAfter = !!sess.convertAfter;
           if (sess.preset) patch.preset = sess.preset;
-          if (typeof sess.transition === "string") patch.transition = sess.transition;
-          if (typeof sess.transitionDur === "number" && sess.transitionDur >= 0.2 && sess.transitionDur <= 2)
-            patch.transitionDur = sess.transitionDur;
           if (Array.isArray(sess.manual)) patch.manual = sess.manual.filter((x) => typeof x === "string");
           store.setState(patch);
           if (sess.folder) {
@@ -644,9 +603,7 @@ function Merger() {
             music: st.music,
             loopMusic: st.loopMusic,
             convertAfter: st.convertAfter,
-            preset: st.preset,
-            transition: st.transition,
-            transitionDur: st.transitionDur
+            preset: st.preset
           }
         }
       }).catch(() => {
@@ -655,7 +612,7 @@ function Merger() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [s.folder, s.manual, s.mode, s.outputName, s.musicEnabled, s.music, s.loopMusic, s.convertAfter, s.preset, s.transition, s.transitionDur, s.restored, isBusy]);
+  }, [s.folder, s.manual, s.mode, s.outputName, s.musicEnabled, s.music, s.loopMusic, s.convertAfter, s.preset, s.restored, isBusy]);
   const PlayerShell = api.PlayerShell;
   return /* @__PURE__ */ react_shim_default.createElement("div", { ref: (el) => shared.scrollEl.current = el, className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-4xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-4" }, t("source", "Zdroj vide\xED")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap gap-2" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",

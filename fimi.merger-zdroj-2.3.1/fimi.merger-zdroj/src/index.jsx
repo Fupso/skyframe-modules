@@ -1,4 +1,4 @@
-// fimi.merger v2.4.0 — Spájač
+// fimi.merger v2.3.1 — Spájač
 // Layout: zdroj + lety + náhľad v hlavnej ploche, hudba/výstup/spustenie
 // v pravom paneli core (registerSidePanel), nástroje v toolbare (registerToolbar).
 // Zdieľaný stav ide cez modulový store (panel sa renderuje v strome core).
@@ -11,19 +11,6 @@ const { useState, useEffect, useMemo, useRef, useSyncExternalStore } = React;
 
 const VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
 const AUDIO_FILTERS = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac"] }];
-const TRANSITIONS = [
-  { id: "none", key: "tr_none", fallback: "Žiadna (tvrdý strih)" },
-  { id: "fade", key: "tr_fade", fallback: "Fade (krížové prelínanie)" },
-  { id: "fadeblack", key: "tr_fadeblack", fallback: "Fade cez čiernu" },
-  { id: "dissolve", key: "tr_dissolve", fallback: "Dissolve" },
-  { id: "wipeleft", key: "tr_wipeleft", fallback: "Wipe vľavo" },
-  { id: "wiperight", key: "tr_wiperight", fallback: "Wipe vpravo" },
-  { id: "wipeup", key: "tr_wipeup", fallback: "Wipe hore" },
-  { id: "wipedown", key: "tr_wipedown", fallback: "Wipe dole" },
-  { id: "slideup", key: "tr_slideup", fallback: "Slide hore" },
-  { id: "slidedown", key: "tr_slidedown", fallback: "Slide dole" },
-  { id: "circleopen", key: "tr_circleopen", fallback: "Kruhový prechod" },
-];
 const PRESETS = [
   { id: "youtube_4k", label: "YouTube 4K" },
   { id: "youtube_1080", label: "YouTube 1080p" },
@@ -61,8 +48,6 @@ const initialState = {
   musicEnabled: false,
   music: null,
   loopMusic: true,
-  transition: "none",
-  transitionDur: 0.8,
   convertAfter: false,
   preset: "youtube_1080",
   preview: null,      // path | null
@@ -258,8 +243,6 @@ async function startMerge() {
         moduleId: api.moduleId,
         outputDir: s.outDir || null,
         loopMusic: s.loopMusic,
-        transition: s.transition !== "none" ? s.transition : null,
-        transitionDur: s.transitionDur,
       });
       store.setState((st) => {
         const jobs = [...st.jobs];
@@ -533,46 +516,6 @@ function SidePanel() {
         )}
       </div>
 
-      {/* Tranzície */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider px-1">
-          {t("transition", "Prechod medzi klipmi")}
-        </h3>
-        <select
-          value={s.transition}
-          onChange={(e) => store.setState({ transition: e.target.value })}
-          disabled={isBusy}
-          className="w-full px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
-        >
-          {TRANSITIONS.map((tr) => (
-            <option key={tr.id} value={tr.id}>
-              {t(tr.key, tr.fallback)}
-            </option>
-          ))}
-        </select>
-        {s.transition !== "none" && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-text-dim">
-              <span>{t("transition_duration", "Dĺžka prechodu")}</span>
-              <span className="font-mono">{s.transitionDur.toFixed(1)} s</span>
-            </div>
-            <input
-              type="range"
-              min={0.2}
-              max={2.0}
-              step={0.1}
-              value={s.transitionDur}
-              onChange={(e) => store.setState({ transitionDur: parseFloat(e.target.value) })}
-              disabled={isBusy}
-              className="w-full accent-[#6366f1]"
-            />
-            <p className="text-[11px] text-text-dim leading-snug">
-              {t("transition_hint", "Prechody vyžadujú prekódovanie (pomalšie než rýchle spojenie) a pôvodný zvuk klipov sa nahradí hudbou alebo tichom.")}
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Výstup */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider px-1">
@@ -780,9 +723,6 @@ function Merger() {
           patch.loopMusic = sess.loopMusic !== false;
           patch.convertAfter = !!sess.convertAfter;
           if (sess.preset) patch.preset = sess.preset;
-          if (typeof sess.transition === "string") patch.transition = sess.transition;
-          if (typeof sess.transitionDur === "number" && sess.transitionDur >= 0.2 && sess.transitionDur <= 2.0)
-            patch.transitionDur = sess.transitionDur;
           if (Array.isArray(sess.manual)) patch.manual = sess.manual.filter((x) => typeof x === "string");
           store.setState(patch);
           if (sess.folder) {
@@ -816,8 +756,6 @@ function Merger() {
               loopMusic: st.loopMusic,
               convertAfter: st.convertAfter,
               preset: st.preset,
-              transition: st.transition,
-              transitionDur: st.transitionDur,
             },
           },
         })
@@ -826,7 +764,7 @@ function Merger() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [s.folder, s.manual, s.mode, s.outputName, s.musicEnabled, s.music, s.loopMusic, s.convertAfter, s.preset, s.transition, s.transitionDur, s.restored, isBusy]);
+  }, [s.folder, s.manual, s.mode, s.outputName, s.musicEnabled, s.music, s.loopMusic, s.convertAfter, s.preset, s.restored, isBusy]);
 
   const PlayerShell = api.PlayerShell;
 

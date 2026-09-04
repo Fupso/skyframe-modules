@@ -46,19 +46,5 @@
   "tool_add": "Добавить видео",
   "tool_start": "Запустить обработку",
   "bad_response": "Неожиданный ответ ядра.",
-  "close": "Закрыть",
-  "transition": "Переход между клипами",
-  "transition_duration": "Длительность перехода",
-  "transition_hint": "Переходы требуют перекодирования (медленнее быстрого соединения), а исходный звук клипов заменяется музыкой или тишиной.",
-  "tr_none": "Нет (жёсткая склейка)",
-  "tr_fade": "Fade (кроссфейд)",
-  "tr_fadeblack": "Fade через чёрный",
-  "tr_dissolve": "Dissolve",
-  "tr_wipeleft": "Wipe влево",
-  "tr_wiperight": "Wipe вправо",
-  "tr_wipeup": "Wipe вверх",
-  "tr_wipedown": "Wipe вниз",
-  "tr_slideup": "Slide вверх",
-  "tr_slidedown": "Slide вниз",
-  "tr_circleopen": "Круговой переход"
+  "close": "Закрыть"
 }

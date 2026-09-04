@@ -46,19 +46,5 @@
   "tool_add": "Videos hinzufügen",
   "tool_start": "Verarbeitung starten",
   "bad_response": "Unerwartete Antwort vom Core.",
-  "close": "Schließen",
-  "transition": "Übergang zwischen Clips",
-  "transition_duration": "Übergangsdauer",
-  "transition_hint": "Übergänge erfordern eine Neukodierung (langsamer als schnelles Verbinden); der Originalton der Clips wird durch Musik oder Stille ersetzt.",
-  "tr_none": "Keiner (harter Schnitt)",
-  "tr_fade": "Fade (Überblenden)",
-  "tr_fadeblack": "Fade über Schwarz",
-  "tr_dissolve": "Dissolve",
-  "tr_wipeleft": "Wipe links",
-  "tr_wiperight": "Wipe rechts",
-  "tr_wipeup": "Wipe hoch",
-  "tr_wipedown": "Wipe runter",
-  "tr_slideup": "Slide hoch",
-  "tr_slidedown": "Slide runter",
-  "tr_circleopen": "Kreis-Übergang"
+  "close": "Schließen"
 }

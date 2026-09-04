@@ -1,9 +1,9 @@
 {
   "id": "fimi.merger",
   "name": "Spájač",
-  "version": "2.4.0",
+  "version": "2.3.1",
   "author": "SkyFrame Community",
-  "description": "Profesionálne spájanie videí s detekciou letov, prechodmi, hudbou, náhľadom a konverziou pre YouTube, TikTok a ďalšie.",
+  "description": "Profesionálne spájanie videí s detekciou letov, hudbou, náhľadom a konverziou pre YouTube, TikTok a ďalšie.",
   "permissions": [
     "filesystem.read",
     "ffmpeg.execute"
