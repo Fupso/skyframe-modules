@@ -1,4 +1,4 @@
-// skyframe.filters v3.2.0 — Filtre (nástroj SkyFrame Editora)
+// skyframe.filters v3.2.1 — Filtre (nástroj SkyFrame Editora)
 // Čistý nástroj: žiadny vlastný náhľad ani export. Štýl sa zapíše ako krok
 // do zásobníka úprav v core — náhľad aj export robí Editor jednou vetvou
 // (WYSIWYG) a kombinuje ho s ostatnými nástrojmi (Portrét…).
@@ -547,9 +547,8 @@ function Wheel({ value, onChange, label }) {
 
   const set = (e) => {
     const r = ref.current.getBoundingClientRect();
-    const cx = r.width / 2, cy = r.height / 2;
-    let dx = (e.clientX - cx) / (r.width / 2 - 7);
-    let dy = (e.clientY - cy) / (r.height / 2 - 7);
+    let dx = (e.clientX - r.left - r.width / 2) / (r.width / 2 - 7);
+    let dy = (e.clientY - r.top - r.height / 2) / (r.height / 2 - 7);
     const len = Math.hypot(dx, dy);
     if (len > 1) { dx /= len; dy /= len; }
     onChange([Math.round(dx * 100) / 100, Math.round(dy * 100) / 100]);

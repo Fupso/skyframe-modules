@@ -498,9 +498,8 @@ function Wheel({ value, onChange, label }) {
   }, [value]);
   const set = (e) => {
     const r = ref.current.getBoundingClientRect();
-    const cx = r.width / 2, cy = r.height / 2;
-    let dx = (e.clientX - cx) / (r.width / 2 - 7);
-    let dy = (e.clientY - cy) / (r.height / 2 - 7);
+    let dx = (e.clientX - r.left - r.width / 2) / (r.width / 2 - 7);
+    let dy = (e.clientY - r.top - r.height / 2) / (r.height / 2 - 7);
     const len = Math.hypot(dx, dy);
     if (len > 1) {
       dx /= len;
