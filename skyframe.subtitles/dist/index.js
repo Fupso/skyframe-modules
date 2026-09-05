@@ -1,4 +1,4 @@
-// ../framesbuild/react-shim.js
+// ../../framesbuild/react-shim.js
 var useState = window.React.useState;
 var useEffect = window.React.useEffect;
 var useMemo = window.React.useMemo;
@@ -284,7 +284,7 @@ function Subtitles() {
       title: t("model_hint", "V\xE4\u010D\u0161\xED model = presnej\u0161\xED prepis, ale pomal\u0161\xED"),
       className: "px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
     },
-    ["base", "small", "medium"].map((mid) => {
+    ["base", "small", "medium", "large-turbo", "large"].map((mid) => {
       const inst = (s.status?.models ?? []).includes(mid);
       const sz = s.status?.model_sizes?.[mid] ?? 0;
       return /* @__PURE__ */ react_shim_default.createElement("option", { key: mid, value: mid }, `Whisper ${mid}${inst ? " \u2713" : sz ? ` (${sz} MB)` : ""}`);

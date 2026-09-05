@@ -325,7 +325,7 @@ function Subtitles() {
               title={t("model_hint", "Väčší model = presnejší prepis, ale pomalší")}
               className="px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
             >
-              {["base", "small", "medium"].map((mid) => {
+              {["base", "small", "medium", "large-turbo", "large"].map((mid) => {
                 const inst = (s.status?.models ?? []).includes(mid);
                 const sz = s.status?.model_sizes?.[mid] ?? 0;
                 return <option key={mid} value={mid}>{`Whisper ${mid}${inst ? " ✓" : sz ? ` (${sz} MB)` : ""}`}</option>;
