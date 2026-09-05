@@ -163,7 +163,7 @@ const inputStyle = {
   width: 140,
 };
 
-function Page() {
+function FramesExtractor() {
   const s = useStore();
   const [, force] = useState(0);
   useEffect(() => {
@@ -279,4 +279,4 @@ function Page() {
   );
 }
 
-export default { Page };
+export default FramesExtractor;

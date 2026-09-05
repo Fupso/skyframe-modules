@@ -144,7 +144,7 @@ var inputStyle = {
   color: "inherit",
   width: 140
 };
-function Page() {
+function FramesExtractor() {
   const s = useStore();
   const [, force] = useState2(0);
   useEffect2(() => {
@@ -197,7 +197,7 @@ function Page() {
     }))
   )))), selFrame && /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.8 } }, t("selected", "Vybran\xE1 sn\xEDmka")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { background: "#000", borderRadius: 12, overflow: "hidden", textAlign: "center" } }, /* @__PURE__ */ react_shim_default.createElement("img", { src: api.fileSrc(selFrame), style: { maxWidth: "100%", maxHeight: 480, objectFit: "contain" } })), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, onClick: () => void editSelected() }, t("edit", "\u{1F58C}\uFE0F Editova\u0165 v Editore")), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnGhost, onClick: () => void saveSelected() }, t("save", "\u{1F4BE} Ulo\u017Ei\u0165 do v\xFDstupu")))), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.7, marginBottom: 6 } }, t("log_title", "Z\xE1znam")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 12, fontFamily: "monospace", opacity: 0.75, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 10, maxHeight: 140, overflowY: "auto" } }, s.log.map((l, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, l)))));
 }
-var index_default = { Page };
+var index_default = FramesExtractor;
 export {
   index_default as default
 };
