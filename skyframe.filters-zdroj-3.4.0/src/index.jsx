@@ -73,6 +73,7 @@ const initialState = {
   maskPath: "",         // cesta k AI maske pre aktuálne médium
   maskFor: "",          // pre ktoré médium je maska
   maskLoading: false,
+  maskProgress: -1,     // progres výpočtu AI masky videa (-1 = nič)
   presets: [],          // používateľské štýly z configu
   baseThumb: null,      // HTMLImageElement ukážkovej fotky
   thumbs: {},           // presetId -> dataURL miniatúry s filtrom
@@ -698,7 +699,8 @@ function ToolPanel() {
         api.setEditorStep({ label, vf: chain });
       } else if (!st.aiMask) {
         api.setEditorStep({ label, graph: skyGraphLuma(chain) });
-      } else if (st.media.kind === "photo" && st.maskPath && st.maskFor === st.media.path) {
+      } else if (st.maskPath && st.maskFor === st.media.path) {
+        // foto aj video — maska videa je cachovaný súbor na zdrojovom fps (krok 45)
         api.setEditorStep({ label, graph: skyGraphAi(chain), inputs: [st.maskPath] });
       } else {
         api.setEditorStep(null); // maska sa počíta / nie je podporovaná
@@ -841,11 +843,53 @@ function ToolPanel() {
             />
             🤖 {t("ai_mask", "AI maska (presnejšia)")}
           </label>
-          {s.aiMask && s.media?.kind === "video" && (
+          {s.aiMask && s.media?.kind === "video" && s.maskFor === s.media.path && s.maskPath ? (
             <p style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
-              ⚠️ {t("ai_video_note", "AI maska na videu zatiaľ nie je v Editore podporovaná — použi luma masku.")}
+              ✓ {t("ai_video_ready", "AI maska videa je pripravená (cache).")}
             </p>
-          )}
+          ) : s.aiMask && s.media?.kind === "video" ? (
+            <div style={{ marginTop: 6 }}>
+              {s.maskLoading ? (
+                <p style={{ fontSize: 11, opacity: 0.8 }}>
+                  ⏳ {t("mask_loading", "Počítam AI masku…")} {s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""}
+                </p>
+              ) : (
+                <button
+                  className="px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
+                  onClick={async () => {
+                    const media = s.media;
+                    if (!media) return;
+                    store.setState({ maskLoading: true, maskProgress: 0 });
+                    try {
+                      const jobId = await api.invoke("ai_sky_maskvideo_file", { input: media.path, maskFps: 3, moduleId: api.moduleId });
+                      await new Promise((resolve) => {
+                        let un;
+                        api.listenJob(jobId, (job) => {
+                          store.setState({ maskProgress: job.progress ?? -1 });
+                          if (job.status !== "running") { un?.(); resolve(job); }
+                        }).then((u) => { un = u; });
+                      }).then((job) => {
+                        if (job.status === "done" && job.result) {
+                          store.setState({ maskPath: job.result, maskFor: media.path, maskLoading: false, maskProgress: -1 });
+                        } else {
+                          store.setState({ maskLoading: false, maskProgress: -1 });
+                          if (job.status === "error") console.error("[filtre] ai maska videa:", job.message);
+                        }
+                      });
+                    } catch (e) {
+                      store.setState({ maskLoading: false, maskProgress: -1 });
+                      console.error("[filtre] ai maska videa:", e);
+                    }
+                  }}
+                >
+                  🤖 {t("ai_video_prepare", "Pripraviť AI masku videa")}
+                </button>
+              )}
+              <p style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>
+                {t("ai_video_hint", "AI prebehne každú 3. snímku, výsledok sa cachuje — druhýkrát je okamžitý.")}
+              </p>
+            </div>
+          ) : null}
           {s.aiMask && s.maskLoading && (
             <p style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>⏳ {t("mask_loading", "Počítam AI masku…")}</p>
           )}

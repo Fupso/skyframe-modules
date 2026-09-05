@@ -47,5 +47,8 @@
   "wheel_hint": "Punkt ziehen · Doppelklick = Rad-Reset",
   "save_grade": "Als eigenen Filter speichern",
   "grade_only": "Farbkorrektur",
-  "custom_grade_prefix": "Korrektur"
+  "custom_grade_prefix": "Korrektur",
+  "ai_video_ready": "Video-KI-Maske ist bereit (Cache).",
+  "ai_video_prepare": "Video-KI-Maske vorbereiten",
+  "ai_video_hint": "KI verarbeitet jedes 3. Frame; Ergebnis wird gecacht — beim nächsten Mal sofort."
 }

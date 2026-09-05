@@ -47,5 +47,8 @@
   "wheel_hint": "drag the dot · double-click = reset wheel",
   "save_grade": "Save as custom filter",
   "grade_only": "Color grade",
-  "custom_grade_prefix": "Grade"
+  "custom_grade_prefix": "Grade",
+  "ai_video_ready": "Video AI mask is ready (cached).",
+  "ai_video_prepare": "Prepare video AI mask",
+  "ai_video_hint": "AI processes every 3rd frame; the result is cached — instant next time."
 }

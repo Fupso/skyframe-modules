@@ -47,5 +47,8 @@
   "wheel_hint": "ťahaj bodku · dvojklik = reset kolieska",
   "save_grade": "Uložiť ako vlastný filter",
   "grade_only": "Farebná úprava",
-  "custom_grade_prefix": "Úprava"
+  "custom_grade_prefix": "Úprava",
+  "ai_video_ready": "AI maska videa je pripravená (cache).",
+  "ai_video_prepare": "Pripraviť AI masku videa",
+  "ai_video_hint": "AI prebehne každú 3. snímku, výsledok sa cachuje — druhýkrát je okamžitý."
 }

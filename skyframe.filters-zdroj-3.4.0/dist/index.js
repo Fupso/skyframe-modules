@@ -60,6 +60,8 @@ var initialState = {
   maskFor: "",
   // pre ktoré médium je maska
   maskLoading: false,
+  maskProgress: -1,
+  // progres výpočtu AI masky videa (-1 = nič)
   presets: [],
   // používateľské štýly z configu
   baseThumb: null,
@@ -627,7 +629,7 @@ function ToolPanel() {
         api.setEditorStep({ label, vf: chain });
       } else if (!st.aiMask) {
         api.setEditorStep({ label, graph: skyGraphLuma(chain) });
-      } else if (st.media.kind === "photo" && st.maskPath && st.maskFor === st.media.path) {
+      } else if (st.maskPath && st.maskFor === st.media.path) {
         api.setEditorStep({ label, graph: skyGraphAi(chain), inputs: [st.maskPath] });
       } else {
         api.setEditorStep(null);
@@ -761,7 +763,44 @@ function ToolPanel() {
       disabled: !ai?.licensed,
       onChange: (e) => store.setState({ aiMask: e.target.checked })
     }
-  ), "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)")), s.aiMask && s.media?.kind === "video" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u26A0\uFE0F ", t("ai_video_note", "AI maska na videu zatia\u013E nie je v Editore podporovan\xE1 \u2014 pou\u017Ei luma masku.")), s.aiMask && s.maskLoading && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
+  ), "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)")), s.aiMask && s.media?.kind === "video" && s.maskFor === s.media.path && s.maskPath ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : s.aiMask && s.media?.kind === "video" ? /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskLoading ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : "") : /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      className: "px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
+      onClick: async () => {
+        const media = s.media;
+        if (!media) return;
+        store.setState({ maskLoading: true, maskProgress: 0 });
+        try {
+          const jobId = await api.invoke("ai_sky_maskvideo_file", { input: media.path, maskFps: 3, moduleId: api.moduleId });
+          await new Promise((resolve) => {
+            let un;
+            api.listenJob(jobId, (job) => {
+              store.setState({ maskProgress: job.progress ?? -1 });
+              if (job.status !== "running") {
+                un?.();
+                resolve(job);
+              }
+            }).then((u) => {
+              un = u;
+            });
+          }).then((job) => {
+            if (job.status === "done" && job.result) {
+              store.setState({ maskPath: job.result, maskFor: media.path, maskLoading: false, maskProgress: -1 });
+            } else {
+              store.setState({ maskLoading: false, maskProgress: -1 });
+              if (job.status === "error") console.error("[filtre] ai maska videa:", job.message);
+            }
+          });
+        } catch (e) {
+          store.setState({ maskLoading: false, maskProgress: -1 });
+          console.error("[filtre] ai maska videa:", e);
+        }
+      }
+    },
+    "\u{1F916} ",
+    t("ai_video_prepare", "Pripravi\u0165 AI masku videa")
+  ), /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("ai_video_hint", "AI prebehne ka\u017Ed\xFA 3. sn\xEDmku, v\xFDsledok sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xFD."))) : null, s.aiMask && s.maskLoading && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ openGrade: !s.openGrade }),

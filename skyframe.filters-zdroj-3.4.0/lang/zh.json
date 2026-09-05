@@ -47,5 +47,8 @@
   "wheel_hint": "拖动圆点 · 双击=重置色轮",
   "save_grade": "保存为自定义滤镜",
   "grade_only": "调色",
-  "custom_grade_prefix": "调色"
+  "custom_grade_prefix": "调色",
+  "ai_video_ready": "视频 AI 蒙版已就绪（已缓存）。",
+  "ai_video_prepare": "准备视频 AI 蒙版",
+  "ai_video_hint": "AI 每 3 帧处理一次；结果会被缓存——下次即时可用。"
 }
