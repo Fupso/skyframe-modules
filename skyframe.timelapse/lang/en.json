@@ -19,5 +19,6 @@
   "empty": "Pick a video — turn long footage into a short sped-up clip",
   "hint": "Tip: 30× turns a 15-minute flight into 30 seconds",
   "log_title": "Log",
-  "audio_note": "audio speeds up with the video"
+  "audio_note": "audio speeds up with the video",
+  "preview_cap": "Preview runs at max 16× — output will be faster"
 }

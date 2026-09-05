@@ -1,4 +1,4 @@
-// skyframe.timelapse v1.0.0 — Časozber (timelapse/hyperlapse)
+// skyframe.timelapse v1.1.0 — Časozber (timelapse/hyperlapse)
 // Vyber video → zvoľ zrýchlenie (alebo cieľovú dĺžku) → vytvor →
 // výsledok otvoríš v Editore na ďalšie úpravy.
 
@@ -6,7 +6,7 @@ import React from "react";
 
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
-const { useState, useEffect, useSyncExternalStore } = React;
+const { useState, useEffect, useRef, useSyncExternalStore } = React;
 
 const VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v"] }];
 const PRESETS = [2, 4, 8, 16, 30, 60];
@@ -138,6 +138,28 @@ const selectStyle = {
   background: "rgba(255,255,255,0.05)", color: "inherit",
 };
 
+// Živý náhľad rýchlosti — prehráva video s playbackRate = faktor
+function Preview({ src, factor }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    // prehliadač zvládne max ~16× — nad tým beží náhľad na 16×
+    try { v.playbackRate = Math.min(16, Math.max(0.25, factor)); } catch {}
+  }, [factor]);
+  return (
+    <div>
+      <video ref={ref} src={api.fileSrc(src)} controls muted
+        style={{ width: "100%", maxHeight: 400, background: "#000", borderRadius: 12, display: "block" }} />
+      {factor > 16 && (
+        <div style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
+          {t("preview_cap", "Náhľad beží max 16× — výsledok bude rýchlejší")} ({Math.round(factor)}×)
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TimelapsePage() {
   const s = useStore();
   const [, force] = useState(0);
@@ -166,6 +188,7 @@ function TimelapsePage() {
 
       {s.video && (
         <>
+          <Preview src={s.video} factor={f} />
           {/* zrýchlenie */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, opacity: 0.8 }}>{t("speed", "Zrýchlenie")}:</span>

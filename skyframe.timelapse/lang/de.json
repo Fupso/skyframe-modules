@@ -19,5 +19,6 @@
   "empty": "Video wählen — aus langem Material wird ein kurzer Clip",
   "hint": "Tipp: 30× macht aus 15 Minuten Flug 30 Sekunden",
   "log_title": "Protokoll",
-  "audio_note": "Audio wird mit dem Video beschleunigt"
+  "audio_note": "Audio wird mit dem Video beschleunigt",
+  "preview_cap": "Vorschau läuft max. 16× — Ausgabe wird schneller"
 }

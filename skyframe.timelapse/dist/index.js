@@ -11,7 +11,7 @@ var react_shim_default = window.React;
 // src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
-var { useState: useState2, useEffect: useEffect2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
+var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
 var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v"] }];
 var PRESETS = [2, 4, 8, 16, 30, 60];
 function baseName(p) {
@@ -134,13 +134,34 @@ var selectStyle = {
   background: "rgba(255,255,255,0.05)",
   color: "inherit"
 };
+function Preview({ src, factor }) {
+  const ref = useRef2(null);
+  useEffect2(() => {
+    const v = ref.current;
+    if (!v) return;
+    try {
+      v.playbackRate = Math.min(16, Math.max(0.25, factor));
+    } catch {
+    }
+  }, [factor]);
+  return /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement(
+    "video",
+    {
+      ref,
+      src: api.fileSrc(src),
+      controls: true,
+      muted: true,
+      style: { width: "100%", maxHeight: 400, background: "#000", borderRadius: 12, display: "block" }
+    }
+  ), factor > 16 && /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 11, opacity: 0.55, marginTop: 4 } }, t("preview_cap", "N\xE1h\u013Ead be\u017E\xED max 16\xD7 \u2014 v\xFDsledok bude r\xFDchlej\u0161\xED"), " (", Math.round(factor), "\xD7)"));
+}
 function TimelapsePage() {
   const s = useStore();
   const [, force] = useState2(0);
   useEffect2(() => store.subscribe(() => force((x) => x + 1)), []);
   const f = effFactor(s);
   const outLen = s.duration > 0 ? s.duration / f : 0;
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 20, maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 } }, /* @__PURE__ */ react_shim_default.createElement("h2", { style: { margin: 0 } }, "\u23E9 ", t("title", "\u010Casozber")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: s.video ? btnGhost : btnStyle, onClick: pickVideo, disabled: s.busy }, s.video ? t("change", "Zmeni\u0165") : t("pick_video", "Vybra\u0165 video")), s.video && /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.7, fontSize: 13 } }, baseName(s.video))), !s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { opacity: 0.6, padding: 40, textAlign: "center", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12 } }, t("empty", "Vyber video \u2014 z dlh\xE9ho z\xE1znamu sprav\xED\u0161 kr\xE1tke zr\xFDchlen\xE9 video"), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 8, fontSize: 12, opacity: 0.7 } }, t("hint", "Tip: 30\xD7 premen\xED 15-min\xFAtov\xFD let na 30 sek\xFAnd"))), s.video && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 13, opacity: 0.8 } }, t("speed", "Zr\xFDchlenie"), ":"), PRESETS.map((p) => /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 20, maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 } }, /* @__PURE__ */ react_shim_default.createElement("h2", { style: { margin: 0 } }, "\u23E9 ", t("title", "\u010Casozber")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: s.video ? btnGhost : btnStyle, onClick: pickVideo, disabled: s.busy }, s.video ? t("change", "Zmeni\u0165") : t("pick_video", "Vybra\u0165 video")), s.video && /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.7, fontSize: 13 } }, baseName(s.video))), !s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { opacity: 0.6, padding: 40, textAlign: "center", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12 } }, t("empty", "Vyber video \u2014 z dlh\xE9ho z\xE1znamu sprav\xED\u0161 kr\xE1tke zr\xFDchlen\xE9 video"), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 8, fontSize: 12, opacity: 0.7 } }, t("hint", "Tip: 30\xD7 premen\xED 15-min\xFAtov\xFD let na 30 sek\xFAnd"))), s.video && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement(Preview, { src: s.video, factor: f }), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 13, opacity: 0.8 } }, t("speed", "Zr\xFDchlenie"), ":"), PRESETS.map((p) => /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       key: p,
