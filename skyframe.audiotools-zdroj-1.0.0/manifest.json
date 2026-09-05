@@ -1,0 +1,16 @@
+{
+  "id": "skyframe.audiotools",
+  "name": "Audio nástroje",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "Hlasitosť, normalizácia, fade in/out, odstránenie ticha, hudobný podmaz a extrakcia audia do MP3.",
+  "icon": "🔊",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [],
+  "min_core_version": "3.4.0"
+}
