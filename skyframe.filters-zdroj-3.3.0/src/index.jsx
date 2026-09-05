@@ -1,4 +1,4 @@
-// skyframe.filters v3.2.1 — Filtre (nástroj SkyFrame Editora)
+// skyframe.filters v3.3.0 — Filtre (nástroj SkyFrame Editora)
 // Čistý nástroj: žiadny vlastný náhľad ani export. Štýl sa zapíše ako krok
 // do zásobníka úprav v core — náhľad aj export robí Editor jednou vetvou
 // (WYSIWYG) a kombinuje ho s ostatnými nástrojmi (Portrét…).
@@ -81,7 +81,7 @@ const initialState = {
   openBuiltin: false,   // rozbalená sekcia vstavaných filtrov
   curves: null,         // [[x,y],...] | null (master krivka)
   wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },  // tieň/stredy/svetlá [dx,dy]
-  openGrade: true,      // rozbalená sekcia kriviek a koliesok
+  openGrade: false,     // rozbalená sekcia kriviek a koliesok
 };
 
 let state = { ...initialState };
@@ -158,7 +158,7 @@ function curveToFfmpeg(points) {
 /** Offset kolieska [dx,dy] (polohy bodky -1..1) → rgb zložky -1..1 (hue kruh). */
 function wheelToRgb(off) {
   const [dx, dy] = off;
-  const a = Math.min(1, Math.hypot(dx, dy));
+  const a = Math.min(1, Math.hypot(dx, dy)) * 0.55; // stlmená citlivosť — plná poloha nie je extrém
   if (a < 0.01) return [0, 0, 0];
   const th = Math.atan2(dy, dx);
   const cl = (v) => Math.max(-1, Math.min(1, v));
@@ -187,6 +187,42 @@ function wheelsToFfmpeg(wheels) {
     parts.push(`r${k}=${r.toFixed(3)}:g${k}=${g.toFixed(3)}:b${k}=${b.toFixed(3)}`);
   }
   return `colorbalance=${parts.join(":")}`;
+}
+
+/** Live LUT pre okamžitý náhľad počas ťahania (krok 42).
+ *  Zopakuje ffmpeg reťazec do 3×256 tabuliek (R/G/B) + CSS saturate.
+ *  Poradie = buildChain: offset kanálov → jas/kontrast → kolieska → krivka. */
+function computeLiveSpec(style, intensity, curves, wheels) {
+  const s = style ? scaledStyle(style, intensity) : mkStyle(0, 0, 0, 100, 100, 100);
+  const off = [s.channels.r.intercept, s.channels.g.intercept, s.channels.b.intercept];
+  const bright = ((s.css.brightness - 100) / 100) * 0.5;
+  const cont = s.css.contrast / 100;
+  const wS = wheels ? wheelToRgb(wheels.s || [0, 0]) : [0, 0, 0];
+  const wM = wheels ? wheelToRgb(wheels.m || [0, 0]) : [0, 0, 0];
+  const wH = wheels ? wheelToRgb(wheels.h || [0, 0]) : [0, 0, 0];
+  const hasC = curves && curves.length >= 3;
+  const tables = [[], [], []];
+  for (let v = 0; v < 256; v++) {
+    const x0 = v / 255;
+    for (let c = 0; c < 3; c++) {
+      let x = x0 + off[c] + bright;
+      x = (x - 0.5) * cont + 0.5;
+      const cl0 = Math.max(0, Math.min(1, x));
+      const sW = Math.max(0, 1 - cl0 * 2);
+      const mW = Math.max(0, 1 - Math.abs(cl0 - 0.5) * 2);
+      const hW = Math.max(0, cl0 * 2 - 1);
+      x += 0.5 * (wS[c] * sW + wM[c] * mW + wH[c] * hW);
+      x = Math.max(0, Math.min(1, x));
+      if (hasC) x = evalCurve(curves, x);
+      tables[c].push(Math.max(0, Math.min(1, x)).toFixed(3));
+    }
+  }
+  return {
+    r: tables[0].join(" "),
+    g: tables[1].join(" "),
+    b: tables[2].join(" "),
+    saturate: Math.max(0, s.css.saturate / 100),
+  };
 }
 
 /** Je štýl neutrálny (žiadna zmena)? */
@@ -389,9 +425,11 @@ function Section({ title, open, onToggle, count, children }) {
 const CURVE_W = 232;
 const CURVE_H = 150;
 
-function CurveEditor({ points, onChange }) {
+function CurveEditor({ points, onChange, onLive }) {
   const ref = React.useRef(null);
   const drag = React.useRef(-1);
+  const [local, setLocal] = useState(null); // body počas ťahania
+  const shown = local || points;
 
   const draw = (cv, pts) => {
     const ctx = cv.getContext("2d");
@@ -432,8 +470,8 @@ function CurveEditor({ points, onChange }) {
   };
 
   React.useEffect(() => {
-    if (ref.current) draw(ref.current, points);
-  }, [points]);
+    if (ref.current) draw(ref.current, shown);
+  }, [shown]);
 
   const toXY = (e) => {
     const r = ref.current.getBoundingClientRect();
@@ -444,7 +482,7 @@ function CurveEditor({ points, onChange }) {
 
   const nearest = (x, y) => {
     let best = -1, bd = 0.06;
-    points.forEach(([px, py], i) => {
+    shown.forEach(([px, py], i) => {
       const d = Math.hypot(px - x, py - y);
       if (d < bd) { bd = d; best = i; }
     });
@@ -457,16 +495,17 @@ function CurveEditor({ points, onChange }) {
     if (hit >= 0) {
       drag.current = hit;
     } else {
-      const pts = [...points, [x, y]].sort((a, b) => a[0] - b[0]);
+      const pts = [...shown, [x, y]].sort((a, b) => a[0] - b[0]);
       drag.current = pts.findIndex((pt) => pt[0] === x && pt[1] === y);
-      onChange(pts);
+      setLocal(pts);
+      onLive?.(pts);
     }
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onMove = (e) => {
     if (drag.current < 0) return;
     let [x, y] = toXY(e);
-    const pts = points.map((pt) => [...pt]);
+    const pts = shown.map((pt) => [...pt]);
     const i = drag.current;
     // koncové body sa hýbu len zvislo
     if (i === 0) x = pts[0][0];
@@ -475,14 +514,19 @@ function CurveEditor({ points, onChange }) {
     const maxX = i < pts.length - 1 ? pts[i + 1][0] - 0.02 : 1;
     x = Math.max(minX, Math.min(maxX, x));
     pts[i] = [x, y];
-    onChange(pts);
+    setLocal(pts);
+    onLive?.(pts);
   };
-  const onUp = () => { drag.current = -1; };
+  const onUp = () => {
+    if (drag.current >= 0 && local) onChange(local); // commit → ffmpeg render na pozadí
+    drag.current = -1;
+    setLocal(null);
+  };
   const onDbl = (e) => {
     const [x, y] = toXY(e);
     const hit = nearest(x, y);
-    if (hit > 0 && hit < points.length - 1 && points.length > 3) {
-      onChange(points.filter((_, i) => i !== hit));
+    if (hit > 0 && hit < shown.length - 1 && shown.length > 3) {
+      onChange(shown.filter((_, i) => i !== hit));
     }
   };
 
@@ -504,11 +548,13 @@ function CurveEditor({ points, onChange }) {
 // Farebné koliesko — kruh, bodka = smer a množstvo farby
 // ---------------------------------------------------------------------------
 
-const WHEEL_R = 34;
+const WHEEL_R = 48;
 
-function Wheel({ value, onChange, label }) {
+function Wheel({ value, onChange, label, onLive }) {
   const ref = React.useRef(null);
   const dragging = React.useRef(false);
+  const [local, setLocal] = useState(null); // pozícia bodky počas ťahania
+  const shown = local || value;
 
   const draw = (cv, [dx, dy]) => {
     const S = WHEEL_R * 2 + 8;
@@ -542,8 +588,8 @@ function Wheel({ value, onChange, label }) {
   };
 
   React.useEffect(() => {
-    if (ref.current) draw(ref.current, value);
-  }, [value]);
+    if (ref.current) draw(ref.current, shown);
+  }, [shown]);
 
   const set = (e) => {
     const r = ref.current.getBoundingClientRect();
@@ -551,7 +597,13 @@ function Wheel({ value, onChange, label }) {
     let dy = (e.clientY - r.top - r.height / 2) / (r.height / 2 - 7);
     const len = Math.hypot(dx, dy);
     if (len > 1) { dx /= len; dy /= len; }
-    onChange([Math.round(dx * 100) / 100, Math.round(dy * 100) / 100]);
+    const v = [Math.round(dx * 50) / 50, Math.round(dy * 50) / 50];
+    if (dragging.current) {
+      setLocal(v);
+      onLive?.(v);
+    } else {
+      onChange(v);
+    }
   };
 
   const S = WHEEL_R * 2 + 8;
@@ -564,7 +616,11 @@ function Wheel({ value, onChange, label }) {
         style={{ cursor: "crosshair", touchAction: "none" }}
         onPointerDown={(e) => { dragging.current = true; set(e); e.currentTarget.setPointerCapture?.(e.pointerId); }}
         onPointerMove={(e) => { if (dragging.current) set(e); }}
-        onPointerUp={() => { dragging.current = false; }}
+        onPointerUp={() => {
+          dragging.current = false;
+          if (local) onChange(local); // commit → ffmpeg render na pozadí
+          setLocal(null);
+        }}
         onDoubleClick={() => onChange([0, 0])}
       />
       <span style={{ fontSize: 10, opacity: 0.7 }}>{label}</span>
@@ -574,6 +630,20 @@ function Wheel({ value, onChange, label }) {
 
 function ToolPanel() {
   const s = useStore();
+
+  // Live náhľad počas ťahania (krok 42): SVG LUT cez core, 0 ms latencia.
+  // Commit (pustenie) ide klasicky cez store → ffmpeg render; core live
+  // filter zhasne, keď čerstvý render dorazí.
+  const sendLive = (curves, wheels) => {
+    if (!api.setEditorLiveFilter) return;
+    const st = store.getState();
+    api.setEditorLiveFilter(computeLiveSpec(st.activeStyle, st.intensity, curves ?? st.curves, wheels ?? st.wheels));
+  };
+
+  // odchod z nástroja / unmount = live filter vypni
+  useEffect(() => {
+    return () => api.setEditorLiveFilter?.(null);
+  }, []);
 
   // Médium editora
   useEffect(() => {
@@ -839,6 +909,7 @@ function ToolPanel() {
           <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 10 }}>
             <CurveEditor
               points={s.curves || [[0, 0], [1, 1]]}
+              onLive={(pts) => sendLive(pts, undefined)}
               onChange={(pts) => {
                 // identita (2 body rovno) = žiadna krivka
                 const identity = pts.length === 2 && Math.abs(pts[0][1] - pts[0][0]) < 0.01 && Math.abs(pts[1][1] - pts[1][0]) < 0.01;
@@ -857,9 +928,9 @@ function ToolPanel() {
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-around" }}>
-              <Wheel label={t("wheel_shadows", "Tiene")} value={s.wheels.s} onChange={(v) => store.setState({ wheels: { ...s.wheels, s: v } })} />
-              <Wheel label={t("wheel_midtones", "Stredy")} value={s.wheels.m} onChange={(v) => store.setState({ wheels: { ...s.wheels, m: v } })} />
-              <Wheel label={t("wheel_highlights", "Svetlá")} value={s.wheels.h} onChange={(v) => store.setState({ wheels: { ...s.wheels, h: v } })} />
+              <Wheel label={t("wheel_shadows", "Tiene")} value={s.wheels.s} onLive={(v) => sendLive(undefined, { ...s.wheels, s: v })} onChange={(v) => store.setState({ wheels: { ...s.wheels, s: v } })} />
+              <Wheel label={t("wheel_midtones", "Stredy")} value={s.wheels.m} onLive={(v) => sendLive(undefined, { ...s.wheels, m: v })} onChange={(v) => store.setState({ wheels: { ...s.wheels, m: v } })} />
+              <Wheel label={t("wheel_highlights", "Svetlá")} value={s.wheels.h} onLive={(v) => sendLive(undefined, { ...s.wheels, h: v })} onChange={(v) => store.setState({ wheels: { ...s.wheels, h: v } })} />
             </div>
             <span style={{ fontSize: 10, opacity: 0.5, textAlign: "center" }}>
               {t("wheel_hint", "ťahaj bodku · dvojklik = reset kolieska")}
