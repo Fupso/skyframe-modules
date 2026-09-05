@@ -1,9 +1,9 @@
 {
   "id": "skyframe.frames",
   "name": "Extraktor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "SkyFrame Community",
-  "description": "Extrakcia snímok z videa — zadaj čas, vyber snímku z tej sekundy a uprav ju v Editore.",
+  "description": "Extrakcia snímok z videa — core prehrávač s presnou pozíciou, náhľad všetkých snímok danej sekundy a okamžitá úprava v Editore.",
   "icon": "🎞️",
   "entry_point": "index.js",
   "enabled": true,

@@ -3,7 +3,7 @@
   "pick_video": "Pick video",
   "change": "Change",
   "time_label": "Time in seconds",
-  "time_hint": "Enter second (e.g. 25 or 1:25)",
+  "time_hint": "e.g. 25 or 1:25",
   "extract": "Show frames",
   "extracting": "Extracting…",
   "frames_of": "Frames from second {t} ({n} pcs, {fps} fps)",
@@ -17,5 +17,7 @@
   "err_no_video": "Pick a video first",
   "err_time": "Enter a valid time (seconds or mm:ss)",
   "empty": "Pick a video and enter a time — all frames of that second will appear",
-  "log_title": "Log"
+  "log_title": "Log",
+  "extract_here": "🎞️ Frames from current position",
+  "or_manual": "or enter time manually:"
 }

@@ -3,7 +3,7 @@
   "pick_video": "Video wählen",
   "change": "Ändern",
   "time_label": "Zeit in Sekunden",
-  "time_hint": "Sekunde eingeben (z. B. 25 oder 1:25)",
+  "time_hint": "z. B. 25 oder 1:25",
   "extract": "Frames anzeigen",
   "extracting": "Extrahiere…",
   "frames_of": "Frames aus Sekunde {t} ({n} Stk., {fps} fps)",
@@ -17,5 +17,7 @@
   "err_no_video": "Wähle zuerst ein Video",
   "err_time": "Gültige Zeit eingeben (Sekunden oder mm:ss)",
   "empty": "Video wählen und Zeit eingeben — alle Frames dieser Sekunde erscheinen",
-  "log_title": "Protokoll"
+  "log_title": "Protokoll",
+  "extract_here": "🎞️ Frames ab aktueller Position",
+  "or_manual": "oder Zeit manuell eingeben:"
 }

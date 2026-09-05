@@ -1,4 +1,4 @@
-// skyframe.frames v1.0.0 — Extraktor snímok
+// skyframe.frames v1.1.0 — Extraktor snímok
 // Zadaj čas (napr. 25. sekunda) → zobrazia sa všetky snímky tej sekundy
 // v plnom rozlíšení → klikneš na vybranú → veľký náhľad →
 // „Editovať v Editore" (filtre, krivky, kolieska — WYSIWYG export)
@@ -13,7 +13,7 @@ const tt = (k, f, vars) => {
   for (const [kk, vv] of Object.entries(vars ?? {})) s = s.replaceAll(`{${kk}}`, String(vv));
   return s;
 };
-const { useState, useEffect, useSyncExternalStore } = React;
+const { useState, useEffect, useRef, useSyncExternalStore, useCallback } = React;
 
 const VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v"] }];
 
@@ -36,6 +36,7 @@ function parseTime(str) {
 
 const initialState = {
   video: null,          // path
+  curTime: 0,           // aktuálna pozícia prehrávača (s)
   timeStr: "",
   frames: [],           // cesty k snímkam
   fps: 0,
@@ -79,13 +80,13 @@ async function pickVideo() {
   }
 }
 
-async function extract() {
+async function extract(secOverride) {
   const s = store.getState();
   if (!s.video) {
     store.setState({ error: t("err_no_video", "Najprv vyber video") });
     return;
   }
-  const sec = parseTime(s.timeStr);
+  const sec = secOverride != null ? secOverride : parseTime(s.timeStr);
   if (sec == null || sec < 0) {
     store.setState({ error: t("err_time", "Zadaj platný čas (sekundy alebo mm:ss)") });
     return;
@@ -163,6 +164,52 @@ const inputStyle = {
   width: 140,
 };
 
+function fmtClock(sec) {
+  const mm = Math.floor(sec / 60);
+  const ss = Math.floor(sec % 60);
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+// Core prehrávač (api.VideoPlayer) — rovnaký ako v Editore, s krokovaním po snímkach
+function PlayerSection({ busy }) {
+  const s = useStore();
+  const CorePlayer = api.VideoPlayer;
+
+  const onTime = useCallback((tm) => {
+    store.setState({ curTime: tm });
+  }, []);
+
+  const extractHere = () => void extract(store.getState().curTime);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {CorePlayer
+        ? <CorePlayer src={s.video} title={baseName(s.video)} onTimeUpdate={onTime} />
+        : <video src={api.fileSrc(s.video)} controls onTimeUpdate={(e) => onTime(e.currentTarget.currentTime)}
+            style={{ width: "100%", maxHeight: 420, background: "#000", borderRadius: 12 }} />}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontFamily: "monospace", fontSize: 14, background: "rgba(255,255,255,0.06)", padding: "6px 10px", borderRadius: 8 }}>
+          {fmtClock(s.curTime)} <span style={{ opacity: 0.6 }}>({s.curTime.toFixed(2)} s)</span>
+        </span>
+        <button style={btnStyle} disabled={busy} onClick={extractHere}>
+          {busy ? t("extracting", "Extrahujem…") : t("extract_here", "🎞️ Snímky z aktuálnej pozície")}
+        </button>
+        <span style={{ opacity: 0.5, fontSize: 12 }}>{t("or_manual", "alebo zadaj čas ručne:")}</span>
+        <input
+          style={{ ...inputStyle, width: 110 }}
+          value={s.timeStr}
+          placeholder={t("time_hint", "napr. 25 alebo 1:25")}
+          onChange={(e) => store.setState({ timeStr: e.target.value })}
+          onKeyDown={(e) => { if (e.key === "Enter" && !busy) void extract(); }}
+        />
+        <button style={btnGhost} disabled={busy} onClick={() => void extract()}>
+          {t("extract", "Zobraziť snímky")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function FramesExtractor() {
   const s = useStore();
   const [, force] = useState(0);
@@ -185,21 +232,7 @@ function FramesExtractor() {
         {s.video && <span style={{ opacity: 0.7, fontSize: 13 }}>{baseName(s.video)}</span>}
       </div>
 
-      {s.video && (
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ fontSize: 13, opacity: 0.8 }}>{t("time_label", "Čas v sekundách")}</label>
-          <input
-            style={inputStyle}
-            value={s.timeStr}
-            placeholder={t("time_hint", "Zadaj sekundu (napr. 25 alebo 1:25)")}
-            onChange={(e) => store.setState({ timeStr: e.target.value })}
-            onKeyDown={(e) => { if (e.key === "Enter" && !s.busy) void extract(); }}
-          />
-          <button style={btnStyle} disabled={s.busy} onClick={() => void extract()}>
-            {s.busy ? t("extracting", "Extrahujem…") : t("extract", "Zobraziť snímky")}
-          </button>
-        </div>
-      )}
+      {s.video && <PlayerSection busy={s.busy} />}
 
       {s.error && <div style={{ color: "#f87171", fontSize: 13 }}>{s.error}</div>}
 

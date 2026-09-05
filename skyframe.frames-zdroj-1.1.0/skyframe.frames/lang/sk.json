@@ -3,7 +3,7 @@
   "pick_video": "Vybrať video",
   "change": "Zmeniť",
   "time_label": "Čas v sekundách",
-  "time_hint": "Zadaj sekundu (napr. 25 alebo 1:25)",
+  "time_hint": "napr. 25 alebo 1:25",
   "extract": "Zobraziť snímky",
   "extracting": "Extrahujem…",
   "frames_of": "Snímky z {t}. sekundy ({n} ks, {fps} fps)",
@@ -17,5 +17,7 @@
   "err_no_video": "Najprv vyber video",
   "err_time": "Zadaj platný čas (sekundy alebo mm:ss)",
   "empty": "Vyber video a zadaj čas — zobrazia sa všetky snímky tej sekundy",
-  "log_title": "Záznam"
+  "log_title": "Záznam",
+  "extract_here": "🎞️ Snímky z aktuálnej pozície",
+  "or_manual": "alebo zadaj čas ručne:"
 }

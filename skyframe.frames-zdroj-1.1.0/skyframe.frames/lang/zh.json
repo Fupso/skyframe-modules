@@ -3,7 +3,7 @@
   "pick_video": "选择视频",
   "change": "更改",
   "time_label": "时间（秒）",
-  "time_hint": "输入秒数（如 25 或 1:25）",
+  "time_hint": "如 25 或 1:25",
   "extract": "显示帧",
   "extracting": "正在提取…",
   "frames_of": "第 {t} 秒的帧（共 {n} 张，{fps} fps）",
@@ -17,5 +17,7 @@
   "err_no_video": "请先选择视频",
   "err_time": "请输入有效时间（秒或 mm:ss）",
   "empty": "选择视频并输入时间——将显示该秒的所有帧",
-  "log_title": "日志"
+  "log_title": "日志",
+  "extract_here": "🎞️ 提取当前位置的帧",
+  "or_manual": "或手动输入时间："
 }

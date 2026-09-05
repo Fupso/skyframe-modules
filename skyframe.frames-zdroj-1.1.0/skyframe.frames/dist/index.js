@@ -16,7 +16,7 @@ var tt = (k, f, vars) => {
   for (const [kk, vv] of Object.entries(vars ?? {})) s = s.replaceAll(`{${kk}}`, String(vv));
   return s;
 };
-var { useState: useState2, useEffect: useEffect2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
+var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2, useCallback: useCallback2 } = react_shim_default;
 var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi", "webm", "m4v"] }];
 function baseName(p) {
   return p.split(/[\\/]/).pop() ?? p;
@@ -31,6 +31,8 @@ function parseTime(str) {
 var initialState = {
   video: null,
   // path
+  curTime: 0,
+  // aktuálna pozícia prehrávača (s)
   timeStr: "",
   frames: [],
   // cesty k snímkam
@@ -69,13 +71,13 @@ async function pickVideo() {
     store.setState({ video: f[0], frames: [], selected: -1, error: "" });
   }
 }
-async function extract() {
+async function extract(secOverride) {
   const s = store.getState();
   if (!s.video) {
     store.setState({ error: t("err_no_video", "Najprv vyber video") });
     return;
   }
-  const sec = parseTime(s.timeStr);
+  const sec = secOverride != null ? secOverride : parseTime(s.timeStr);
   if (sec == null || sec < 0) {
     store.setState({ error: t("err_time", "Zadaj platn\xFD \u010Das (sekundy alebo mm:ss)") });
     return;
@@ -144,6 +146,39 @@ var inputStyle = {
   color: "inherit",
   width: 140
 };
+function fmtClock(sec) {
+  const mm = Math.floor(sec / 60);
+  const ss = Math.floor(sec % 60);
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+function PlayerSection({ busy }) {
+  const s = useStore();
+  const CorePlayer = api.VideoPlayer;
+  const onTime = useCallback2((tm) => {
+    store.setState({ curTime: tm });
+  }, []);
+  const extractHere = () => void extract(store.getState().curTime);
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, CorePlayer ? /* @__PURE__ */ react_shim_default.createElement(CorePlayer, { src: s.video, title: baseName(s.video), onTimeUpdate: onTime }) : /* @__PURE__ */ react_shim_default.createElement(
+    "video",
+    {
+      src: api.fileSrc(s.video),
+      controls: true,
+      onTimeUpdate: (e) => onTime(e.currentTarget.currentTime),
+      style: { width: "100%", maxHeight: 420, background: "#000", borderRadius: 12 }
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontFamily: "monospace", fontSize: 14, background: "rgba(255,255,255,0.06)", padding: "6px 10px", borderRadius: 8 } }, fmtClock(s.curTime), " ", /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.6 } }, "(", s.curTime.toFixed(2), " s)")), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, disabled: busy, onClick: extractHere }, busy ? t("extracting", "Extrahujem\u2026") : t("extract_here", "\u{1F39E}\uFE0F Sn\xEDmky z aktu\xE1lnej poz\xEDcie")), /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.5, fontSize: 12 } }, t("or_manual", "alebo zadaj \u010Das ru\u010Dne:")), /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      style: { ...inputStyle, width: 110 },
+      value: s.timeStr,
+      placeholder: t("time_hint", "napr. 25 alebo 1:25"),
+      onChange: (e) => store.setState({ timeStr: e.target.value }),
+      onKeyDown: (e) => {
+        if (e.key === "Enter" && !busy) void extract();
+      }
+    }
+  ), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnGhost, disabled: busy, onClick: () => void extract() }, t("extract", "Zobrazi\u0165 sn\xEDmky"))));
+}
 function FramesExtractor() {
   const s = useStore();
   const [, force] = useState2(0);
@@ -152,18 +187,7 @@ function FramesExtractor() {
     return u;
   }, []);
   const selFrame = s.selected >= 0 ? s.frames[s.selected] : null;
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 20, maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 } }, /* @__PURE__ */ react_shim_default.createElement("h2", { style: { margin: 0 } }, "\u{1F39E}\uFE0F ", t("title", "Extraktor sn\xEDmok")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: s.video ? btnGhost : btnStyle, onClick: pickVideo }, s.video ? t("change", "Zmeni\u0165") : t("pick_video", "Vybra\u0165 video")), s.video && /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.7, fontSize: 13 } }, baseName(s.video))), s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("label", { style: { fontSize: 13, opacity: 0.8 } }, t("time_label", "\u010Cas v sekund\xE1ch")), /* @__PURE__ */ react_shim_default.createElement(
-    "input",
-    {
-      style: inputStyle,
-      value: s.timeStr,
-      placeholder: t("time_hint", "Zadaj sekundu (napr. 25 alebo 1:25)"),
-      onChange: (e) => store.setState({ timeStr: e.target.value }),
-      onKeyDown: (e) => {
-        if (e.key === "Enter" && !s.busy) void extract();
-      }
-    }
-  ), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, disabled: s.busy, onClick: () => void extract() }, s.busy ? t("extracting", "Extrahujem\u2026") : t("extract", "Zobrazi\u0165 sn\xEDmky"))), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { style: { color: "#f87171", fontSize: 13 } }, s.error), !s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { opacity: 0.6, padding: 40, textAlign: "center", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12 } }, t("empty", "Vyber video a zadaj \u010Das \u2014 zobrazia sa v\u0161etky sn\xEDmky tej sekundy")), s.frames.length > 0 && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.8 } }, tt("frames_of", "Sn\xEDmky z {t}. sekundy ({n} ks, {fps} fps)", {
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 20, maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 } }, /* @__PURE__ */ react_shim_default.createElement("h2", { style: { margin: 0 } }, "\u{1F39E}\uFE0F ", t("title", "Extraktor sn\xEDmok")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: s.video ? btnGhost : btnStyle, onClick: pickVideo }, s.video ? t("change", "Zmeni\u0165") : t("pick_video", "Vybra\u0165 video")), s.video && /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.7, fontSize: 13 } }, baseName(s.video))), s.video && /* @__PURE__ */ react_shim_default.createElement(PlayerSection, { busy: s.busy }), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { style: { color: "#f87171", fontSize: 13 } }, s.error), !s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { opacity: 0.6, padding: 40, textAlign: "center", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12 } }, t("empty", "Vyber video a zadaj \u010Das \u2014 zobrazia sa v\u0161etky sn\xEDmky tej sekundy")), s.frames.length > 0 && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.8 } }, tt("frames_of", "Sn\xEDmky z {t}. sekundy ({n} ks, {fps} fps)", {
     t: Math.floor(s.time),
     n: s.frames.length,
     fps: Math.round(s.fps * 100) / 100
