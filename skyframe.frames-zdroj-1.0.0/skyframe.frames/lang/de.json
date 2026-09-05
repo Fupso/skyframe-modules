@@ -1,0 +1,21 @@
+{
+  "title": "Frame-Extraktor",
+  "pick_video": "Video wählen",
+  "change": "Ändern",
+  "time_label": "Zeit in Sekunden",
+  "time_hint": "Sekunde eingeben (z. B. 25 oder 1:25)",
+  "extract": "Frames anzeigen",
+  "extracting": "Extrahiere…",
+  "frames_of": "Frames aus Sekunde {t} ({n} Stk., {fps} fps)",
+  "pick_frame": "Klicke auf ein Frame zur Auswahl",
+  "selected": "Ausgewähltes Frame",
+  "frame_no": "Frame Nr. {n} ({t} s)",
+  "edit": "🖌️ Im Editor bearbeiten",
+  "save": "💾 In Ausgabe speichern",
+  "saved": "Frame gespeichert: {p}",
+  "edit_sent": "Frame an Editor gesendet",
+  "err_no_video": "Wähle zuerst ein Video",
+  "err_time": "Gültige Zeit eingeben (Sekunden oder mm:ss)",
+  "empty": "Video wählen und Zeit eingeben — alle Frames dieser Sekunde erscheinen",
+  "log_title": "Protokoll"
+}

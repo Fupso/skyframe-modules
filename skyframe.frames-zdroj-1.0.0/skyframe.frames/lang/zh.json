@@ -1,0 +1,21 @@
+{
+  "title": "帧提取器",
+  "pick_video": "选择视频",
+  "change": "更改",
+  "time_label": "时间（秒）",
+  "time_hint": "输入秒数（如 25 或 1:25）",
+  "extract": "显示帧",
+  "extracting": "正在提取…",
+  "frames_of": "第 {t} 秒的帧（共 {n} 张，{fps} fps）",
+  "pick_frame": "点击选择一帧",
+  "selected": "已选帧",
+  "frame_no": "第 {n} 帧（{t} 秒）",
+  "edit": "🖌️ 在编辑器中编辑",
+  "save": "💾 保存到输出目录",
+  "saved": "帧已保存：{p}",
+  "edit_sent": "帧已发送到编辑器",
+  "err_no_video": "请先选择视频",
+  "err_time": "请输入有效时间（秒或 mm:ss）",
+  "empty": "选择视频并输入时间——将显示该秒的所有帧",
+  "log_title": "日志"
+}
