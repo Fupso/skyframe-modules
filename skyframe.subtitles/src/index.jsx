@@ -43,6 +43,7 @@ function parseTime(str) {
 const initialState = {
   media: null,            // path
   lang: "auto",
+  model: "small",         // base | small | medium
   segments: [],           // {start, end, text}[]
   srtPath: "",
   status: null,           // {runtime_installed, model_installed} | null
@@ -110,9 +111,10 @@ async function ensureAll() {
     log(t("dl_runtime", "Sťahujem Whisper runtime…"));
     await watchJob(r, (j) => store.setState({ busyLabel: j.message || "", progress: j.progress ?? -1 }));
   }
-  const m = await api.invoke("ensure_whisper_model", {});
+  const model = store.getState().model;
+  const m = await api.invoke("ensure_whisper_model", { model });
   if (m) {
-    log(t("dl_model", "Sťahujem Whisper model (142 MB)…"));
+    log(t("dl_model", "Sťahujem Whisper model…") + ` (${model})`);
     await watchJob(m, (j) => store.setState({ busyLabel: j.message || "", progress: j.progress ?? -1 }));
   }
   await refreshStatus();
@@ -126,13 +128,14 @@ async function transcribe() {
   try {
     await ensureAll();
     const st = store.getState().status;
-    if (!st?.runtime_installed || !st?.model_installed) {
+    if (!st?.runtime_installed || !(st?.models ?? []).includes(store.getState().model)) {
       log(`⚠️ ${t("whisper_missing", "Whisper nie je nainštalovaný — pozri AI centrum.")}`);
       return;
     }
     const jobId = await api.invoke("transcribe_audio", {
       input: store.getState().media,
       lang: store.getState().lang,
+      model: store.getState().model,
       moduleId: api.moduleId,
     });
     const res = await watchJob(jobId, (j) => store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" }));
@@ -285,7 +288,7 @@ function Subtitles() {
     if (path) store.setState({ media: path, segments: [], srtPath: "" });
   };
 
-  const ready = s.status?.runtime_installed && s.status?.model_installed;
+  const ready = s.status?.runtime_installed && (s.status?.models ?? []).includes(s.model);
 
   return (
     <div className="p-6 overflow-y-auto h-full">
@@ -313,8 +316,21 @@ function Subtitles() {
             </div>
           )}
 
-          {/* Jazyk + prepis */}
+          {/* Jazyk + model + prepis */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
+            <select
+              value={s.model}
+              onChange={(e) => store.setState({ model: e.target.value })}
+              disabled={s.busy}
+              title={t("model_hint", "Väčší model = presnejší prepis, ale pomalší")}
+              className="px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
+            >
+              {["base", "small", "medium"].map((mid) => {
+                const inst = (s.status?.models ?? []).includes(mid);
+                const sz = s.status?.model_sizes?.[mid] ?? 0;
+                return <option key={mid} value={mid}>{`Whisper ${mid}${inst ? " ✓" : sz ? ` (${sz} MB)` : ""}`}</option>;
+              })}
+            </select>
             <select
               value={s.lang}
               onChange={(e) => store.setState({ lang: e.target.value })}

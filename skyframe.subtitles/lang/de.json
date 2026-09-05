@@ -29,5 +29,6 @@
   "lang_en": "Englisch",
   "lang_de": "Deutsch",
   "lang_ru": "Russisch",
-  "lang_zh": "Chinesisch"
+  "lang_zh": "Chinesisch",
+  "model_hint": "Größeres Modell = genauer, aber langsamer. Für Slowakisch small oder medium."
 }

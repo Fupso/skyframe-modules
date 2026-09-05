@@ -29,5 +29,6 @@
   "lang_en": "英语",
   "lang_de": "德语",
   "lang_ru": "俄语",
-  "lang_zh": "中文"
+  "lang_zh": "中文",
+  "model_hint": "模型越大越准确，但越慢。斯洛伐克语建议 small 或 medium。"
 }

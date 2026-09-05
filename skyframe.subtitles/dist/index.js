@@ -1,13 +1,12 @@
-// ../../merger-build/react-shim.js
-var R = window.React;
-var react_shim_default = R;
-var useState = R.useState;
-var useEffect = R.useEffect;
-var useMemo = R.useMemo;
-var useRef = R.useRef;
-var useCallback = R.useCallback;
-var useSyncExternalStore = R.useSyncExternalStore;
-var Fragment = R.Fragment;
+// ../framesbuild/react-shim.js
+var useState = window.React.useState;
+var useEffect = window.React.useEffect;
+var useMemo = window.React.useMemo;
+var useRef = window.React.useRef;
+var useCallback = window.React.useCallback;
+var useSyncExternalStore = window.React.useSyncExternalStore;
+var Fragment = window.React.Fragment;
+var react_shim_default = window.React;
 
 // src/index.jsx
 var api = window.SkyFrame;
@@ -41,6 +40,8 @@ var initialState = {
   media: null,
   // path
   lang: "auto",
+  model: "small",
+  // base | small | medium
   segments: [],
   // {start, end, text}[]
   srtPath: "",
@@ -102,9 +103,10 @@ async function ensureAll() {
     log(t("dl_runtime", "S\u0165ahujem Whisper runtime\u2026"));
     await watchJob(r, (j) => store.setState({ busyLabel: j.message || "", progress: j.progress ?? -1 }));
   }
-  const m = await api.invoke("ensure_whisper_model", {});
+  const model = store.getState().model;
+  const m = await api.invoke("ensure_whisper_model", { model });
   if (m) {
-    log(t("dl_model", "S\u0165ahujem Whisper model (142 MB)\u2026"));
+    log(t("dl_model", "S\u0165ahujem Whisper model\u2026") + ` (${model})`);
     await watchJob(m, (j) => store.setState({ busyLabel: j.message || "", progress: j.progress ?? -1 }));
   }
   await refreshStatus();
@@ -117,13 +119,14 @@ async function transcribe() {
   try {
     await ensureAll();
     const st = store.getState().status;
-    if (!st?.runtime_installed || !st?.model_installed) {
+    if (!st?.runtime_installed || !(st?.models ?? []).includes(store.getState().model)) {
       log(`\u26A0\uFE0F ${t("whisper_missing", "Whisper nie je nain\u0161talovan\xFD \u2014 pozri AI centrum.")}`);
       return;
     }
     const jobId = await api.invoke("transcribe_audio", {
       input: store.getState().media,
       lang: store.getState().lang,
+      model: store.getState().model,
       moduleId: api.moduleId
     });
     const res = await watchJob(jobId, (j) => store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" }));
@@ -262,7 +265,7 @@ function Subtitles() {
     const path = Array.isArray(f) ? f[0] : f;
     if (path) store.setState({ media: path, segments: [], srtPath: "" });
   };
-  const ready = s.status?.runtime_installed && s.status?.model_installed;
+  const ready = s.status?.runtime_installed && (s.status?.models ?? []).includes(s.model);
   return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 overflow-y-auto h-full" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-w-3xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "bg-bg-card rounded-2xl border border-border p-6" }, /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-4" }, "\u{1F4AC} ", t("title", "Titulky")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-3 mb-4" }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
@@ -273,6 +276,20 @@ function Subtitles() {
     "\u{1F3AC} ",
     s.media ? baseName(s.media) : t("pick_video", "Vybra\u0165 video")
   ), s.media && !s.busy && /* @__PURE__ */ react_shim_default.createElement("button", { onClick: () => store.setState({ media: null, segments: [], srtPath: "" }), className: "px-2 py-1 text-error hover:bg-error/10 rounded text-xs" }, "\u2715")), !ready && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200" }, "\u26A0\uFE0F ", t("setup_needed", "Whisper runtime a model sa stiahnu automaticky pri prvom prepise (alebo v AI centre). ~250 MB spolu.")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-wrap items-center gap-3 mb-4" }, /* @__PURE__ */ react_shim_default.createElement(
+    "select",
+    {
+      value: s.model,
+      onChange: (e) => store.setState({ model: e.target.value }),
+      disabled: s.busy,
+      title: t("model_hint", "V\xE4\u010D\u0161\xED model = presnej\u0161\xED prepis, ale pomal\u0161\xED"),
+      className: "px-3 py-2 bg-bg rounded-lg border border-border text-sm text-text outline-none"
+    },
+    ["base", "small", "medium"].map((mid) => {
+      const inst = (s.status?.models ?? []).includes(mid);
+      const sz = s.status?.model_sizes?.[mid] ?? 0;
+      return /* @__PURE__ */ react_shim_default.createElement("option", { key: mid, value: mid }, `Whisper ${mid}${inst ? " \u2713" : sz ? ` (${sz} MB)` : ""}`);
+    })
+  ), /* @__PURE__ */ react_shim_default.createElement(
     "select",
     {
       value: s.lang,

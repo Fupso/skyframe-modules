@@ -29,5 +29,6 @@
   "lang_en": "English",
   "lang_de": "German",
   "lang_ru": "Russian",
-  "lang_zh": "Chinese"
+  "lang_zh": "Chinese",
+  "model_hint": "Bigger model = more accurate, but slower. For Slovak use small or medium."
 }

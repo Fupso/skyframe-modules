@@ -29,5 +29,6 @@
   "lang_en": "Angličtina",
   "lang_de": "Nemčina",
   "lang_ru": "Ruština",
-  "lang_zh": "Čínština"
+  "lang_zh": "Čínština",
+  "model_hint": "Väčší model = presnejší prepis, ale pomalší. Na slovenčinu odporúčame small alebo medium."
 }
