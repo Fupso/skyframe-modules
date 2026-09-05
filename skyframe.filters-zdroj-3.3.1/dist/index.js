@@ -107,17 +107,6 @@ function scaledStyle(style, intensity) {
     }
   };
 }
-function lutEq(style, intensity) {
-  const s = scaledStyle(style, intensity);
-  const ch = (name, c) => {
-    const off = Math.round(c.intercept * 255);
-    const sign = off >= 0 ? "+" : "";
-    return `${name}='clip(val${sign}${off}\\,0\\,255)'`;
-  };
-  const lut = `lutrgb=${ch("r", s.channels.r)}:${ch("g", s.channels.g)}:${ch("b", s.channels.b)}`;
-  const eq = `eq=brightness=${((s.css.brightness - 100) / 100 * 0.5).toFixed(3)}:contrast=${(s.css.contrast / 100).toFixed(3)}:saturation=${(s.css.saturate / 100).toFixed(3)}`;
-  return `${lut},${eq}`;
-}
 function evalCurve(points, x) {
   if (!points || points.length < 2) return x;
   if (x <= points[0][0]) return points[0][1];
@@ -129,11 +118,6 @@ function evalCurve(points, x) {
   const t22 = t2 * t2, t3 = t22 * t2;
   const y = 0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t2 + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t22 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
   return Math.max(0, Math.min(1, y));
-}
-function curveToFfmpeg(points) {
-  if (!points || points.length < 3) return null;
-  const pts = points.map(([x, y]) => `${x.toFixed(3)}/${y.toFixed(3)}`).join(" ");
-  return `curves=master='${pts}'`;
 }
 function wheelToRgb(off) {
   const [dx, dy] = off;
@@ -147,25 +131,7 @@ function wheelToRgb(off) {
     cl(a * Math.cos(th + 2 * Math.PI / 3))
   ];
 }
-function wheelsToFfmpeg(wheels) {
-  if (!wheels) return null;
-  const parts = [];
-  const keys = [["s", "s"], ["m", "m"], ["h", "h"]];
-  let any = false;
-  const rgb = {};
-  for (const [k] of keys) {
-    const [r, g, b] = wheelToRgb(wheels[k] || [0, 0]);
-    rgb[k] = [r, g, b];
-    if (Math.abs(r) > 0.01 || Math.abs(g) > 0.01 || Math.abs(b) > 0.01) any = true;
-  }
-  if (!any) return null;
-  for (const [k] of keys) {
-    const [r, g, b] = rgb[k];
-    parts.push(`r${k}=${r.toFixed(3)}:g${k}=${g.toFixed(3)}:b${k}=${b.toFixed(3)}`);
-  }
-  return `colorbalance=${parts.join(":")}`;
-}
-function computeLiveSpec(style, intensity, curves, wheels) {
+function buildChannelLuts(style, intensity, curves, wheels) {
   const s = style ? scaledStyle(style, intensity) : mkStyle(0, 0, 0, 100, 100, 100);
   const off = [s.channels.r.intercept, s.channels.g.intercept, s.channels.b.intercept];
   const bright = (s.css.brightness - 100) / 100 * 0.5;
@@ -174,7 +140,7 @@ function computeLiveSpec(style, intensity, curves, wheels) {
   const wM = wheels ? wheelToRgb(wheels.m || [0, 0]) : [0, 0, 0];
   const wH = wheels ? wheelToRgb(wheels.h || [0, 0]) : [0, 0, 0];
   const hasC = curves && curves.length >= 3;
-  const tables = [[], [], []];
+  const luts = [[], [], []];
   for (let v = 0; v < 256; v++) {
     const x0 = v / 255;
     for (let c = 0; c < 3; c++) {
@@ -187,29 +153,50 @@ function computeLiveSpec(style, intensity, curves, wheels) {
       x += 0.5 * (wS[c] * sW + wM[c] * mW + wH[c] * hW);
       x = Math.max(0, Math.min(1, x));
       if (hasC) x = evalCurve(curves, x);
-      tables[c].push(Math.max(0, Math.min(1, x)).toFixed(3));
+      luts[c].push(Math.max(0, Math.min(1, x)));
     }
   }
+  return { luts, saturate: Math.max(0, s.css.saturate / 100) };
+}
+function isIdentityLut(lut) {
+  for (let v = 0; v < 256; v += 8) if (Math.abs(lut[v] - v / 255) > 4e-3) return false;
+  return true;
+}
+function computeLiveSpec(style, intensity, curves, wheels) {
+  const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels);
   return {
-    r: tables[0].join(" "),
-    g: tables[1].join(" "),
-    b: tables[2].join(" "),
-    saturate: Math.max(0, s.css.saturate / 100)
+    r: luts[0].map((v) => v.toFixed(3)).join(" "),
+    g: luts[1].map((v) => v.toFixed(3)).join(" "),
+    b: luts[2].map((v) => v.toFixed(3)).join(" "),
+    saturate
   };
 }
-function isNeutralStyle(style) {
-  if (!style) return true;
-  const c = style.channels;
-  const off = Math.abs(c.r.intercept) + Math.abs(c.g.intercept) + Math.abs(c.b.intercept);
-  return off < 5e-3 && style.css.brightness === 100 && style.css.contrast === 100 && style.css.saturate === 100;
+function wheelsActive(wheels) {
+  if (!wheels) return false;
+  return ["s", "m", "h"].some((k) => {
+    const [dx, dy] = wheels[k] || [0, 0];
+    return Math.hypot(dx, dy) * 0.55 >= 0.01;
+  });
 }
 function buildChain(style, intensity, curves, wheels) {
+  const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels);
   const parts = [];
-  if (style && !isNeutralStyle(style)) parts.push(lutEq(style, intensity));
-  const wb = wheelsToFfmpeg(wheels);
-  if (wb) parts.push(wb);
-  const cv = curveToFfmpeg(curves);
-  if (cv) parts.push(cv);
+  const allIdentity = luts.every(isIdentityLut);
+  if (!allIdentity) {
+    const N = 33;
+    const names = ["r", "g", "b"];
+    const chans = luts.map((lut) => {
+      const pts = [];
+      for (let i = 0; i < N; i++) {
+        const x = i / (N - 1);
+        const y = lut[Math.round(x * 255)];
+        pts.push(`${x.toFixed(3)}/${y.toFixed(3)}`);
+      }
+      return pts.join(" ");
+    });
+    parts.push(`curves=r='${chans[0]}':g='${chans[1]}':b='${chans[2]}'`);
+  }
+  if (Math.abs(saturate - 1) > 5e-3) parts.push(`eq=saturation=${saturate.toFixed(3)}`);
   return parts.join(",");
 }
 function skyGraphLuma(chain) {
@@ -224,48 +211,15 @@ function presetName(p) {
 var THUMB_W = 300;
 var THUMB_H = 200;
 function applyStyleToPixels(data, style, curves, wheels) {
-  const or = style.channels.r.intercept * 255;
-  const og = style.channels.g.intercept * 255;
-  const ob = style.channels.b.intercept * 255;
-  const br = (style.css.brightness - 100) / 100 * 0.5 * 255;
-  const ct = style.css.contrast / 100;
-  const st = style.css.saturate / 100;
-  const wS = wheels ? wheelToRgb(wheels.s || [0, 0]) : [0, 0, 0];
-  const wM = wheels ? wheelToRgb(wheels.m || [0, 0]) : [0, 0, 0];
-  const wH = wheels ? wheelToRgb(wheels.h || [0, 0]) : [0, 0, 0];
-  const hasW = wS.some((v) => Math.abs(v) > 0.01) || wM.some((v) => Math.abs(v) > 0.01) || wH.some((v) => Math.abs(v) > 0.01);
-  const hasC = curves && curves.length >= 3;
-  let lut = null;
-  if (hasC) {
-    lut = new Uint8ClampedArray(256);
-    for (let v = 0; v < 256; v++) lut[v] = Math.round(evalCurve(curves, v / 255) * 255);
-  }
+  const { luts, saturate: sat } = buildChannelLuts(style, 100, curves, wheels);
   for (let i = 0; i < data.length; i += 4) {
-    let r = data[i] + or, g = data[i + 1] + og, b = data[i + 2] + ob;
-    r += br;
-    g += br;
-    b += br;
-    r = (r - 128) * ct + 128;
-    g = (g - 128) * ct + 128;
-    b = (b - 128) * ct + 128;
-    let l = 0.299 * r + 0.587 * g + 0.114 * b;
-    r = l + (r - l) * st;
-    g = l + (g - l) * st;
-    b = l + (b - l) * st;
-    if (hasW) {
-      const ln = Math.max(0, Math.min(1, l / 255));
-      const sW = Math.max(0, 1 - ln * 2);
-      const mW = Math.max(0, 1 - Math.abs(ln - 0.5) * 2);
-      const hW = Math.max(0, ln * 2 - 1);
-      r += 128 * (wS[0] * sW + wM[0] * mW + wH[0] * hW);
-      g += 128 * (wS[1] * sW + wM[1] * mW + wH[1] * hW);
-      b += 128 * (wS[2] * sW + wM[2] * mW + wH[2] * hW);
-    }
-    if (lut) {
-      r = lut[Math.max(0, Math.min(255, Math.round(r)))];
-      g = lut[Math.max(0, Math.min(255, Math.round(g)))];
-      b = lut[Math.max(0, Math.min(255, Math.round(b)))];
-    }
+    let r = luts[0][data[i]] * 255;
+    let g = luts[1][data[i + 1]] * 255;
+    let b = luts[2][data[i + 2]] * 255;
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = l + (r - l) * sat;
+    g = l + (g - l) * sat;
+    b = l + (b - l) * sat;
     data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
     data[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g;
     data[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
@@ -661,13 +615,13 @@ function ToolPanel() {
     if (!api.setEditorStep) return;
     const timer = setTimeout(() => {
       const st = store.getState();
-      const chain = st.activeStyle || st.curves || wheelsToFfmpeg(st.wheels) ? buildChain(st.activeStyle, st.intensity, st.curves, st.wheels) : "";
+      const chain = st.activeStyle || st.curves || wheelsActive(st.wheels) ? buildChain(st.activeStyle, st.intensity, st.curves, st.wheels) : "";
       if (!st.media || !chain) {
         api.setEditorStep(null);
         return;
       }
       const name = st.activePresetId ? presetName({ id: st.activePresetId, nameKey: st.activePresetId.startsWith("builtin_") ? `style_${st.activePresetId.slice(8)}` : void 0, name: st.activePresetName }) : t("grade_only", "Farebn\xE1 \xFAprava");
-      const extras = `${st.curves ? " \xB7 krivky" : ""}${wheelsToFfmpeg(st.wheels) ? " \xB7 kolieska" : ""}`;
+      const extras = `${st.curves ? " \xB7 krivky" : ""}${wheelsActive(st.wheels) ? " \xB7 kolieska" : ""}`;
       const label = `\u{1F3A8} ${name}${st.activeStyle ? ` ${st.intensity}%` : ""}${st.skyOnly ? st.aiMask ? " \xB7 AI obloha" : " \xB7 obloha" : ""}${extras}`;
       if (!st.skyOnly) {
         api.setEditorStep({ label, vf: chain });
@@ -852,7 +806,7 @@ function ToolPanel() {
       className: "w-full px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
       onClick: () => {
         const st = store.getState();
-        if (!st.curves && !wheelsToFfmpeg(st.wheels) && !st.activeStyle) return;
+        if (!st.curves && !wheelsActive(st.wheels) && !st.activeStyle) return;
         const id = `custom_${Date.now()}`;
         const name = `${t("custom_grade_prefix", "\xDAprava")} ${st.presets.length + 1}`;
         const preset = {
@@ -860,7 +814,7 @@ function ToolPanel() {
           name,
           style: st.activeStyle || mkStyle(0, 0, 0, 100, 100, 100),
           curves: st.curves ? st.curves.map((pt) => [...pt]) : void 0,
-          wheels: wheelsToFfmpeg(st.wheels) ? { s: [...st.wheels.s], m: [...st.wheels.m], h: [...st.wheels.h] } : void 0
+          wheels: wheelsActive(st.wheels) ? { s: [...st.wheels.s], m: [...st.wheels.m], h: [...st.wheels.h] } : void 0
         };
         let thumb = null;
         try {
@@ -904,7 +858,7 @@ function ToolPanel() {
       onToggle: () => store.setState({ openBuiltin: !s.openBuiltin })
     },
     /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, BUILTIN_PRESETS.map(card))
-  )), (s.activeStyle || s.curves || wheelsToFfmpeg(s.wheels)) && /* @__PURE__ */ react_shim_default.createElement(
+  )), (s.activeStyle || s.curves || wheelsActive(s.wheels)) && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       className: "w-full mt-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
