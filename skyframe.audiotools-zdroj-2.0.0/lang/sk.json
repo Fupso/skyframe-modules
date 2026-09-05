@@ -1,0 +1,14 @@
+{
+  "title": "Zvuk",
+  "sec_volume": "Hlasitosť",
+  "volume": "Hlasitosť",
+  "normalize": "Normalizovať hlasitosť (EBU R128)",
+  "sec_fade": "Prechody",
+  "fade_in": "Fade in",
+  "fade_out": "Fade out",
+  "sec_silence": "Ticho",
+  "remove_silence": "Odstrániť ticho (-45 dB, min. 0,5 s)",
+  "lbl_silence": "bez ticha",
+  "lbl_norm": "normalizácia",
+  "stub": "Nástroj Zvuk nájdeš v Editore — v pravom paneli nástrojov."
+}

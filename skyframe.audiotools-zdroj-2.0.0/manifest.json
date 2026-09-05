@@ -1,0 +1,15 @@
+{
+  "id": "skyframe.audiotools",
+  "name": "Zvuk",
+  "version": "2.0.0",
+  "author": "SkyFrame Community",
+  "description": "Zvukové úpravy v Editore — hlasitosť, normalizácia (EBU R128), fade in/out a odstránenie ticha. Aplikujú sa v jednom exporte spolu s ostatnými úpravami.",
+  "icon": "🔊",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "ffmpeg.execute"
+  ],
+  "provides": ["editor_tool"],
+  "min_core_version": "3.4.0"
+}
