@@ -19,5 +19,6 @@
   "empty": "Video wählen und Zeit eingeben — alle Frames dieser Sekunde erscheinen",
   "log_title": "Protokoll",
   "extract_here": "🎞️ Frames ab aktueller Position",
-  "or_manual": "oder Zeit manuell eingeben:"
+  "or_manual": "oder Zeit manuell eingeben:",
+  "pick_first": "Wähle zuerst oben ein Video"
 }

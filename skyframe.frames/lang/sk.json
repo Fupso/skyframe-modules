@@ -19,5 +19,6 @@
   "empty": "Vyber video a zadaj čas — zobrazia sa všetky snímky tej sekundy",
   "log_title": "Záznam",
   "extract_here": "🎞️ Snímky z aktuálnej pozície",
-  "or_manual": "alebo zadaj čas ručne:"
+  "or_manual": "alebo zadaj čas ručne:",
+  "pick_first": "Najprv vyber video hore"
 }

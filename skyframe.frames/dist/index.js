@@ -152,14 +152,13 @@ function fmtClock(sec) {
   const ss = Math.floor(sec % 60);
   return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
-function PlayerSection({ busy }) {
+function PlayerSection() {
   const s = useStore();
   const CorePlayer = api.VideoPlayer;
   const onTime = useCallback2((tm) => {
     store.setState({ curTime: tm });
   }, []);
-  const extractHere = () => void extract(store.getState().curTime);
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, CorePlayer ? /* @__PURE__ */ react_shim_default.createElement(CorePlayer, { src: s.video, title: baseName(s.video), onTimeUpdate: onTime }) : /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", null, CorePlayer ? /* @__PURE__ */ react_shim_default.createElement(CorePlayer, { src: s.video, title: baseName(s.video), onTimeUpdate: onTime }) : /* @__PURE__ */ react_shim_default.createElement(
     "video",
     {
       src: api.fileSrc(s.video),
@@ -167,7 +166,16 @@ function PlayerSection({ busy }) {
       onTimeUpdate: (e) => onTime(e.currentTarget.currentTime),
       style: { width: "100%", maxHeight: 420, background: "#000", borderRadius: 12 }
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontFamily: "monospace", fontSize: 14, background: "rgba(255,255,255,0.06)", padding: "6px 10px", borderRadius: 8 } }, fmtClock(s.curTime), " ", /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.6 } }, "(", s.curTime.toFixed(2), " s)")), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, disabled: busy, onClick: extractHere }, busy ? t("extracting", "Extrahujem\u2026") : t("extract_here", "\u{1F39E}\uFE0F Sn\xEDmky z aktu\xE1lnej poz\xEDcie")), /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.5, fontSize: 12 } }, t("or_manual", "alebo zadaj \u010Das ru\u010Dne:")), /* @__PURE__ */ react_shim_default.createElement(
+  ));
+}
+function ControlsPanel() {
+  const s = useStore();
+  const busy = s.busy;
+  const extractHere = () => void extract(store.getState().curTime);
+  if (!s.video) {
+    return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: "8px 14px", opacity: 0.6, fontSize: 13 } }, t("pick_first", "Najprv vyber video hore"));
+  }
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "8px 14px" } }, /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontFamily: "monospace", fontSize: 14, background: "rgba(255,255,255,0.06)", padding: "6px 10px", borderRadius: 8 } }, fmtClock(s.curTime), " ", /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.6 } }, "(", s.curTime.toFixed(2), " s)")), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, disabled: busy, onClick: extractHere }, busy ? t("extracting", "Extrahujem\u2026") : t("extract_here", "\u{1F39E}\uFE0F Sn\xEDmky z aktu\xE1lnej poz\xEDcie")), /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.5, fontSize: 12 } }, t("or_manual", "alebo zadaj \u010Das ru\u010Dne:")), /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       style: { ...inputStyle, width: 110 },
@@ -178,7 +186,7 @@ function PlayerSection({ busy }) {
         if (e.key === "Enter" && !busy) void extract();
       }
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnGhost, disabled: busy, onClick: () => void extract() }, t("extract", "Zobrazi\u0165 sn\xEDmky"))));
+  ), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnGhost, disabled: busy, onClick: () => void extract() }, t("extract", "Zobrazi\u0165 sn\xEDmky")));
 }
 function FramesExtractor() {
   const s = useStore();
@@ -188,7 +196,7 @@ function FramesExtractor() {
     return u;
   }, []);
   const selFrame = s.selected >= 0 ? s.frames[s.selected] : null;
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 20, maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 } }, /* @__PURE__ */ react_shim_default.createElement("h2", { style: { margin: 0 } }, "\u{1F39E}\uFE0F ", t("title", "Extraktor sn\xEDmok")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: s.video ? btnGhost : btnStyle, onClick: pickVideo }, s.video ? t("change", "Zmeni\u0165") : t("pick_video", "Vybra\u0165 video")), s.video && /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.7, fontSize: 13 } }, baseName(s.video))), s.video && /* @__PURE__ */ react_shim_default.createElement(PlayerSection, { busy: s.busy }), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { style: { color: "#f87171", fontSize: 13 } }, s.error), !s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { opacity: 0.6, padding: 40, textAlign: "center", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12 } }, t("empty", "Vyber video a zadaj \u010Das \u2014 zobrazia sa v\u0161etky sn\xEDmky tej sekundy")), s.frames.length > 0 && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.8 } }, tt("frames_of", "Sn\xEDmky z {t}. sekundy ({n} ks, {fps} fps)", {
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 20, maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 } }, /* @__PURE__ */ react_shim_default.createElement("h2", { style: { margin: 0 } }, "\u{1F39E}\uFE0F ", t("title", "Extraktor sn\xEDmok")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: s.video ? btnGhost : btnStyle, onClick: pickVideo }, s.video ? t("change", "Zmeni\u0165") : t("pick_video", "Vybra\u0165 video")), s.video && /* @__PURE__ */ react_shim_default.createElement("span", { style: { opacity: 0.7, fontSize: 13 } }, baseName(s.video))), s.video && /* @__PURE__ */ react_shim_default.createElement(PlayerSection, null), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { style: { color: "#f87171", fontSize: 13 } }, s.error), !s.video && /* @__PURE__ */ react_shim_default.createElement("div", { style: { opacity: 0.6, padding: 40, textAlign: "center", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 12 } }, t("empty", "Vyber video a zadaj \u010Das \u2014 zobrazia sa v\u0161etky sn\xEDmky tej sekundy")), s.frames.length > 0 && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.8 } }, tt("frames_of", "Sn\xEDmky z {t}. sekundy ({n} ks, {fps} fps)", {
     t: Math.floor(s.time),
     n: s.frames.length,
     fps: Math.round(s.fps * 100) / 100
@@ -222,6 +230,7 @@ function FramesExtractor() {
     }))
   )))), selFrame && /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.8 } }, t("selected", "Vybran\xE1 sn\xEDmka")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { background: "#000", borderRadius: 12, overflow: "hidden", textAlign: "center" } }, /* @__PURE__ */ react_shim_default.createElement("img", { src: api.fileSrc(selFrame), style: { maxWidth: "100%", maxHeight: 480, objectFit: "contain" } })), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, onClick: () => void editSelected() }, t("edit", "\u{1F58C}\uFE0F Editova\u0165 v Editore")), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnGhost, onClick: () => void saveSelected() }, t("save", "\u{1F4BE} Ulo\u017Ei\u0165 do v\xFDstupu")))), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 13, opacity: 0.7, marginBottom: 6 } }, t("log_title", "Z\xE1znam")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 12, fontFamily: "monospace", opacity: 0.75, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 10, maxHeight: 140, overflowY: "auto" } }, s.log.map((l, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, l)))));
 }
+api.registerBottomPanel?.(ControlsPanel);
 var index_default = FramesExtractor;
 export {
   index_default as default

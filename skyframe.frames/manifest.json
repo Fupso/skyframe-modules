@@ -1,7 +1,7 @@
 {
   "id": "skyframe.frames",
   "name": "Extraktor",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "SkyFrame Community",
   "description": "Extrakcia snímok z videa — core prehrávač s presnou pozíciou, náhľad všetkých snímok danej sekundy a okamžitá úprava v Editore.",
   "icon": "🎞️",

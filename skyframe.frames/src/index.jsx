@@ -1,4 +1,4 @@
-// skyframe.frames v1.1.0 — Extraktor snímok
+// skyframe.frames v1.2.0 — Extraktor snímok
 // Zadaj čas (napr. 25. sekunda) → zobrazia sa všetky snímky tej sekundy
 // v plnom rozlíšení → klikneš na vybranú → veľký náhľad →
 // „Editovať v Editore" (filtre, krivky, kolieska — WYSIWYG export)
@@ -173,7 +173,7 @@ function fmtClock(sec) {
 }
 
 // Core prehrávač (api.VideoPlayer) — rovnaký ako v Editore, s krokovaním po snímkach
-function PlayerSection({ busy }) {
+function PlayerSection() {
   const s = useStore();
   const CorePlayer = api.VideoPlayer;
 
@@ -181,33 +181,45 @@ function PlayerSection({ busy }) {
     store.setState({ curTime: tm });
   }, []);
 
-  const extractHere = () => void extract(store.getState().curTime);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div>
       {CorePlayer
         ? <CorePlayer src={s.video} title={baseName(s.video)} onTimeUpdate={onTime} />
         : <video src={api.fileSrc(s.video)} controls onTimeUpdate={(e) => onTime(e.currentTarget.currentTime)}
             style={{ width: "100%", maxHeight: 420, background: "#000", borderRadius: 12 }} />}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "monospace", fontSize: 14, background: "rgba(255,255,255,0.06)", padding: "6px 10px", borderRadius: 8 }}>
-          {fmtClock(s.curTime)} <span style={{ opacity: 0.6 }}>({s.curTime.toFixed(2)} s)</span>
-        </span>
-        <button style={btnStyle} disabled={busy} onClick={extractHere}>
-          {busy ? t("extracting", "Extrahujem…") : t("extract_here", "🎞️ Snímky z aktuálnej pozície")}
-        </button>
-        <span style={{ opacity: 0.5, fontSize: 12 }}>{t("or_manual", "alebo zadaj čas ručne:")}</span>
-        <input
-          style={{ ...inputStyle, width: 110 }}
-          value={s.timeStr}
-          placeholder={t("time_hint", "napr. 25 alebo 1:25")}
-          onChange={(e) => store.setState({ timeStr: e.target.value })}
-          onKeyDown={(e) => { if (e.key === "Enter" && !busy) void extract(); }}
-        />
-        <button style={btnGhost} disabled={busy} onClick={() => void extract()}>
-          {t("extract", "Zobraziť snímky")}
-        </button>
-      </div>
+    </div>
+  );
+}
+
+// Ovládanie v SPODNOM paneli — čas + extrakcia vždy po ruke
+function ControlsPanel() {
+  const s = useStore();
+  const busy = s.busy;
+  const extractHere = () => void extract(store.getState().curTime);
+
+  if (!s.video) {
+    return <div style={{ padding: "8px 14px", opacity: 0.6, fontSize: 13 }}>{t("pick_first", "Najprv vyber video hore")}</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "8px 14px" }}>
+      <span style={{ fontFamily: "monospace", fontSize: 14, background: "rgba(255,255,255,0.06)", padding: "6px 10px", borderRadius: 8 }}>
+        {fmtClock(s.curTime)} <span style={{ opacity: 0.6 }}>({s.curTime.toFixed(2)} s)</span>
+      </span>
+      <button style={btnStyle} disabled={busy} onClick={extractHere}>
+        {busy ? t("extracting", "Extrahujem…") : t("extract_here", "🎞️ Snímky z aktuálnej pozície")}
+      </button>
+      <span style={{ opacity: 0.5, fontSize: 12 }}>{t("or_manual", "alebo zadaj čas ručne:")}</span>
+      <input
+        style={{ ...inputStyle, width: 110 }}
+        value={s.timeStr}
+        placeholder={t("time_hint", "napr. 25 alebo 1:25")}
+        onChange={(e) => store.setState({ timeStr: e.target.value })}
+        onKeyDown={(e) => { if (e.key === "Enter" && !busy) void extract(); }}
+      />
+      <button style={btnGhost} disabled={busy} onClick={() => void extract()}>
+        {t("extract", "Zobraziť snímky")}
+      </button>
     </div>
   );
 }
@@ -234,7 +246,7 @@ function FramesExtractor() {
         {s.video && <span style={{ opacity: 0.7, fontSize: 13 }}>{baseName(s.video)}</span>}
       </div>
 
-      {s.video && <PlayerSection busy={s.busy} />}
+      {s.video && <PlayerSection />}
 
       {s.error && <div style={{ color: "#f87171", fontSize: 13 }}>{s.error}</div>}
 
@@ -313,5 +325,7 @@ function FramesExtractor() {
     </div>
   );
 }
+
+api.registerBottomPanel?.(ControlsPanel);
 
 export default FramesExtractor;

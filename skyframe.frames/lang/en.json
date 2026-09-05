@@ -19,5 +19,6 @@
   "empty": "Pick a video and enter a time — all frames of that second will appear",
   "log_title": "Log",
   "extract_here": "🎞️ Frames from current position",
-  "or_manual": "or enter time manually:"
+  "or_manual": "or enter time manually:",
+  "pick_first": "Pick a video above first"
 }
