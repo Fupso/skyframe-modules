@@ -1,0 +1,23 @@
+{
+  "title": "延时摄影",
+  "pick_video": "选择视频",
+  "change": "更改",
+  "speed": "加速倍数",
+  "custom": "自定义…",
+  "target_len": "目标时长（秒）",
+  "audio": "音频",
+  "audio_none": "无音频",
+  "audio_speed": "加速音频",
+  "src_len": "视频时长",
+  "out_len": "输出",
+  "create": "⏩ 创建延时视频",
+  "creating": "创建中…",
+  "done": "完成",
+  "open_editor": "🖌️ 在编辑器中打开",
+  "open_folder": "📂 打开文件夹",
+  "err_no_video": "请先选择视频",
+  "empty": "选择视频——将长片段变为短加速视频",
+  "hint": "提示：30× 可将 15 分钟飞行压缩为 30 秒",
+  "log_title": "日志",
+  "audio_note": "音频随视频一起加速"
+}

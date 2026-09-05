@@ -1,0 +1,23 @@
+{
+  "title": "Zeitraffer",
+  "pick_video": "Video wählen",
+  "change": "Ändern",
+  "speed": "Beschleunigung",
+  "custom": "eigen…",
+  "target_len": "Ziellänge (s)",
+  "audio": "Audio",
+  "audio_none": "Ohne Audio",
+  "audio_speed": "Beschleunigtes Audio",
+  "src_len": "Videolänge",
+  "out_len": "Ausgabe",
+  "create": "⏩ Zeitraffer erstellen",
+  "creating": "Erstelle…",
+  "done": "Fertig",
+  "open_editor": "🖌️ Im Editor öffnen",
+  "open_folder": "📂 Ordner öffnen",
+  "err_no_video": "Wähle zuerst ein Video",
+  "empty": "Video wählen — aus langem Material wird ein kurzer Clip",
+  "hint": "Tipp: 30× macht aus 15 Minuten Flug 30 Sekunden",
+  "log_title": "Protokoll",
+  "audio_note": "Audio wird mit dem Video beschleunigt"
+}

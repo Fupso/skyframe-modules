@@ -1,0 +1,16 @@
+{
+  "id": "skyframe.timelapse",
+  "name": "Časozber",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "Zrýchlené video (timelapse/hyperlapse) — z dlhého letu krátke dynamické video.",
+  "icon": "⏩",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [],
+  "min_core_version": "3.2.0"
+}

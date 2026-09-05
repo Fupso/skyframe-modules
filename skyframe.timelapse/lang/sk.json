@@ -1,0 +1,23 @@
+{
+  "title": "Časozber",
+  "pick_video": "Vybrať video",
+  "change": "Zmeniť",
+  "speed": "Zrýchlenie",
+  "custom": "vlastné…",
+  "target_len": "Cieľová dĺžka (s)",
+  "audio": "Zvuk",
+  "audio_none": "Bez zvuku",
+  "audio_speed": "Zrýchlený zvuk",
+  "src_len": "Dĺžka videa",
+  "out_len": "Výstup",
+  "create": "⏩ Vytvoriť časozber",
+  "creating": "Vytváram…",
+  "done": "Hotovo",
+  "open_editor": "🖌️ Otvoriť v Editore",
+  "open_folder": "📂 Otvoriť priečinok",
+  "err_no_video": "Najprv vyber video",
+  "empty": "Vyber video — z dlhého záznamu spravíš krátke zrýchlené video",
+  "hint": "Tip: 30× premení 15-minútový let na 30 sekúnd",
+  "log_title": "Záznam",
+  "audio_note": "zvuk sa zrýchli spolu s videom"
+}

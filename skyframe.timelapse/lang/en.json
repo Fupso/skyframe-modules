@@ -1,0 +1,23 @@
+{
+  "title": "Timelapse",
+  "pick_video": "Pick video",
+  "change": "Change",
+  "speed": "Speed",
+  "custom": "custom…",
+  "target_len": "Target length (s)",
+  "audio": "Audio",
+  "audio_none": "No audio",
+  "audio_speed": "Sped-up audio",
+  "src_len": "Video length",
+  "out_len": "Output",
+  "create": "⏩ Create timelapse",
+  "creating": "Creating…",
+  "done": "Done",
+  "open_editor": "🖌️ Open in Editor",
+  "open_folder": "📂 Open folder",
+  "err_no_video": "Pick a video first",
+  "empty": "Pick a video — turn long footage into a short sped-up clip",
+  "hint": "Tip: 30× turns a 15-minute flight into 30 seconds",
+  "log_title": "Log",
+  "audio_note": "audio speeds up with the video"
+}
