@@ -136,24 +136,42 @@ var selectStyle = {
 };
 function Preview({ src, factor }) {
   const ref = useRef2(null);
+  const skipMode = factor > 16;
   useEffect2(() => {
     const v = ref.current;
     if (!v) return;
-    try {
-      v.playbackRate = Math.min(16, Math.max(0.25, factor));
-    } catch {
+    if (!skipMode) {
+      try {
+        v.playbackRate = Math.max(0.25, factor);
+      } catch {
+      }
+      return;
     }
-  }, [factor]);
+    v.pause();
+    v.playbackRate = 1;
+    const step = 0.12;
+    const iv = setInterval(() => {
+      const vid = ref.current;
+      if (!vid) return;
+      if (vid.currentTime + factor * step >= (vid.duration || Infinity)) {
+        vid.currentTime = 0;
+      } else {
+        vid.currentTime += factor * step;
+      }
+    }, step * 1e3);
+    return () => clearInterval(iv);
+  }, [factor, skipMode]);
   return /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement(
     "video",
     {
       ref,
       src: api.fileSrc(src),
-      controls: true,
+      controls: !skipMode,
       muted: true,
+      autoPlay: !skipMode,
       style: { width: "100%", maxHeight: 400, background: "#000", borderRadius: 12, display: "block" }
     }
-  ), factor > 16 && /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 11, opacity: 0.55, marginTop: 4 } }, t("preview_cap", "N\xE1h\u013Ead be\u017E\xED max 16\xD7 \u2014 v\xFDsledok bude r\xFDchlej\u0161\xED"), " (", Math.round(factor), "\xD7)"));
+  ), skipMode && /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 11, opacity: 0.55, marginTop: 4 } }, t("preview_skip", "N\xE1h\u013Ead v skokovom re\u017Eime \u2014 zobrazuje skuto\u010Dn\xE9 tempo"), " (", Math.round(factor), "\xD7)"));
 }
 function TimelapsePage() {
   const s = useStore();

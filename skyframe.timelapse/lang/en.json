@@ -20,5 +20,6 @@
   "hint": "Tip: 30× turns a 15-minute flight into 30 seconds",
   "log_title": "Log",
   "audio_note": "audio speeds up with the video",
-  "preview_cap": "Preview runs at max 16× — output will be faster"
+  "preview_cap": "Preview runs at max 16× — output will be faster",
+  "preview_skip": "Preview in skip mode — shows the real pace"
 }

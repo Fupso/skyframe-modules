@@ -20,5 +20,6 @@
   "hint": "Tip: 30× premení 15-minútový let na 30 sekúnd",
   "log_title": "Záznam",
   "audio_note": "zvuk sa zrýchli spolu s videom",
-  "preview_cap": "Náhľad beží max 16× — výsledok bude rýchlejší"
+  "preview_cap": "Náhľad beží max 16× — výsledok bude rýchlejší",
+  "preview_skip": "Náhľad v skokovom režime — zobrazuje skutočné tempo"
 }

@@ -1,4 +1,4 @@
-// skyframe.timelapse v1.1.0 — Časozber (timelapse/hyperlapse)
+// skyframe.timelapse v1.2.0 — Časozber (timelapse/hyperlapse)
 // Vyber video → zvoľ zrýchlenie (alebo cieľovú dĺžku) → vytvor →
 // výsledok otvoríš v Editore na ďalšie úpravy.
 
@@ -138,22 +138,43 @@ const selectStyle = {
   background: "rgba(255,255,255,0.05)", color: "inherit",
 };
 
-// Živý náhľad rýchlosti — prehráva video s playbackRate = faktor
+// Živý náhľad rýchlosti:
+//  ≤16× → playbackRate (plynulé);  >16× → skokový režim (posúvame currentTime
+//  timerom o faktor×interval — zobrazí skutočné tempo, trhane ako časozber)
 function Preview({ src, factor }) {
   const ref = useRef(null);
+  const skipMode = factor > 16;
+
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    // prehliadač zvládne max ~16× — nad tým beží náhľad na 16×
-    try { v.playbackRate = Math.min(16, Math.max(0.25, factor)); } catch {}
-  }, [factor]);
+    if (!skipMode) {
+      try { v.playbackRate = Math.max(0.25, factor); } catch {}
+      return;
+    }
+    // skokový režim: pauza + timer posúva pozíciu
+    v.pause();
+    v.playbackRate = 1;
+    const step = 0.12; // reálnych sekund medzi skokmi
+    const iv = setInterval(() => {
+      const vid = ref.current;
+      if (!vid) return;
+      if (vid.currentTime + factor * step >= (vid.duration || Infinity)) {
+        vid.currentTime = 0; // loop
+      } else {
+        vid.currentTime += factor * step;
+      }
+    }, step * 1000);
+    return () => clearInterval(iv);
+  }, [factor, skipMode]);
+
   return (
     <div>
-      <video ref={ref} src={api.fileSrc(src)} controls muted
+      <video ref={ref} src={api.fileSrc(src)} controls={!skipMode} muted autoPlay={!skipMode}
         style={{ width: "100%", maxHeight: 400, background: "#000", borderRadius: 12, display: "block" }} />
-      {factor > 16 && (
+      {skipMode && (
         <div style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
-          {t("preview_cap", "Náhľad beží max 16× — výsledok bude rýchlejší")} ({Math.round(factor)}×)
+          {t("preview_skip", "Náhľad v skokovom režime — zobrazuje skutočné tempo")} ({Math.round(factor)}×)
         </div>
       )}
     </div>

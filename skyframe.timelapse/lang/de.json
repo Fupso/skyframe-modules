@@ -20,5 +20,6 @@
   "hint": "Tipp: 30× macht aus 15 Minuten Flug 30 Sekunden",
   "log_title": "Protokoll",
   "audio_note": "Audio wird mit dem Video beschleunigt",
-  "preview_cap": "Vorschau läuft max. 16× — Ausgabe wird schneller"
+  "preview_cap": "Vorschau läuft max. 16× — Ausgabe wird schneller",
+  "preview_skip": "Vorschau im Sprungmodus — zeigt das echte Tempo"
 }
