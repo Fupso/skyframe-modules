@@ -67,8 +67,9 @@ function log(line) {
 }
 async function pickVideo() {
   const f = await api.pickFiles(VIDEO_FILTERS, false);
-  if (f && f[0]) {
-    store.setState({ video: f[0], frames: [], selected: -1, error: "" });
+  const path = Array.isArray(f) ? f[0] : f;
+  if (path) {
+    store.setState({ video: path, frames: [], selected: -1, error: "" });
   }
 }
 async function extract(secOverride) {
