@@ -1,0 +1,22 @@
+{
+  "title": "音频",
+  "sec_volume": "音量",
+  "volume": "音量",
+  "normalize": "响度归一化（EBU R128）",
+  "sec_fade": "淡入淡出",
+  "fade_in": "淡入",
+  "fade_out": "淡出",
+  "sec_silence": "静音",
+  "remove_silence": "去除静音（-45 dB，最少 0.5 秒）",
+  "lbl_silence": "去静音",
+  "lbl_norm": "归一化",
+  "stub": "音频工具位于编辑器中——在右侧工具面板。",
+  "sec_music": "背景音乐",
+  "music_file": "音乐文件",
+  "music_mode": "背景音乐模式",
+  "music_mode_mix": "与原声混合",
+  "music_mode_replace": "替换原声",
+  "music_volume": "音乐音量",
+  "lbl_music_mix": "背景音乐",
+  "lbl_music_replace": "音乐替换原声"
+}

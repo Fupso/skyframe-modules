@@ -1,0 +1,22 @@
+{
+  "title": "Ton",
+  "sec_volume": "Lautstärke",
+  "volume": "Lautstärke",
+  "normalize": "Lautheit normalisieren (EBU R128)",
+  "sec_fade": "Übergänge",
+  "fade_in": "Fade in",
+  "fade_out": "Fade out",
+  "sec_silence": "Stille",
+  "remove_silence": "Stille entfernen (-45 dB, min. 0,5 s)",
+  "lbl_silence": "ohne Stille",
+  "lbl_norm": "normalisiert",
+  "stub": "Das Ton-Werkzeug findest du im Editor — im rechten Werkzeugpanel.",
+  "sec_music": "Musikuntermalung",
+  "music_file": "Musikdatei",
+  "music_mode": "Musikmodus",
+  "music_mode_mix": "Mit Originalton mischen",
+  "music_mode_replace": "Originalton ersetzen",
+  "music_volume": "Musiklautstärke",
+  "lbl_music_mix": "Untermalung",
+  "lbl_music_replace": "Musik ersetzt Ton"
+}

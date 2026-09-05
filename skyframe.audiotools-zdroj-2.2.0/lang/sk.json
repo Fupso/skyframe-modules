@@ -1,0 +1,22 @@
+{
+  "title": "Zvuk",
+  "sec_volume": "Hlasitosť",
+  "volume": "Hlasitosť",
+  "normalize": "Normalizovať hlasitosť (EBU R128)",
+  "sec_fade": "Prechody",
+  "fade_in": "Fade in",
+  "fade_out": "Fade out",
+  "sec_silence": "Ticho",
+  "remove_silence": "Odstrániť ticho (-45 dB, min. 0,5 s)",
+  "lbl_silence": "bez ticha",
+  "lbl_norm": "normalizácia",
+  "stub": "Nástroj Zvuk nájdeš v Editore — v pravom paneli nástrojov.",
+  "sec_music": "Hudobný podmaz",
+  "music_file": "Hudobný súbor",
+  "music_mode": "Režim podmazu",
+  "music_mode_mix": "Zmiešať s pôvodným zvukom",
+  "music_mode_replace": "Nahradiť pôvodný zvuk",
+  "music_volume": "Hlasitosť hudby",
+  "lbl_music_mix": "podmaz",
+  "lbl_music_replace": "hudba namiesto zvuku"
+}

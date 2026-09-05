@@ -1,0 +1,22 @@
+{
+  "title": "Audio",
+  "sec_volume": "Volume",
+  "volume": "Volume",
+  "normalize": "Normalize loudness (EBU R128)",
+  "sec_fade": "Fades",
+  "fade_in": "Fade in",
+  "fade_out": "Fade out",
+  "sec_silence": "Silence",
+  "remove_silence": "Remove silence (-45 dB, min. 0.5 s)",
+  "lbl_silence": "no silence",
+  "lbl_norm": "normalized",
+  "stub": "The Audio tool lives in the Editor — in the right tools panel.",
+  "sec_music": "Music bed",
+  "music_file": "Music file",
+  "music_mode": "Music mode",
+  "music_mode_mix": "Mix with original audio",
+  "music_mode_replace": "Replace original audio",
+  "music_volume": "Music volume",
+  "lbl_music_mix": "music bed",
+  "lbl_music_replace": "music replaces audio"
+}
