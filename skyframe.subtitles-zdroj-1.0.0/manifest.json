@@ -1,0 +1,24 @@
+{
+  "id": "skyframe.subtitles",
+  "name": "Titulky",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "AI prepis reči do titulkov (Whisper, offline), editor segmentov a vypálenie titulkov do videa.",
+  "icon": "💬",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute",
+    "ai.run"
+  ],
+  "provides": [],
+  "min_core_version": "3.2.0",
+  "ai_models": [
+    {
+      "id": "whisper-base",
+      "name": "Whisper base (titulky)",
+      "size_mb": 142
+    }
+  ]
+}
