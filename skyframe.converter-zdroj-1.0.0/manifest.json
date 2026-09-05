@@ -1,0 +1,16 @@
+{
+  "id": "skyframe.converter",
+  "name": "Konvertor",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "HandBrake-style konverzia videí — dávková fronta, rozlíšenie, kvalita (CRF), fps, zvuk a formát.",
+  "icon": "🔄",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [],
+  "min_core_version": "3.2.0"
+}
