@@ -9,5 +9,7 @@
   "saved": "✅ Uložené: {p}",
   "failed": "❌ {e}",
   "hint": "Nastav pozíciu úchytom na časovej osi — video sa presunie na ňu. Uloží sa presne tá snímka, ktorú vidíš (aj s filtrami a strihom).",
-  "tool_no_media": "Najprv otvor súbor v Editore."
+  "tool_no_media": "Najprv otvor súbor v Editore.",
+  "browse": "🎞 Zobraziť snímky sekundy",
+  "browsing": "⏳ Extrahujem…"
 }

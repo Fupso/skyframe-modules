@@ -19,8 +19,27 @@ const { useState } = React;
 // ctx: { mediaPath, kind, duration, sourceDuration, timeScale, hasAudio, pipelineVf }
 function CaptureButton({ values, ctx }) {
   const [busy, setBusy] = useState(false);
+  const [browseBusy, setBrowseBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState(false);
+
+  async function browse() {
+    if (!ctx?.mediaPath || browseBusy) return;
+    setBrowseBusy(true); setMsg(""); setErr(false);
+    try {
+      const res = await api.invoke("extract_editor_second", {
+        input: ctx.mediaPath,
+        vf: ctx.pipelineVf ?? "",
+        timeSec: Number(values?.time) || 0,
+      });
+      api.showFrames(res.frames ?? [], res.time ?? (Number(values?.time) || 0));
+    } catch (e) {
+      setErr(true);
+      setMsg(tt("failed", "❌ {e}", { e: String(e) }));
+    } finally {
+      setBrowseBusy(false);
+    }
+  }
 
   async function capture() {
     if (!ctx?.mediaPath || busy) return;
@@ -56,6 +75,18 @@ function CaptureButton({ values, ctx }) {
         }}
       >
         {busy ? t("capturing", "⏳ Ukladám…") : t("capture", "📸 Uložiť snímku")}
+      </button>
+      <button
+        onClick={() => { void browse(); }}
+        disabled={!ctx?.mediaPath || browseBusy}
+        style={{
+          padding: "8px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600,
+          background: "#3f3f46", color: "#fff", border: "none",
+          cursor: !ctx?.mediaPath || browseBusy ? "default" : "pointer",
+          opacity: !ctx?.mediaPath || browseBusy ? 0.6 : 1,
+        }}
+      >
+        {browseBusy ? t("browsing", "⏳ Extrahujem…") : t("browse", "🎞 Zobraziť snímky sekundy")}
       </button>
       {msg && (
         <div style={{ fontSize: 11, wordBreak: "break-all", color: err ? "#f87171" : "#34d399" }}>{msg}</div>

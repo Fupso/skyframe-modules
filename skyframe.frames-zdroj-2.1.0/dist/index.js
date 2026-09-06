@@ -25,8 +25,28 @@ var tt = (k, f, vars) => {
 var { useState: useState2 } = react_shim_default;
 function CaptureButton({ values, ctx }) {
   const [busy, setBusy] = useState2(false);
+  const [browseBusy, setBrowseBusy] = useState2(false);
   const [msg, setMsg] = useState2("");
   const [err, setErr] = useState2(false);
+  async function browse() {
+    if (!ctx?.mediaPath || browseBusy) return;
+    setBrowseBusy(true);
+    setMsg("");
+    setErr(false);
+    try {
+      const res = await api.invoke("extract_editor_second", {
+        input: ctx.mediaPath,
+        vf: ctx.pipelineVf ?? "",
+        timeSec: Number(values?.time) || 0
+      });
+      api.showFrames(res.frames ?? [], res.time ?? (Number(values?.time) || 0));
+    } catch (e) {
+      setErr(true);
+      setMsg(tt("failed", "\u274C {e}", { e: String(e) }));
+    } finally {
+      setBrowseBusy(false);
+    }
+  }
   async function capture() {
     if (!ctx?.mediaPath || busy) return;
     setBusy(true);
@@ -68,6 +88,26 @@ function CaptureButton({ values, ctx }) {
       }
     },
     busy ? t("capturing", "\u23F3 Uklad\xE1m\u2026") : t("capture", "\u{1F4F8} Ulo\u017Ei\u0165 sn\xEDmku")
+  ), /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      onClick: () => {
+        void browse();
+      },
+      disabled: !ctx?.mediaPath || browseBusy,
+      style: {
+        padding: "8px 12px",
+        borderRadius: 10,
+        fontSize: 12,
+        fontWeight: 600,
+        background: "#3f3f46",
+        color: "#fff",
+        border: "none",
+        cursor: !ctx?.mediaPath || browseBusy ? "default" : "pointer",
+        opacity: !ctx?.mediaPath || browseBusy ? 0.6 : 1
+      }
+    },
+    browseBusy ? t("browsing", "\u23F3 Extrahujem\u2026") : t("browse", "\u{1F39E} Zobrazi\u0165 sn\xEDmky sekundy")
   ), msg && /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 11, wordBreak: "break-all", color: err ? "#f87171" : "#34d399" } }, msg));
 }
 api.registerTool({

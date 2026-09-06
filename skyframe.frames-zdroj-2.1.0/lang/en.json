@@ -9,5 +9,7 @@
   "saved": "✅ Saved: {p}",
   "failed": "❌ {e}",
   "hint": "Set the position with the timeline handle — the video scrubs to it. The saved frame is exactly what you see (filters and trim included).",
-  "tool_no_media": "Open a file in the Editor first."
+  "tool_no_media": "Open a file in the Editor first.",
+  "browse": "🎞 Browse frames of this second",
+  "browsing": "⏳ Extracting…"
 }
