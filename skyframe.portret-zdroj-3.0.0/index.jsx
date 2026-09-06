@@ -1,13 +1,12 @@
-// skyframe.portret v2.0.0 — Portrét (nástroj SkyFrame Editora)
-// Čistý nástroj: žiadny vlastný náhľad ani export. Posuvníky zapisujú krok
-// do zásobníka úprav v core; náhľad aj export robí Editor (jedna vetva,
-// WYSIWYG). Kombinuje sa s ostatnými nástrojmi (Filtre…) automaticky.
+// skyframe.portret v3.0.0 — Portrét (deklaratívny nástroj Editora, krok 66)
+// Migrácia z legacy registerEditorPanel/setEditorStep na registerTool:
+// hodnoty drží core v session (prežijú reštart), krok zásobníka skladá
+// buildStep. UI je jedno custom pole (predvoľby + posuvníky).
 
 import React from "react";
 
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
-const { useState, useEffect, useSyncExternalStore } = React;
 
 // Východzie hodnoty NEUTRÁLNE — nič sa nepripočíta, kým používateľ nezmení
 const DEFAULTS = { smooth: 0, brighten: 0, warmth: 0, saturation: 0, sharpen: 0, vignette: 0 };
@@ -19,27 +18,6 @@ const PRESETS = [
   { id: "studio",   nameKey: "preset_studio",   p: { smooth: 20, brighten: 15, warmth: 0,   saturation: 0,   sharpen: 25, vignette: 15 } },
   { id: "bw",       nameKey: "preset_bw",       p: { smooth: 30, brighten: 8,  warmth: 0,   saturation: -100, sharpen: 20, vignette: 25 } },
 ];
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
-
-let state = { params: { ...DEFAULTS }, media: null };
-const listeners = new Set();
-const store = {
-  getState: () => state,
-  setState(patch) {
-    state = { ...state, ...patch };
-    listeners.forEach((l) => l());
-  },
-  subscribe(l) {
-    listeners.add(l);
-    return () => listeners.delete(l);
-  },
-};
-function useStore() {
-  return useSyncExternalStore(store.subscribe, store.getState);
-}
 
 // ---------------------------------------------------------------------------
 // Parametre → ffmpeg vf fragment
@@ -71,7 +49,7 @@ function buildVf(p) {
 }
 
 function isNeutral(p) {
-  return Object.keys(DEFAULTS).every((k) => p[k] === DEFAULTS[k]);
+  return Object.keys(DEFAULTS).every((k) => (p?.[k] ?? DEFAULTS[k]) === DEFAULTS[k]);
 }
 
 function stepLabel(p) {
@@ -86,7 +64,7 @@ function stepLabel(p) {
 }
 
 // ---------------------------------------------------------------------------
-// Panel nástroja (zobrazuje sa v Editore)
+// Custom pole — predvoľby + posuvníky (hodnota = objekt params v session)
 // ---------------------------------------------------------------------------
 
 function Slider({ label, value, min, max, onChange }) {
@@ -105,42 +83,12 @@ function Slider({ label, value, min, max, onChange }) {
   );
 }
 
-function ToolPanel() {
-  const s = useStore();
-
-  // Sleduj médium editora
-  useEffect(() => {
-    if (api.getEditorMedia) store.setState({ media: api.getEditorMedia() });
-    if (api.onEditorMedia) {
-      return api.onEditorMedia((media) => store.setState({ media }));
-    }
-  }, []);
-
-  // Zmeň parametre → zapíš krok do editora (debounce 250 ms)
-  useEffect(() => {
-    if (!api.setEditorStep) return;
-    const timer = setTimeout(() => {
-      if (!s.media || isNeutral(s.params)) {
-        api.setEditorStep(null);
-      } else {
-        api.setEditorStep({ label: stepLabel(s.params), vf: buildVf(s.params) });
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [s.params, s.media]);
-
-  const set = (k) => (v) => store.setState({ params: { ...s.params, [k]: v } });
-
-  if (!s.media) {
-    return (
-      <div style={{ padding: 16, fontSize: 12, opacity: 0.7 }}>
-        {t("tool_no_media", "V Editore nie je otvorený žiadny súbor.")}
-      </div>
-    );
-  }
+function PortretField({ value, onChange }) {
+  const p = { ...DEFAULTS, ...(value ?? {}) };
+  const set = (k) => (v) => onChange({ ...p, [k]: v });
 
   return (
-    <div style={{ padding: 12 }}>
+    <div>
       <div style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6, marginBottom: 8 }}>
         {t("presets", "Predvoľby")}
       </div>
@@ -149,23 +97,23 @@ function ToolPanel() {
           <button
             key={pr.id}
             className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
-            onClick={() => store.setState({ params: { ...pr.p } })}
+            onClick={() => onChange({ ...pr.p })}
           >
             {t(pr.nameKey, pr.id)}
           </button>
         ))}
       </div>
 
-      <Slider label={`✨ ${t("smooth", "Jemnosť pleti")}`}   value={s.params.smooth}     min={0}    max={100} onChange={set("smooth")} />
-      <Slider label={`💡 ${t("brighten", "Rozjasnenie")}`}    value={s.params.brighten}   min={0}    max={100} onChange={set("brighten")} />
-      <Slider label={`🌡️ ${t("warmth", "Teplota")}`}          value={s.params.warmth}     min={-100} max={100} onChange={set("warmth")} />
-      <Slider label={`🎨 ${t("saturation", "Sýtosť")}`}       value={s.params.saturation} min={-100} max={100} onChange={set("saturation")} />
-      <Slider label={`🔍 ${t("sharpen", "Vyostrenie")}`}      value={s.params.sharpen}    min={0}    max={100} onChange={set("sharpen")} />
-      <Slider label={`🌑 ${t("vignette", "Vignetácia")}`}     value={s.params.vignette}   min={0}    max={100} onChange={set("vignette")} />
+      <Slider label={`✨ ${t("smooth", "Jemnosť pleti")}`}   value={p.smooth}     min={0}    max={100} onChange={set("smooth")} />
+      <Slider label={`💡 ${t("brighten", "Rozjasnenie")}`}    value={p.brighten}   min={0}    max={100} onChange={set("brighten")} />
+      <Slider label={`🌡️ ${t("warmth", "Teplota")}`}          value={p.warmth}     min={-100} max={100} onChange={set("warmth")} />
+      <Slider label={`🎨 ${t("saturation", "Sýtosť")}`}       value={p.saturation} min={-100} max={100} onChange={set("saturation")} />
+      <Slider label={`🔍 ${t("sharpen", "Vyostrenie")}`}      value={p.sharpen}    min={0}    max={100} onChange={set("sharpen")} />
+      <Slider label={`🌑 ${t("vignette", "Vignetácia")}`}     value={p.vignette}   min={0}    max={100} onChange={set("vignette")} />
 
       <button
         className="w-full mt-1 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
-        onClick={() => store.setState({ params: { ...DEFAULTS } })}
+        onClick={() => onChange({ ...DEFAULTS })}
       >
         ↩️ {t("reset", "Obnoviť predvolené")}
       </button>
@@ -174,12 +122,20 @@ function ToolPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Registrácia + hlavný komponent (info karta pre tab modulu)
+// Deklaratívna registrácia
 // ---------------------------------------------------------------------------
 
-if (api.registerEditorPanel) {
-  api.registerEditorPanel(ToolPanel);
-}
+api.registerTool({
+  icon: "🧑",
+  labelKey: "title",
+  fields: [{ id: "params", type: "custom", component: PortretField }],
+  buildStep(values, ctx) {
+    if (!ctx.mediaPath) return null;
+    const p = values.params;
+    if (!p || isNeutral(p)) return null;
+    return { label: stepLabel(p), vf: buildVf(p) };
+  },
+});
 
 function PortretInfo() {
   return (

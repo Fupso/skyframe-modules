@@ -1,4 +1,4 @@
-// skyframe.filters v3.3.0 — Filtre (nástroj SkyFrame Editora)
+// skyframe.filters v4.0.0 — Filtre (deklaratívny nástroj Editora, krok 66)
 // Čistý nástroj: žiadny vlastný náhľad ani export. Štýl sa zapíše ako krok
 // do zásobníka úprav v core — náhľad aj export robí Editor jednou vetvou
 // (WYSIWYG) a kombinuje ho s ostatnými nástrojmi (Portrét…).
@@ -63,15 +63,7 @@ const BUILTIN_PRESETS = [
 // ---------------------------------------------------------------------------
 
 const initialState = {
-  media: null,          // {path, kind} z editora
-  activeStyle: null,    // {channels, css}
-  activePresetId: null,
-  intensity: 80,
-  skyOnly: false,
-  aiMask: false,
   aiStatus: null,       // {licensed, runtimeInstalled, modelInstalled} | null
-  maskPath: "",         // cesta k AI maske pre aktuálne médium
-  maskFor: "",          // pre ktoré médium je maska
   maskLoading: false,
   maskProgress: -1,     // progres výpočtu AI masky videa (-1 = nič)
   presets: [],          // používateľské štýly z configu
@@ -80,10 +72,24 @@ const initialState = {
   photoBusy: false,     // prebieha analýza fotky
   openCustom: true,     // rozbalená sekcia vlastných filtrov
   openBuiltin: false,   // rozbalená sekcia vstavaných filtrov
-  curves: null,         // [[x,y],...] | null (master krivka)
-  wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },  // tieň/stredy/svetlá [dx,dy]
   openGrade: false,     // rozbalená sekcia kriviek a koliesok
 };
+
+/** Predvolená hodnota grading poľa (drží ju core v session) */
+const DEFAULT_GRADE = {
+  style: null,          // {channels, css} | null
+  presetId: null,
+  presetName: null,
+  intensity: 80,
+  skyOnly: false,
+  aiMask: false,
+  maskPath: "",         // cesta k AI maske pre aktuálne médium
+  maskFor: "",          // pre ktoré médium je maska
+  curves: null,         // [[x,y],...] | null (master krivka)
+  wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },  // tieň/stredy/svetlá [dx,dy]
+};
+
+const NEUTRAL_WHEELS = { s: [0, 0], m: [0, 0], h: [0, 0] };
 
 let state = { ...initialState };
 const listeners = new Set();
@@ -595,29 +601,23 @@ function Wheel({ value, onChange, label, onLive }) {
   );
 }
 
-function ToolPanel() {
+function FiltersField({ value, onChange, ctx }) {
   const s = useStore();
+  const v = { ...DEFAULT_GRADE, ...(value ?? {}) };
+  const setV = (patch) => onChange({ ...v, ...patch });
+  const media = ctx?.mediaPath ? { path: ctx.mediaPath, kind: ctx.kind } : null;
 
   // Live náhľad počas ťahania (krok 42): SVG LUT cez core, 0 ms latencia.
-  // Commit (pustenie) ide klasicky cez store → ffmpeg render; core live
-  // filter zhasne, keď čerstvý render dorazí.
+  // Commit (pustenie) ide cez onChange → rebuild kroku → proxy render;
+  // core live filter zhasne, keď čerstvý render dorazí.
   const sendLive = (curves, wheels) => {
     if (!api.setEditorLiveFilter) return;
-    const st = store.getState();
-    api.setEditorLiveFilter(computeLiveSpec(st.activeStyle, st.intensity, curves ?? st.curves, wheels ?? st.wheels));
+    api.setEditorLiveFilter(computeLiveSpec(v.style, v.intensity, curves ?? v.curves, wheels ?? v.wheels));
   };
 
   // odchod z nástroja / unmount = live filter vypni
   useEffect(() => {
     return () => api.setEditorLiveFilter?.(null);
-  }, []);
-
-  // Médium editora
-  useEffect(() => {
-    if (api.getEditorMedia) store.setState({ media: api.getEditorMedia() });
-    if (api.onEditorMedia) {
-      return api.onEditorMedia((media) => store.setState({ media }));
-    }
   }, []);
 
   // AI stav + používateľské štýly + ukážková fotka pre miniatúry
@@ -662,63 +662,40 @@ function ToolPanel() {
     store.setState({ thumbs: next });
   }, [s.baseThumb, s.presets]);
 
-  // AI maska: spočítaj raz na médium (core cachuje súbor)
+  // AI maska fotky: spočítaj raz na médium (core cachuje súbor)
   useEffect(() => {
-    if (!s.aiMask || !s.media || s.media.kind !== "photo") return;
-    if (s.maskFor === s.media.path && s.maskPath) return;
+    if (!v.aiMask || !media || media.kind !== "photo") return;
+    if (v.maskFor === media.path && v.maskPath) return;
     let dead = false;
     store.setState({ maskLoading: true });
     (async () => {
       try {
-        const path = await api.invoke("ai_sky_mask_file", { input: s.media.path });
-        if (!dead) store.setState({ maskPath: path, maskFor: s.media.path, maskLoading: false });
+        const path = await api.invoke("ai_sky_mask_file", { input: media.path });
+        if (!dead) {
+          setV({ maskPath: path, maskFor: media.path });
+          store.setState({ maskLoading: false });
+        }
       } catch (e) {
-        if (!dead) store.setState({ maskLoading: false, maskPath: "", maskFor: "" });
+        if (!dead) {
+          store.setState({ maskLoading: false });
+          setV({ maskPath: "", maskFor: "" });
+        }
         console.error("[filtre] ai maska:", e);
       }
     })();
     return () => { dead = true; };
-  }, [s.aiMask, s.media, s.maskFor, s.maskPath]);
-
-  // Zápis kroku do editora (debounce 250 ms)
-  useEffect(() => {
-    if (!api.setEditorStep) return;
-    const timer = setTimeout(() => {
-      const st = store.getState();
-      const chain = st.activeStyle || st.curves || wheelsActive(st.wheels)
-        ? buildChain(st.activeStyle, st.intensity, st.curves, st.wheels)
-        : "";
-      if (!st.media || !chain) {
-        api.setEditorStep(null);
-        return;
-      }
-      const name = st.activePresetId ? presetName({ id: st.activePresetId, nameKey: st.activePresetId.startsWith("builtin_") ? `style_${st.activePresetId.slice(8)}` : undefined, name: st.activePresetName }) : t("grade_only", "Farebná úprava");
-      const extras = `${st.curves ? " · krivky" : ""}${wheelsActive(st.wheels) ? " · kolieska" : ""}`;
-      const label = `🎨 ${name}${st.activeStyle ? ` ${st.intensity}%` : ""}${st.skyOnly ? (st.aiMask ? " · AI obloha" : " · obloha") : ""}${extras}`;
-      if (!st.skyOnly) {
-        api.setEditorStep({ label, vf: chain });
-      } else if (!st.aiMask) {
-        api.setEditorStep({ label, graph: skyGraphLuma(chain) });
-      } else if (st.maskPath && st.maskFor === st.media.path) {
-        // foto aj video — maska videa je cachovaný súbor na zdrojovom fps (krok 45)
-        api.setEditorStep({ label, graph: skyGraphAi(chain), inputs: [st.maskPath] });
-      } else {
-        api.setEditorStep(null); // maska sa počíta / nie je podporovaná
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [s.activeStyle, s.intensity, s.skyOnly, s.aiMask, s.media, s.maskPath, s.maskFor, s.curves, s.wheels]);
+  }, [v.aiMask, media?.path]);
 
   const pick = (p) => {
-    if (s.activePresetId === p.id) {
-      store.setState({ activeStyle: null, activePresetId: null, activePresetName: null, curves: null, wheels: { s: [0, 0], m: [0, 0], h: [0, 0] } });
+    if (v.presetId === p.id) {
+      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } });
     } else {
-      store.setState({
-        activeStyle: p.style,
-        activePresetId: p.id,
-        activePresetName: p.name || null,
+      setV({
+        style: p.style,
+        presetId: p.id,
+        presetName: p.name || null,
         curves: p.curves ? p.curves.map((pt) => [...pt]) : null,
-        wheels: p.wheels ? { s: [...(p.wheels.s || [0, 0])], m: [...(p.wheels.m || [0, 0])], h: [...(p.wheels.h || [0, 0])] } : { s: [0, 0], m: [0, 0], h: [0, 0] },
+        wheels: p.wheels ? { s: [...(p.wheels.s || [0, 0])], m: [...(p.wheels.m || [0, 0])], h: [...(p.wheels.h || [0, 0])] } : { ...NEUTRAL_WHEELS },
       });
     }
   };
@@ -753,18 +730,17 @@ function ToolPanel() {
 
   const removePreset = (id) => {
     const presets = store.getState().presets.filter((p) => p.id !== id);
-    const patch = { presets };
-    if (s.activePresetId === id) {
-      patch.activeStyle = null; patch.activePresetId = null; patch.activePresetName = null;
+    store.setState({ presets });
+    if (v.presetId === id) {
+      setV({ style: null, presetId: null, presetName: null });
     }
-    store.setState(patch);
     savePresets(presets);
   };
 
   const ai = s.aiStatus;
 
   const card = (p) => {
-    const active = s.activePresetId === p.id;
+    const active = v.presetId === p.id;
     const thumb = s.thumbs[p.id];
     return (
       <div key={p.id} style={{ position: "relative" }}>
@@ -803,22 +779,16 @@ function ToolPanel() {
   };
 
   return (
-    <div style={{ padding: 12, display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {!s.media && (
-        <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
-          {t("tool_no_media", "V Editore nie je otvorený žiadny súbor.")}
-        </p>
-      )}
-
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Intenzita */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
           <span>{t("intensity", "Intenzita")}</span>
-          <span>{s.intensity} %</span>
+          <span>{v.intensity} %</span>
         </div>
         <input
-          type="range" min={0} max={100} value={s.intensity}
-          onChange={(e) => store.setState({ intensity: parseInt(e.target.value, 10) })}
+          type="range" min={0} max={100} value={v.intensity}
+          onChange={(e) => setV({ intensity: parseInt(e.target.value, 10) })}
           style={{ width: "100%" }}
         />
       </div>
@@ -827,27 +797,27 @@ function ToolPanel() {
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 8, cursor: "pointer" }}>
         <input
           type="checkbox"
-          checked={s.skyOnly}
-          onChange={(e) => store.setState({ skyOnly: e.target.checked })}
+          checked={v.skyOnly}
+          onChange={(e) => setV({ skyOnly: e.target.checked })}
         />
         ☁️ {t("sky_only", "Len svetlé partie (obloha)")}
       </label>
-      {s.skyOnly && (
+      {v.skyOnly && (
         <div style={{ marginLeft: 4, marginBottom: 8 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
             <input
               type="checkbox"
-              checked={s.aiMask}
+              checked={v.aiMask}
               disabled={!ai?.licensed}
-              onChange={(e) => store.setState({ aiMask: e.target.checked })}
+              onChange={(e) => setV({ aiMask: e.target.checked })}
             />
             🤖 {t("ai_mask", "AI maska (presnejšia)")}
           </label>
-          {s.aiMask && s.media?.kind === "video" && s.maskFor === s.media.path && s.maskPath ? (
+          {v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath ? (
             <p style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
               ✓ {t("ai_video_ready", "AI maska videa je pripravená (cache).")}
             </p>
-          ) : s.aiMask && s.media?.kind === "video" ? (
+          ) : v.aiMask && media?.kind === "video" ? (
             <div style={{ marginTop: 6 }}>
               {s.maskLoading ? (
                 <p style={{ fontSize: 11, opacity: 0.8 }}>
@@ -857,11 +827,11 @@ function ToolPanel() {
                 <button
                   className="px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
                   onClick={async () => {
-                    const media = s.media;
-                    if (!media) return;
+                    const mpath = media?.path;
+                    if (!mpath) return;
                     store.setState({ maskLoading: true, maskProgress: 0 });
                     try {
-                      const jobId = await api.invoke("ai_sky_maskvideo_file", { input: media.path, maskFps: 3, moduleId: api.moduleId });
+                      const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId });
                       await new Promise((resolve) => {
                         let un;
                         api.listenJob(jobId, (job) => {
@@ -870,7 +840,8 @@ function ToolPanel() {
                         }).then((u) => { un = u; });
                       }).then((job) => {
                         if (job.status === "done" && job.result) {
-                          store.setState({ maskPath: job.result, maskFor: media.path, maskLoading: false, maskProgress: -1 });
+                          setV({ maskPath: job.result, maskFor: mpath });
+                          store.setState({ maskLoading: false, maskProgress: -1 });
                         } else {
                           store.setState({ maskLoading: false, maskProgress: -1 });
                           if (job.status === "error") console.error("[filtre] ai maska videa:", job.message);
@@ -890,7 +861,7 @@ function ToolPanel() {
               </p>
             </div>
           ) : null}
-          {s.aiMask && s.maskLoading && (
+          {v.aiMask && s.maskLoading && (
             <p style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>⏳ {t("mask_loading", "Počítam AI masku…")}</p>
           )}
           {!ai?.licensed && (
@@ -918,18 +889,18 @@ function ToolPanel() {
         {s.openGrade && (
           <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 10 }}>
             <CurveEditor
-              points={s.curves || [[0, 0], [1, 1]]}
+              points={v.curves || [[0, 0], [1, 1]]}
               onLive={(pts) => sendLive(pts, undefined)}
               onChange={(pts) => {
                 // identita (2 body rovno) = žiadna krivka
                 const identity = pts.length === 2 && Math.abs(pts[0][1] - pts[0][0]) < 0.01 && Math.abs(pts[1][1] - pts[1][0]) < 0.01;
-                store.setState({ curves: identity ? null : pts });
+                setV({ curves: identity ? null : pts });
               }}
             />
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <button
                 className="px-2 py-1 text-[11px] rounded bg-zinc-700 hover:bg-zinc-600"
-                onClick={() => store.setState({ curves: null })}
+                onClick={() => setV({ curves: null })}
               >
                 ↺ {t("curve_reset", "Reset krivky")}
               </button>
@@ -938,9 +909,9 @@ function ToolPanel() {
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-around" }}>
-              <Wheel label={t("wheel_shadows", "Tiene")} value={s.wheels.s} onLive={(v) => sendLive(undefined, { ...s.wheels, s: v })} onChange={(v) => store.setState({ wheels: { ...s.wheels, s: v } })} />
-              <Wheel label={t("wheel_midtones", "Stredy")} value={s.wheels.m} onLive={(v) => sendLive(undefined, { ...s.wheels, m: v })} onChange={(v) => store.setState({ wheels: { ...s.wheels, m: v } })} />
-              <Wheel label={t("wheel_highlights", "Svetlá")} value={s.wheels.h} onLive={(v) => sendLive(undefined, { ...s.wheels, h: v })} onChange={(v) => store.setState({ wheels: { ...s.wheels, h: v } })} />
+              <Wheel label={t("wheel_shadows", "Tiene")} value={v.wheels.s} onLive={(wv) => sendLive(undefined, { ...v.wheels, s: wv })} onChange={(wv) => setV({ wheels: { ...v.wheels, s: wv } })} />
+              <Wheel label={t("wheel_midtones", "Stredy")} value={v.wheels.m} onLive={(wv) => sendLive(undefined, { ...v.wheels, m: wv })} onChange={(wv) => setV({ wheels: { ...v.wheels, m: wv } })} />
+              <Wheel label={t("wheel_highlights", "Svetlá")} value={v.wheels.h} onLive={(wv) => sendLive(undefined, { ...v.wheels, h: wv })} onChange={(wv) => setV({ wheels: { ...v.wheels, h: wv } })} />
             </div>
             <span style={{ fontSize: 10, opacity: 0.5, textAlign: "center" }}>
               {t("wheel_hint", "ťahaj bodku · dvojklik = reset kolieska")}
@@ -948,16 +919,16 @@ function ToolPanel() {
             <button
               className="w-full px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
               onClick={() => {
+                if (!v.curves && !wheelsActive(v.wheels) && !v.style) return;
                 const st = store.getState();
-                if (!st.curves && !wheelsActive(st.wheels) && !st.activeStyle) return;
                 const id = `custom_${Date.now()}`;
                 const name = `${t("custom_grade_prefix", "Úprava")} ${st.presets.length + 1}`;
                 const preset = {
                   id,
                   name,
-                  style: st.activeStyle || mkStyle(0, 0, 0, 100, 100, 100),
-                  curves: st.curves ? st.curves.map((pt) => [...pt]) : undefined,
-                  wheels: wheelsActive(st.wheels) ? { s: [...st.wheels.s], m: [...st.wheels.m], h: [...st.wheels.h] } : undefined,
+                  style: v.style || mkStyle(0, 0, 0, 100, 100, 100),
+                  curves: v.curves ? v.curves.map((pt) => [...pt]) : undefined,
+                  wheels: wheelsActive(v.wheels) ? { s: [...v.wheels.s], m: [...v.wheels.m], h: [...v.wheels.h] } : undefined,
                 };
                 let thumb = null;
                 try { if (st.baseThumb) thumb = makeThumb(st.baseThumb, preset.style, preset.curves || null, preset.wheels || null); } catch {}
@@ -986,7 +957,7 @@ function ToolPanel() {
       </button>
 
       {/* Rollovateľný zoznam filtrov v sekciách */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
+      <div style={{ paddingRight: 2 }}>
         <Section
           title={t("custom_filters", "Vlastné filtre")}
           count={s.presets.length}
@@ -998,28 +969,27 @@ function ToolPanel() {
               {t("no_custom", "Zatiaľ žiadne — vytvor si vlastný z fotky tlačidlom vyššie.")}
             </p>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
               {s.presets.map(card)}
             </div>
           )}
         </Section>
-
         <Section
           title={t("builtin_filters", "Vstavané filtre")}
           count={BUILTIN_PRESETS.length}
           open={s.openBuiltin}
           onToggle={() => store.setState({ openBuiltin: !s.openBuiltin })}
         >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
             {BUILTIN_PRESETS.map(card)}
           </div>
         </Section>
       </div>
 
-      {(s.activeStyle || s.curves || wheelsActive(s.wheels)) && (
+      {(v.style || v.curves || wheelsActive(v.wheels)) && (
         <button
           className="w-full mt-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
-          onClick={() => store.setState({ activeStyle: null, activePresetId: null, activePresetName: null, curves: null, wheels: { s: [0, 0], m: [0, 0], h: [0, 0] } })}
+          onClick={() => setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } })}
         >
           ✕ {t("clear_style", "Zrušiť všetko")}
         </button>
@@ -1032,9 +1002,45 @@ function ToolPanel() {
 // Registrácia + info karta pre tab modulu
 // ---------------------------------------------------------------------------
 
-if (api.registerEditorPanel) {
-  api.registerEditorPanel(ToolPanel);
-}
+// ---------------------------------------------------------------------------
+// Deklaratívna registrácia — krok zásobníka skladá buildStep z hodnôt
+// custom poľa „grade" (rovnaká matematika ako doteraz: buildChain…).
+// ---------------------------------------------------------------------------
+
+api.registerTool({
+  icon: "🎨",
+  labelKey: "title",
+  fields: [{ id: "grade", type: "custom", component: FiltersField }],
+  buildStep(values, ctx) {
+    if (!ctx.mediaPath) return null;
+    const v = values.grade;
+    if (!v) return null;
+    const style = v.style ?? null;
+    const intensity = typeof v.intensity === "number" ? v.intensity : 80;
+    const curves = v.curves ?? null;
+    const wheels = v.wheels ?? null;
+    const has = style || curves || wheelsActive(wheels);
+    if (!has) return null;
+    const chain = buildChain(style, intensity, curves, wheels);
+    if (!chain) return null;
+    const name = v.presetId
+      ? presetName({ id: v.presetId, nameKey: String(v.presetId).startsWith("builtin_") ? `style_${String(v.presetId).slice(8)}` : undefined, name: v.presetName })
+      : t("grade_only", "Farebná úprava");
+    const extras = `${curves ? " · krivky" : ""}${wheelsActive(wheels) ? " · kolieska" : ""}`;
+    const label = `🎨 ${name}${style ? ` ${intensity}%` : ""}${v.skyOnly ? (v.aiMask ? " · AI obloha" : " · obloha") : ""}${extras}`;
+    if (!v.skyOnly) {
+      return { label, vf: chain };
+    }
+    if (!v.aiMask) {
+      return { label, graph: skyGraphLuma(chain) };
+    }
+    if (v.maskPath && v.maskFor === ctx.mediaPath) {
+      // foto aj video — maska videa je cachovaný súbor na zdrojovom fps (krok 45)
+      return { label, graph: skyGraphAi(chain), inputs: [v.maskPath] };
+    }
+    return null; // maska sa počíta / nie je podporovaná
+  },
+});
 
 function FiltersInfo() {
   return (

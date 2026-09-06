@@ -1,0 +1,18 @@
+{
+  "id": "skyframe.portret",
+  "name": "Portrét",
+  "version": "3.0.0",
+  "author": "SkyFrame Community",
+  "description": "Portrétové úpravy — jemnosť pleti, teplota, vyostrenie. Deklaratívny nástroj Editora: hodnoty sa ukladajú v session, krok sa kombinuje s ostatnými do jedného výstupu.",
+  "icon": "🧑",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [
+    "editor_tool"
+  ],
+  "min_core_version": "3.4.0"
+}

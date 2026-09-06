@@ -1,13 +1,18 @@
-// ../../merger-build/react-shim.js
+// ../framesbuild/react-shim.js
 var R = window.React;
-var react_shim_default = R;
 var useState = R.useState;
 var useEffect = R.useEffect;
-var useMemo = R.useMemo;
 var useRef = R.useRef;
+var useMemo = R.useMemo;
 var useCallback = R.useCallback;
-var useSyncExternalStore = R.useSyncExternalStore;
+var useReducer = R.useReducer;
+var useContext = R.useContext;
+var createContext = R.createContext;
 var Fragment = R.Fragment;
+var useSyncExternalStore = R.useSyncExternalStore;
+var useLayoutEffect = R.useLayoutEffect;
+var forwardRef = R.forwardRef;
+var react_shim_default = R;
 
 // src/index.jsx
 var api = window.SkyFrame;
@@ -45,20 +50,8 @@ var BUILTIN_PRESETS = [
   builtin("arctic", -0.06, 0.02, 0.12, 104, 106, 100)
 ];
 var initialState = {
-  media: null,
-  // {path, kind} z editora
-  activeStyle: null,
-  // {channels, css}
-  activePresetId: null,
-  intensity: 80,
-  skyOnly: false,
-  aiMask: false,
   aiStatus: null,
   // {licensed, runtimeInstalled, modelInstalled} | null
-  maskPath: "",
-  // cesta k AI maske pre aktuálne médium
-  maskFor: "",
-  // pre ktoré médium je maska
   maskLoading: false,
   maskProgress: -1,
   // progres výpočtu AI masky videa (-1 = nič)
@@ -74,13 +67,27 @@ var initialState = {
   // rozbalená sekcia vlastných filtrov
   openBuiltin: false,
   // rozbalená sekcia vstavaných filtrov
-  curves: null,
-  // [[x,y],...] | null (master krivka)
-  wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },
-  // tieň/stredy/svetlá [dx,dy]
   openGrade: false
   // rozbalená sekcia kriviek a koliesok
 };
+var DEFAULT_GRADE = {
+  style: null,
+  // {channels, css} | null
+  presetId: null,
+  presetName: null,
+  intensity: 80,
+  skyOnly: false,
+  aiMask: false,
+  maskPath: "",
+  // cesta k AI maske pre aktuálne médium
+  maskFor: "",
+  // pre ktoré médium je maska
+  curves: null,
+  // [[x,y],...] | null (master krivka)
+  wheels: { s: [0, 0], m: [0, 0], h: [0, 0] }
+  // tieň/stredy/svetlá [dx,dy]
+};
+var NEUTRAL_WHEELS = { s: [0, 0], m: [0, 0], h: [0, 0] };
 var state = { ...initialState };
 var listeners = /* @__PURE__ */ new Set();
 var store = {
@@ -534,21 +541,17 @@ function Wheel({ value, onChange, label, onLive }) {
     }
   ), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.7 } }, label));
 }
-function ToolPanel() {
+function FiltersField({ value, onChange, ctx }) {
   const s = useStore();
+  const v = { ...DEFAULT_GRADE, ...value ?? {} };
+  const setV = (patch) => onChange({ ...v, ...patch });
+  const media = ctx?.mediaPath ? { path: ctx.mediaPath, kind: ctx.kind } : null;
   const sendLive = (curves, wheels) => {
     if (!api.setEditorLiveFilter) return;
-    const st = store.getState();
-    api.setEditorLiveFilter(computeLiveSpec(st.activeStyle, st.intensity, curves ?? st.curves, wheels ?? st.wheels));
+    api.setEditorLiveFilter(computeLiveSpec(v.style, v.intensity, curves ?? v.curves, wheels ?? v.wheels));
   };
   useEffect2(() => {
     return () => api.setEditorLiveFilter?.(null);
-  }, []);
-  useEffect2(() => {
-    if (api.getEditorMedia) store.setState({ media: api.getEditorMedia() });
-    if (api.onEditorMedia) {
-      return api.onEditorMedia((media) => store.setState({ media }));
-    }
   }, []);
   useEffect2(() => {
     (async () => {
@@ -596,57 +599,39 @@ function ToolPanel() {
     store.setState({ thumbs: next });
   }, [s.baseThumb, s.presets]);
   useEffect2(() => {
-    if (!s.aiMask || !s.media || s.media.kind !== "photo") return;
-    if (s.maskFor === s.media.path && s.maskPath) return;
+    if (!v.aiMask || !media || media.kind !== "photo") return;
+    if (v.maskFor === media.path && v.maskPath) return;
     let dead = false;
     store.setState({ maskLoading: true });
     (async () => {
       try {
-        const path = await api.invoke("ai_sky_mask_file", { input: s.media.path });
-        if (!dead) store.setState({ maskPath: path, maskFor: s.media.path, maskLoading: false });
+        const path = await api.invoke("ai_sky_mask_file", { input: media.path });
+        if (!dead) {
+          setV({ maskPath: path, maskFor: media.path });
+          store.setState({ maskLoading: false });
+        }
       } catch (e) {
-        if (!dead) store.setState({ maskLoading: false, maskPath: "", maskFor: "" });
+        if (!dead) {
+          store.setState({ maskLoading: false });
+          setV({ maskPath: "", maskFor: "" });
+        }
         console.error("[filtre] ai maska:", e);
       }
     })();
     return () => {
       dead = true;
     };
-  }, [s.aiMask, s.media, s.maskFor, s.maskPath]);
-  useEffect2(() => {
-    if (!api.setEditorStep) return;
-    const timer = setTimeout(() => {
-      const st = store.getState();
-      const chain = st.activeStyle || st.curves || wheelsActive(st.wheels) ? buildChain(st.activeStyle, st.intensity, st.curves, st.wheels) : "";
-      if (!st.media || !chain) {
-        api.setEditorStep(null);
-        return;
-      }
-      const name = st.activePresetId ? presetName({ id: st.activePresetId, nameKey: st.activePresetId.startsWith("builtin_") ? `style_${st.activePresetId.slice(8)}` : void 0, name: st.activePresetName }) : t("grade_only", "Farebn\xE1 \xFAprava");
-      const extras = `${st.curves ? " \xB7 krivky" : ""}${wheelsActive(st.wheels) ? " \xB7 kolieska" : ""}`;
-      const label = `\u{1F3A8} ${name}${st.activeStyle ? ` ${st.intensity}%` : ""}${st.skyOnly ? st.aiMask ? " \xB7 AI obloha" : " \xB7 obloha" : ""}${extras}`;
-      if (!st.skyOnly) {
-        api.setEditorStep({ label, vf: chain });
-      } else if (!st.aiMask) {
-        api.setEditorStep({ label, graph: skyGraphLuma(chain) });
-      } else if (st.maskPath && st.maskFor === st.media.path) {
-        api.setEditorStep({ label, graph: skyGraphAi(chain), inputs: [st.maskPath] });
-      } else {
-        api.setEditorStep(null);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [s.activeStyle, s.intensity, s.skyOnly, s.aiMask, s.media, s.maskPath, s.maskFor, s.curves, s.wheels]);
+  }, [v.aiMask, media?.path]);
   const pick = (p) => {
-    if (s.activePresetId === p.id) {
-      store.setState({ activeStyle: null, activePresetId: null, activePresetName: null, curves: null, wheels: { s: [0, 0], m: [0, 0], h: [0, 0] } });
+    if (v.presetId === p.id) {
+      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } });
     } else {
-      store.setState({
-        activeStyle: p.style,
-        activePresetId: p.id,
-        activePresetName: p.name || null,
+      setV({
+        style: p.style,
+        presetId: p.id,
+        presetName: p.name || null,
         curves: p.curves ? p.curves.map((pt) => [...pt]) : null,
-        wheels: p.wheels ? { s: [...p.wheels.s || [0, 0]], m: [...p.wheels.m || [0, 0]], h: [...p.wheels.h || [0, 0]] } : { s: [0, 0], m: [0, 0], h: [0, 0] }
+        wheels: p.wheels ? { s: [...p.wheels.s || [0, 0]], m: [...p.wheels.m || [0, 0]], h: [...p.wheels.h || [0, 0]] } : { ...NEUTRAL_WHEELS }
       });
     }
   };
@@ -678,18 +663,15 @@ function ToolPanel() {
   };
   const removePreset = (id) => {
     const presets = store.getState().presets.filter((p) => p.id !== id);
-    const patch = { presets };
-    if (s.activePresetId === id) {
-      patch.activeStyle = null;
-      patch.activePresetId = null;
-      patch.activePresetName = null;
+    store.setState({ presets });
+    if (v.presetId === id) {
+      setV({ style: null, presetId: null, presetName: null });
     }
-    store.setState(patch);
     savePresets(presets);
   };
   const ai = s.aiStatus;
   const card = (p) => {
-    const active = s.activePresetId === p.id;
+    const active = v.presetId === p.id;
     const thumb = s.thumbs[p.id];
     return /* @__PURE__ */ react_shim_default.createElement("div", { key: p.id, style: { position: "relative" } }, /* @__PURE__ */ react_shim_default.createElement(
       "button",
@@ -738,41 +720,41 @@ function ToolPanel() {
       "\u2715"
     ));
   };
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { padding: 12, display: "flex", flexDirection: "column", height: "100%", minHeight: 0 } }, !s.media && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 12, opacity: 0.7, marginBottom: 12 } }, t("tool_no_media", "V Editore nie je otvoren\xFD \u017Eiadny s\xFAbor.")), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8, marginBottom: 4 } }, /* @__PURE__ */ react_shim_default.createElement("span", null, t("intensity", "Intenzita")), /* @__PURE__ */ react_shim_default.createElement("span", null, s.intensity, " %")), /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", minHeight: 0 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8, marginBottom: 4 } }, /* @__PURE__ */ react_shim_default.createElement("span", null, t("intensity", "Intenzita")), /* @__PURE__ */ react_shim_default.createElement("span", null, v.intensity, " %")), /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "range",
       min: 0,
       max: 100,
-      value: s.intensity,
-      onChange: (e) => store.setState({ intensity: parseInt(e.target.value, 10) }),
+      value: v.intensity,
+      onChange: (e) => setV({ intensity: parseInt(e.target.value, 10) }),
       style: { width: "100%" }
     }
   )), /* @__PURE__ */ react_shim_default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 8, cursor: "pointer" } }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: s.skyOnly,
-      onChange: (e) => store.setState({ skyOnly: e.target.checked })
+      checked: v.skyOnly,
+      onChange: (e) => setV({ skyOnly: e.target.checked })
     }
-  ), "\u2601\uFE0F ", t("sky_only", "Len svetl\xE9 partie (obloha)")), s.skyOnly && /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginLeft: 4, marginBottom: 8 } }, /* @__PURE__ */ react_shim_default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" } }, /* @__PURE__ */ react_shim_default.createElement(
+  ), "\u2601\uFE0F ", t("sky_only", "Len svetl\xE9 partie (obloha)")), v.skyOnly && /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginLeft: 4, marginBottom: 8 } }, /* @__PURE__ */ react_shim_default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" } }, /* @__PURE__ */ react_shim_default.createElement(
     "input",
     {
       type: "checkbox",
-      checked: s.aiMask,
+      checked: v.aiMask,
       disabled: !ai?.licensed,
-      onChange: (e) => store.setState({ aiMask: e.target.checked })
+      onChange: (e) => setV({ aiMask: e.target.checked })
     }
-  ), "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)")), s.aiMask && s.media?.kind === "video" && s.maskFor === s.media.path && s.maskPath ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : s.aiMask && s.media?.kind === "video" ? /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskLoading ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : "") : /* @__PURE__ */ react_shim_default.createElement(
+  ), "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)")), v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : v.aiMask && media?.kind === "video" ? /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskLoading ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : "") : /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       className: "px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
       onClick: async () => {
-        const media = s.media;
-        if (!media) return;
+        const mpath = media?.path;
+        if (!mpath) return;
         store.setState({ maskLoading: true, maskProgress: 0 });
         try {
-          const jobId = await api.invoke("ai_sky_maskvideo_file", { input: media.path, maskFps: 3, moduleId: api.moduleId });
+          const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId });
           await new Promise((resolve) => {
             let un;
             api.listenJob(jobId, (job) => {
@@ -786,7 +768,8 @@ function ToolPanel() {
             });
           }).then((job) => {
             if (job.status === "done" && job.result) {
-              store.setState({ maskPath: job.result, maskFor: media.path, maskLoading: false, maskProgress: -1 });
+              setV({ maskPath: job.result, maskFor: mpath });
+              store.setState({ maskLoading: false, maskProgress: -1 });
             } else {
               store.setState({ maskLoading: false, maskProgress: -1 });
               if (job.status === "error") console.error("[filtre] ai maska videa:", job.message);
@@ -800,7 +783,7 @@ function ToolPanel() {
     },
     "\u{1F916} ",
     t("ai_video_prepare", "Pripravi\u0165 AI masku videa")
-  ), /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("ai_video_hint", "AI prebehne ka\u017Ed\xFA 3. sn\xEDmku, v\xFDsledok sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xFD."))) : null, s.aiMask && s.maskLoading && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("ai_video_hint", "AI prebehne ka\u017Ed\xFA 3. sn\xEDmku, v\xFDsledok sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xFD."))) : null, v.aiMask && s.maskLoading && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ openGrade: !s.openGrade }),
@@ -824,36 +807,36 @@ function ToolPanel() {
   ), s.openGrade && /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 6, display: "flex", flexDirection: "column", gap: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
     CurveEditor,
     {
-      points: s.curves || [[0, 0], [1, 1]],
+      points: v.curves || [[0, 0], [1, 1]],
       onLive: (pts) => sendLive(pts, void 0),
       onChange: (pts) => {
         const identity = pts.length === 2 && Math.abs(pts[0][1] - pts[0][0]) < 0.01 && Math.abs(pts[1][1] - pts[1][0]) < 0.01;
-        store.setState({ curves: identity ? null : pts });
+        setV({ curves: identity ? null : pts });
       }
     }
   ), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       className: "px-2 py-1 text-[11px] rounded bg-zinc-700 hover:bg-zinc-600",
-      onClick: () => store.setState({ curves: null })
+      onClick: () => setV({ curves: null })
     },
     "\u21BA ",
     t("curve_reset", "Reset krivky")
-  ), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.5, alignSelf: "center" } }, t("curve_hint", "klik = bod \xB7 dvojklik = zmaza\u0165"))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", justifyContent: "space-around" } }, /* @__PURE__ */ react_shim_default.createElement(Wheel, { label: t("wheel_shadows", "Tiene"), value: s.wheels.s, onLive: (v) => sendLive(void 0, { ...s.wheels, s: v }), onChange: (v) => store.setState({ wheels: { ...s.wheels, s: v } }) }), /* @__PURE__ */ react_shim_default.createElement(Wheel, { label: t("wheel_midtones", "Stredy"), value: s.wheels.m, onLive: (v) => sendLive(void 0, { ...s.wheels, m: v }), onChange: (v) => store.setState({ wheels: { ...s.wheels, m: v } }) }), /* @__PURE__ */ react_shim_default.createElement(Wheel, { label: t("wheel_highlights", "Svetl\xE1"), value: s.wheels.h, onLive: (v) => sendLive(void 0, { ...s.wheels, h: v }), onChange: (v) => store.setState({ wheels: { ...s.wheels, h: v } }) })), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.5, textAlign: "center" } }, t("wheel_hint", "\u0165ahaj bodku \xB7 dvojklik = reset kolieska")), /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.5, alignSelf: "center" } }, t("curve_hint", "klik = bod \xB7 dvojklik = zmaza\u0165"))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", justifyContent: "space-around" } }, /* @__PURE__ */ react_shim_default.createElement(Wheel, { label: t("wheel_shadows", "Tiene"), value: v.wheels.s, onLive: (wv) => sendLive(void 0, { ...v.wheels, s: wv }), onChange: (wv) => setV({ wheels: { ...v.wheels, s: wv } }) }), /* @__PURE__ */ react_shim_default.createElement(Wheel, { label: t("wheel_midtones", "Stredy"), value: v.wheels.m, onLive: (wv) => sendLive(void 0, { ...v.wheels, m: wv }), onChange: (wv) => setV({ wheels: { ...v.wheels, m: wv } }) }), /* @__PURE__ */ react_shim_default.createElement(Wheel, { label: t("wheel_highlights", "Svetl\xE1"), value: v.wheels.h, onLive: (wv) => sendLive(void 0, { ...v.wheels, h: wv }), onChange: (wv) => setV({ wheels: { ...v.wheels, h: wv } }) })), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.5, textAlign: "center" } }, t("wheel_hint", "\u0165ahaj bodku \xB7 dvojklik = reset kolieska")), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       className: "w-full px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
       onClick: () => {
+        if (!v.curves && !wheelsActive(v.wheels) && !v.style) return;
         const st = store.getState();
-        if (!st.curves && !wheelsActive(st.wheels) && !st.activeStyle) return;
         const id = `custom_${Date.now()}`;
         const name = `${t("custom_grade_prefix", "\xDAprava")} ${st.presets.length + 1}`;
         const preset = {
           id,
           name,
-          style: st.activeStyle || mkStyle(0, 0, 0, 100, 100, 100),
-          curves: st.curves ? st.curves.map((pt) => [...pt]) : void 0,
-          wheels: wheelsActive(st.wheels) ? { s: [...st.wheels.s], m: [...st.wheels.m], h: [...st.wheels.h] } : void 0
+          style: v.style || mkStyle(0, 0, 0, 100, 100, 100),
+          curves: v.curves ? v.curves.map((pt) => [...pt]) : void 0,
+          wheels: wheelsActive(v.wheels) ? { s: [...v.wheels.s], m: [...v.wheels.m], h: [...v.wheels.h] } : void 0
         };
         let thumb = null;
         try {
@@ -879,7 +862,7 @@ function ToolPanel() {
       disabled: s.photoBusy
     },
     s.photoBusy ? `\u23F3 ${t("photo_analyzing", "Analyzujem fotku\u2026")}` : `\u2795 ${t("add_from_photo", "Nov\xFD filter z fotky")}`
-  ), /* @__PURE__ */ react_shim_default.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 2 } }, /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ react_shim_default.createElement("div", { style: { paddingRight: 2 } }, /* @__PURE__ */ react_shim_default.createElement(
     Section,
     {
       title: t("custom_filters", "Vlastn\xE9 filtre"),
@@ -887,7 +870,7 @@ function ToolPanel() {
       open: s.openCustom,
       onToggle: () => store.setState({ openCustom: !s.openCustom })
     },
-    s.presets.length === 0 ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.6, margin: "4px 0 8px" } }, t("no_custom", "Zatia\u013E \u017Eiadne \u2014 vytvor si vlastn\xFD z fotky tla\u010Didlom vy\u0161\u0161ie.")) : /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, s.presets.map(card))
+    s.presets.length === 0 ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.6, margin: "4px 0 8px" } }, t("no_custom", "Zatia\u013E \u017Eiadne \u2014 vytvor si vlastn\xFD z fotky tla\u010Didlom vy\u0161\u0161ie.")) : /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, s.presets.map(card))
   ), /* @__PURE__ */ react_shim_default.createElement(
     Section,
     {
@@ -896,20 +879,48 @@ function ToolPanel() {
       open: s.openBuiltin,
       onToggle: () => store.setState({ openBuiltin: !s.openBuiltin })
     },
-    /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, BUILTIN_PRESETS.map(card))
-  )), (s.activeStyle || s.curves || wheelsActive(s.wheels)) && /* @__PURE__ */ react_shim_default.createElement(
+    /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } }, BUILTIN_PRESETS.map(card))
+  )), (v.style || v.curves || wheelsActive(v.wheels)) && /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       className: "w-full mt-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
-      onClick: () => store.setState({ activeStyle: null, activePresetId: null, activePresetName: null, curves: null, wheels: { s: [0, 0], m: [0, 0], h: [0, 0] } })
+      onClick: () => setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } })
     },
     "\u2715 ",
     t("clear_style", "Zru\u0161i\u0165 v\u0161etko")
   ));
 }
-if (api.registerEditorPanel) {
-  api.registerEditorPanel(ToolPanel);
-}
+api.registerTool({
+  icon: "\u{1F3A8}",
+  labelKey: "title",
+  fields: [{ id: "grade", type: "custom", component: FiltersField }],
+  buildStep(values, ctx) {
+    if (!ctx.mediaPath) return null;
+    const v = values.grade;
+    if (!v) return null;
+    const style = v.style ?? null;
+    const intensity = typeof v.intensity === "number" ? v.intensity : 80;
+    const curves = v.curves ?? null;
+    const wheels = v.wheels ?? null;
+    const has = style || curves || wheelsActive(wheels);
+    if (!has) return null;
+    const chain = buildChain(style, intensity, curves, wheels);
+    if (!chain) return null;
+    const name = v.presetId ? presetName({ id: v.presetId, nameKey: String(v.presetId).startsWith("builtin_") ? `style_${String(v.presetId).slice(8)}` : void 0, name: v.presetName }) : t("grade_only", "Farebn\xE1 \xFAprava");
+    const extras = `${curves ? " \xB7 krivky" : ""}${wheelsActive(wheels) ? " \xB7 kolieska" : ""}`;
+    const label = `\u{1F3A8} ${name}${style ? ` ${intensity}%` : ""}${v.skyOnly ? v.aiMask ? " \xB7 AI obloha" : " \xB7 obloha" : ""}${extras}`;
+    if (!v.skyOnly) {
+      return { label, vf: chain };
+    }
+    if (!v.aiMask) {
+      return { label, graph: skyGraphLuma(chain) };
+    }
+    if (v.maskPath && v.maskFor === ctx.mediaPath) {
+      return { label, graph: skyGraphAi(chain), inputs: [v.maskPath] };
+    }
+    return null;
+  }
+});
 function FiltersInfo() {
   return /* @__PURE__ */ react_shim_default.createElement("div", { className: "h-full flex items-center justify-center" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-center max-w-sm rounded-2xl border border-border bg-bg-card p-8" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-5xl mb-4" }, "\u{1F3A8}"), /* @__PURE__ */ react_shim_default.createElement("h2", { className: "text-lg font-semibold mb-2" }, t("title", "Filtre")), /* @__PURE__ */ react_shim_default.createElement("p", { className: "text-sm text-text-dim" }, t("editor_tool_info", "Tento modul je n\xE1stroj SkyFrame Editora. Otvor Editor (ikona \u{1F39B}\uFE0F v\u013Eavo), nahraj s\xFAbor a tento n\xE1stroj n\xE1jde\u0161 v pravom st\u013Apci."))));
 }
