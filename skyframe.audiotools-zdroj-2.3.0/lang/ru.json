@@ -18,5 +18,6 @@
   "music_mode_replace": "Заменить оригинальный звук",
   "music_volume": "Громкость музыки",
   "lbl_music_mix": "подложка",
-  "lbl_music_replace": "музыка вместо звука"
+  "lbl_music_replace": "музыка вместо звука",
+  "lbl_music_only": "только музыка (в источнике нет звука)"
 }

@@ -18,5 +18,6 @@
   "music_mode_replace": "Replace original audio",
   "music_volume": "Music volume",
   "lbl_music_mix": "music bed",
-  "lbl_music_replace": "music replaces audio"
+  "lbl_music_replace": "music replaces audio",
+  "lbl_music_only": "music only (source has no audio)"
 }

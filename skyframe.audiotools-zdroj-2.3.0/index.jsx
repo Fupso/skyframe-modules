@@ -40,6 +40,8 @@ api.registerTool({
   buildStep(values, ctx) {
     // fotky nemajú zvukovú stopu
     if (ctx.kind !== "video") return null;
+    // zdroj bez zvukovej stopy (dron): reťazec na pôvodnom zvuku nedáva zmysel
+    const hasAudio = ctx.hasAudio !== false;
 
     // reťazec úprav pôvodného zvuku
     const chain = [];
@@ -77,7 +79,7 @@ api.registerTool({
 
     const music = typeof values.musicPath === "string" && values.musicPath.trim() ? values.musicPath.trim() : null;
     if (!music) {
-      if (chain.length === 0) return null;
+      if (chain.length === 0 || !hasAudio) return null;
       return { label: `🔊 ${labels.join(", ")}`, af: chain.join(",") };
     }
 
@@ -92,6 +94,15 @@ api.registerTool({
       const extra = chain.length ? "," + chain.join(",") : "";
       const g = `[I0]${loop}${tail ? "," + tail : ""}${extra}[A_OUT]`;
       labels.push(t("lbl_music_replace", "hudba namiesto zvuku"));
+      return { label: `🔊 ${labels.join(", ")}`, agraph: g, aInputs: [music] };
+    }
+
+    if (!hasAudio) {
+      // zdroj nemá zvuk — mix by zlyhal ([0:a:0] neexistuje); hudba hrá samotná
+      const tail = ctx.duration > 0 ? `atrim=0:${ctx.duration.toFixed(3)}` : "";
+      const extra = chain.length ? "," + chain.join(",") : "";
+      const g = `[I0]${loop}${tail ? "," + tail : ""}${extra}[A_OUT]`;
+      labels.push(t("lbl_music_only", "hudba (zdroj bez zvuku)"));
       return { label: `🔊 ${labels.join(", ")}`, agraph: g, aInputs: [music] };
     }
 

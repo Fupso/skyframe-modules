@@ -18,5 +18,6 @@
   "music_mode_replace": "Nahradiť pôvodný zvuk",
   "music_volume": "Hlasitosť hudby",
   "lbl_music_mix": "podmaz",
-  "lbl_music_replace": "hudba namiesto zvuku"
+  "lbl_music_replace": "hudba namiesto zvuku",
+  "lbl_music_only": "hudba (zdroj bez zvuku)"
 }

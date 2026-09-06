@@ -18,5 +18,6 @@
   "music_mode_replace": "替换原声",
   "music_volume": "音乐音量",
   "lbl_music_mix": "背景音乐",
-  "lbl_music_replace": "音乐替换原声"
+  "lbl_music_replace": "音乐替换原声",
+  "lbl_music_only": "仅音乐（源无声）"
 }

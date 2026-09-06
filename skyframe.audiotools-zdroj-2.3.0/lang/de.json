@@ -18,5 +18,6 @@
   "music_mode_replace": "Originalton ersetzen",
   "music_volume": "Musiklautstärke",
   "lbl_music_mix": "Untermalung",
-  "lbl_music_replace": "Musik ersetzt Ton"
+  "lbl_music_replace": "Musik ersetzt Ton",
+  "lbl_music_only": "nur Musik (Quelle ohne Ton)"
 }
