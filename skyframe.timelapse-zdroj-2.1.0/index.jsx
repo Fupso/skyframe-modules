@@ -34,6 +34,16 @@ api.registerTool({
         { value: "mute", labelKey: "audio_mute" },
       ] },
   ],
+  // core podľa toho prepočíta ctx.duration nástrojov ZA časozberom
+  affectsDuration(values, sourceDuration) {
+    let f = Number(values.factor) || 1;
+    const hi = Number(values.factorHi) || 0;
+    if (hi > 1) f = Math.min(240, hi);
+    const tgt = Number(values.target) || 0;
+    if (tgt > 0 && sourceDuration > 0) f = Math.max(1, sourceDuration / tgt);
+    if (f <= 1.001) return 1;
+    return 1 / Math.min(240, f);
+  },
   buildStep(values, ctx) {
     if (ctx.kind !== "video") return null;
 

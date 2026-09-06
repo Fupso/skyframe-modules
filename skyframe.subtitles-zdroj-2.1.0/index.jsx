@@ -77,10 +77,16 @@ function parseTime(str) {
 
 // zapíše SRT cez core a potvrdí nové dáta do toolValues (autosave + rebuild kroku)
 let lastWrittenPath = ""; // čerstvosť: po reštarte appky sa SRT vždy regeneruje
-async function commit(onChange, value, segments) {
+let lastScale = 1;
+async function commit(onChange, value, segments, timeScale = 1) {
   try {
-    const srtPath = await api.invoke("write_temp_srt", { segments, previous: value?.srtPath ?? null });
+    // segmenty držíme v čase ZDROJA (editor ich tak ukazuje), do SRT idú
+    // škálované — subtitles filter ich kreslí na časovú os PO časozbere
+    const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
+    const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
+    const srtPath = await api.invoke("write_temp_srt", { segments: scaled, previous: value?.srtPath ?? null });
     lastWrittenPath = srtPath;
+    lastScale = ts;
     onChange({ segments, srtPath });
   } catch (e) {
     store.setState({ error: String(e) });
@@ -88,6 +94,7 @@ async function commit(onChange, value, segments) {
 }
 
 async function transcribe(ctx, onChange, value, lang) {
+  const ts = ctx?.timeScale > 0 ? ctx.timeScale : 1;
   if (!ctx.mediaPath) return;
   store.setState({ busy: true, progress: -1, busyLabel: "", error: "" });
   try {
@@ -114,7 +121,7 @@ async function transcribe(ctx, onChange, value, lang) {
       const data = JSON.parse(res.result);
       const segments = (data.segments ?? []).map((g) => ({ start: g.start, end: g.end, text: g.text }));
       store.setState({ busy: false });
-      await commit(onChange, value, segments);
+      await commit(onChange, value, segments, ts);
     } else if (res.status === "cancelled") {
       store.setState({ busy: false });
     } else {
@@ -141,6 +148,7 @@ const btnStyle = {
 const btnPrimary = { ...btnStyle, background: "#3b82f6", color: "#fff", fontWeight: 600 };
 
 function SubtitlesField({ value, onChange, values, ctx }) {
+  const timeScale = ctx?.timeScale > 0 ? ctx.timeScale : 1;
   const s = useStore();
   const segments = Array.isArray(value?.segments) ? value.segments : [];
 
@@ -153,21 +161,21 @@ function SubtitlesField({ value, onChange, values, ctx }) {
   // temp .srt neprežije reštart appky — obnovenú session preženieme cez
   // write_temp_srt znova, inak by export zlyhal na neexistujúcom súbore
   useEffect(() => {
-    if (segments.length > 0 && value?.srtPath !== lastWrittenPath) {
-      void commit(onChange, value, segments);
+    if (segments.length > 0 && (value?.srtPath !== lastWrittenPath || timeScale !== lastScale)) {
+      void commit(onChange, value, segments, timeScale);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [timeScale]);
 
   const upd = (i, patch) => {
     const next = segments.map((g, j) => (j === i ? { ...g, ...patch } : g));
-    commit(onChange, value, next);
+    commit(onChange, value, next, timeScale);
   };
-  const del = (i) => commit(onChange, value, segments.filter((_, j) => j !== i));
+  const del = (i) => commit(onChange, value, segments.filter((_, j) => j !== i), timeScale);
   const add = () => {
     const last = segments[segments.length - 1];
     const start = last ? last.end : 0;
-    commit(onChange, value, [...segments, { start, end: start + 2, text: "" }]);
+    commit(onChange, value, [...segments, { start, end: start + 2, text: "" }], timeScale);
   };
   const split = (i) => {
     const g = segments[i];
@@ -177,7 +185,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
     const a = { ...g, end: mid, text: words.slice(0, half).join(" ") || g.text };
     const b = { start: mid, end: g.end, text: words.slice(half).join(" ") };
     const next = [...segments.slice(0, i), a, b, ...segments.slice(i + 1)];
-    commit(onChange, value, next);
+    commit(onChange, value, next, timeScale);
   };
 
   return (
