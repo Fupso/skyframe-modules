@@ -1,0 +1,13 @@
+{
+  "title": "Frame-Extraktor",
+  "time": "Frame-Position",
+  "format": "Format",
+  "fmt_jpg": "JPG (kleinere Datei)",
+  "fmt_png": "PNG (verlustfrei)",
+  "capture": "📸 Frame speichern",
+  "capturing": "⏳ Speichern…",
+  "saved": "✅ Gespeichert: {p}",
+  "failed": "❌ {e}",
+  "hint": "Position mit dem Zeitleisten-Griff setzen — das Video springt dorthin. Gespeichert wird genau das sichtbare Bild (inkl. Filter und Schnitt).",
+  "tool_no_media": "Zuerst eine Datei im Editor öffnen."
+}

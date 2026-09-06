@@ -1,0 +1,18 @@
+{
+  "id": "skyframe.frames",
+  "name": "Extraktor snímok",
+  "version": "2.0.0",
+  "author": "SkyFrame Community",
+  "description": "Extrakcia snímky priamo v Editore — nastav pozíciu úchytom na časovej osi (s živým náhľadom), vyber formát a ulož presne tú snímku, ktorú vidíš (WYSIWYG, vrátane filtrov a strihu).",
+  "icon": "📸",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [
+    "editor_tool"
+  ],
+  "min_core_version": "3.5.0"
+}

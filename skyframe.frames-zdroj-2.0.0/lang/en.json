@@ -1,0 +1,13 @@
+{
+  "title": "Frame extractor",
+  "time": "Frame position",
+  "format": "Format",
+  "fmt_jpg": "JPG (smaller file)",
+  "fmt_png": "PNG (lossless)",
+  "capture": "📸 Save frame",
+  "capturing": "⏳ Saving…",
+  "saved": "✅ Saved: {p}",
+  "failed": "❌ {e}",
+  "hint": "Set the position with the timeline handle — the video scrubs to it. The saved frame is exactly what you see (filters and trim included).",
+  "tool_no_media": "Open a file in the Editor first."
+}
