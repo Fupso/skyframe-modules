@@ -1,8 +1,7 @@
-// skyframe.speedramp 1.0.0 — Rampa rýchlosti (nástroj Editora, krok 73)
-// Vybraná sekcia videa sa spomalí alebo zrýchli, zvyšok beží normálne —
-// klasický „speed ramp". Video aj zvuk sa rozdelia na 3 úseky (pred /
-// sekcia / po), sekcia dostane faktor a všetko sa zreťazí (concat),
-// takže zvuk ostáva v synchronizácii s obrazom.
+// skyframe.speedramp 1.1.0 — Rampa rýchlosti (nástroj Editora, krok 73)
+// Vybraná sekcia videa sa spomalí alebo zrýchli, zvyšok beží normálne.
+// Sekcia sa nastavuje DVOMA ÚCHYTMI na časovej osi (ako strih v cutteri)
+// + rýchlosť jazdcom. Zvuk sa prispôsobí automaticky (ostáva v sync).
 //
 // Technicky: filter_complex graf s placeholdermi [IN]/[OUT] (video) a
 // [A_IN]/[A_OUT] (zvuk). Prázdne úseky (sekcia na začiatku/konci) sa
@@ -25,10 +24,11 @@ function atempoChain(f) {
 // na výpočet násobku dĺžky (dostane len values + sourceDuration)
 let lastDur = 0;
 
-function segments(start, dur, D) {
+function segments(start, end, D) {
   // vráti zoznam úsekov {from, to, f} — f=1 je normálna rýchlosť
-  const T0 = Math.max(0, Math.min(start, D));
-  const T1 = Math.max(T0, Math.min(start + dur, D));
+  let T0 = Math.max(0, Math.min(start, D));
+  let T1 = Math.max(0, Math.min(end, D));
+  if (T1 < T0) { const tmp = T0; T0 = T1; T1 = tmp; } // úchyty sa dajú prehodiť
   const segs = [];
   if (T0 > 0.01) segs.push({ from: 0, to: T0, f: 1 });
   if (T1 - T0 > 0.01) segs.push({ from: T0, to: T1, f: "ramp" });
@@ -41,8 +41,10 @@ api.registerTool({
   labelKey: "title",
   fields: [
     { id: "enabled", type: "checkbox", labelKey: "enabled", default: true },
-    { id: "start", type: "number", labelKey: "start", min: 0, step: 0.1, unit: "s", default: 0 },
-    { id: "duration", type: "number", labelKey: "duration", min: 0.1, step: 0.1, unit: "s", default: 2 },
+    // úchyty na spodnej časovej osi (ako strih) — klikni na nástroj ⏩ vľavo
+    // hore a ťahaj značky priamo pod prehrávačom
+    { id: "start", type: "time", labelKey: "start", min: 0, step: 0.1, unit: "s", default: 0 },
+    { id: "end", type: "time", labelKey: "end", min: 0, step: 0.1, unit: "s", default: 2 },
     { id: "factor", type: "slider", labelKey: "factor", min: 0.25, max: 4, step: 0.25, unit: "×", default: 0.5 },
     { id: "hint", type: "separator", labelKey: "hint" },
   ],
@@ -51,24 +53,20 @@ api.registerTool({
     const f = Number(values.factor) || 1;
     if (Math.abs(f - 1) < 0.001) return 1;
     const D = lastDur > 0 ? lastDur : 1;
-    const segs = segments(Number(values.start) || 0, Number(values.duration) || 0, D);
+    const segs = segments(Number(values.start) || 0, Number(values.end) || 0, D);
     let nd = 0;
     for (const s of segs) nd += (s.to - s.from) / (s.f === "ramp" ? f : 1);
     return D > 0 ? nd / D : 1;
   },
   buildStep(values, ctx) {
     if (!ctx.mediaPath || ctx.kind !== "video") return null;
-    if (values.enabled === false) { lastDur = ctx.duration; return null; }
-    const f = Number(values.factor) || 1;
     const D = ctx.duration > 0 ? ctx.duration : ctx.sourceDuration;
     lastDur = D;
+    if (values.enabled === false) return null;
+    const f = Number(values.factor) || 1;
     if (Math.abs(f - 1) < 0.001 || D <= 0) return null;
-    const start = Number(values.start) || 0;
-    const dur = Number(values.duration) || 0;
-    if (dur < 0.05 || start >= D - 0.01) return null;
-
-    const segs = segments(start, dur, D);
-    if (segs.length === 0) return null;
+    const segs = segments(Number(values.start) || 0, Number(values.end) || 0, D);
+    if (segs.length === 0 || !segs.some((s) => s.f === "ramp")) return null;
 
     // ── Video graf ──
     const vParts = [`[IN]split=${segs.length}${segs.map((_, i) => `[rs${i}]`).join("")}`];
@@ -100,10 +98,9 @@ api.registerTool({
     }
 
     const dir = f < 1 ? t("slow", "spomalenie") : t("fast", "zrýchlenie");
-    const T0 = Math.max(0, Math.min(start, D));
-    const T1 = Math.max(T0, Math.min(start + dur, D));
+    const ramp = segs.find((s) => s.f === "ramp");
     return {
-      label: `⏩ ${f}× (${dir}) ${T0.toFixed(1)}–${T1.toFixed(1)} s`,
+      label: `⏩ ${f}× (${dir}) ${ramp.from.toFixed(1)}–${ramp.to.toFixed(1)} s`,
       graph,
       agraph,
     };
