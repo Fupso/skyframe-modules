@@ -1,0 +1,14 @@
+{
+  "title": "Stabilizácia",
+  "enabled": "Zapnutá",
+  "rx": "Max. posun vodorovne",
+  "ry": "Max. posun zvislo",
+  "blocksize": "Jemnosť analýzy",
+  "blocksize_hint": "Menšie bloky = presnejšia analýza, ale pomalší render.",
+  "edge": "Vyplnenie hrán",
+  "edge_mirror": "Zrkadlenie (najprirodzenejšie)",
+  "edge_blank": "Čierna",
+  "edge_original": "Pôvodné pixely",
+  "edge_clamp": "Opakovať okraj",
+  "tool_no_media": "Najprv otvor video v Editore."
+}

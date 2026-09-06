@@ -1,0 +1,14 @@
+{
+  "title": "Stabilisierung",
+  "enabled": "Aktiviert",
+  "rx": "Max. horizontale Verschiebung",
+  "ry": "Max. vertikale Verschiebung",
+  "blocksize": "Analysefeinheit",
+  "blocksize_hint": "Kleinere Blöcke = genauere Analyse, aber langsameres Rendern.",
+  "edge": "Randfüllung",
+  "edge_mirror": "Spiegeln (am natürlichsten)",
+  "edge_blank": "Schwarz",
+  "edge_original": "Original-Pixel",
+  "edge_clamp": "Rand wiederholen",
+  "tool_no_media": "Zuerst ein Video im Editor öffnen."
+}

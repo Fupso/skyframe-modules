@@ -1,0 +1,13 @@
+{
+  "id": "skyframe.stabil",
+  "name": "Stabilizácia",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "Vyhladí trasúce sa zábery (ruka, vietor, chôdza) — nastaviteľný rozsah kompenzácie a vyplnenie hrán, WYSIWYG náhľad priamo v Editore.",
+  "icon": "🎥",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [],
+  "provides": ["editor_tool"],
+  "min_core_version": "3.5.0"
+}

@@ -1,0 +1,14 @@
+{
+  "title": "视频稳定",
+  "enabled": "启用",
+  "rx": "最大水平位移",
+  "ry": "最大垂直位移",
+  "blocksize": "分析精度",
+  "blocksize_hint": "块越小分析越精确，但渲染更慢。",
+  "edge": "边缘填充",
+  "edge_mirror": "镜像（最自然）",
+  "edge_blank": "黑色",
+  "edge_original": "原始像素",
+  "edge_clamp": "重复边缘",
+  "tool_no_media": "请先在编辑器中打开视频。"
+}

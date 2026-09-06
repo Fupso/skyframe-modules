@@ -1,0 +1,14 @@
+{
+  "title": "Stabilization",
+  "enabled": "Enabled",
+  "rx": "Max horizontal shift",
+  "ry": "Max vertical shift",
+  "blocksize": "Analysis fineness",
+  "blocksize_hint": "Smaller blocks = more accurate analysis, but slower render.",
+  "edge": "Edge fill",
+  "edge_mirror": "Mirror (most natural)",
+  "edge_blank": "Black",
+  "edge_original": "Original pixels",
+  "edge_clamp": "Repeat edge",
+  "tool_no_media": "Open a video in the Editor first."
+}
