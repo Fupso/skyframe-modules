@@ -1,4 +1,4 @@
-// skyframe.vstyles 2.0.0 — Štýly videa (nástroj SkyFrame Editora)
+// skyframe.vstyles 2.3.2 — Štýly videa (nástroj SkyFrame Editora)
 // AI štýl = prvý krok v zásobníku Editora (per-frame ONNX v core), potom
 // ostatné nástroje (Filtre, Portrét). Náhľad aj export robí Editor.
 
@@ -91,6 +91,11 @@ function ToolPanel() {
   const isVideo = s.media && s.media.kind === "video";
 
   useEffect(() => {
+    // krok 72/2.3.2: ak používateľ zmazal náš krok zo zásobníka ✕, nerob
+    // „vzkriesenie" — vynuluj výber a nepíš krok nanovo
+    if (api.getEditorSteps && !api.getEditorSteps().includes("skyframe.vstyles") && store.getState().selected) {
+      store.setState({ selected: null });
+    }
     refreshInstalled();
     api.invoke("ai_status", {})
       .then((st) => store.setState({ aiOk: !!(st && (st.licensed || st.trial)) }))
