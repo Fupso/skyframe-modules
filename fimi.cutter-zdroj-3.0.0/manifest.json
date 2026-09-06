@@ -1,0 +1,15 @@
+{
+  "id": "fimi.cutter",
+  "name": "Strihač",
+  "version": "3.0.0",
+  "author": "SkyFrame Community",
+  "description": "Strih videa priamo v Editore — úchyty začiatku a konca na časovej osi, v jednom exporte s filtrami, zvukom a ďalšími nástrojmi.",
+  "icon": "✂️",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [],
+  "provides": [
+    "editor_tool"
+  ],
+  "min_core_version": "3.4.0"
+}
