@@ -24,5 +24,9 @@
   "lang_en": "英语",
   "lang_de": "德语",
   "lang_ru": "俄语",
-  "lang_zh": "中文"
+  "lang_zh": "中文",
+  "srt_save": "保存 SRT",
+  "srt_saving": "⏳ 保存中…",
+  "srt_saved": "✅ 已保存：{p}",
+  "srt_failed": "❌ {e}"
 }

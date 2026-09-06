@@ -9,6 +9,11 @@ import React from "react";
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
 const { useState, useEffect, useSyncExternalStore } = React;
+const tt = (k, f, vars) => {
+  let str = t(k, f);
+  for (const [kk, vv] of Object.entries(vars ?? {})) str = str.replaceAll(`{${kk}}`, String(vv));
+  return str;
+};
 
 const MODELS = ["base", "small", "medium", "large-turbo", "large"];
 
@@ -167,6 +172,25 @@ function SubtitlesField({ value, onChange, values, ctx }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeScale]);
 
+  const [saveMsg, setSaveMsg] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  // uloží titulky ako .srt do výstupného priečinka — časy ŠKÁLOVANÉ,
+  // aby sedeli na exportované video (rovnako ako vypálené titulky)
+  const saveSrt = async () => {
+    if (segments.length === 0 || saveBusy) return;
+    setSaveBusy(true); setSaveMsg("");
+    try {
+      const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
+      const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
+      const p = await api.invoke("export_srt", { segments: scaled, outputName: null });
+      setSaveMsg(tt("srt_saved", "✅ Uložené: {p}", { p }));
+    } catch (e) {
+      setSaveMsg(tt("srt_failed", "❌ {e}", { e: String(e) }));
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
   const upd = (i, patch) => {
     const next = segments.map((g, j) => (j === i ? { ...g, ...patch } : g));
     commit(onChange, value, next, timeScale);
@@ -245,8 +269,13 @@ function SubtitlesField({ value, onChange, values, ctx }) {
           ))}
         </div>
       )}
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button style={btnStyle} onClick={add}>＋ {t("add", "Pridať titulok")}</button>
+        {segments.length > 0 && (
+          <button style={btnStyle} disabled={saveBusy} onClick={() => { void saveSrt(); }}>
+            {saveBusy ? t("srt_saving", "⏳ Ukladám…") : `💾 ${t("srt_save", "Uložiť SRT")}`}
+          </button>
+        )}
         {segments.length > 0 && (
           <button
             style={{ ...btnStyle, color: "#f87171" }}
@@ -256,6 +285,9 @@ function SubtitlesField({ value, onChange, values, ctx }) {
           </button>
         )}
       </div>
+      {saveMsg && (
+        <div style={{ fontSize: 10, color: saveMsg.startsWith("✅") ? "#34d399" : "#f87171", wordBreak: "break-all" }}>{saveMsg}</div>
+      )}
     </div>
   );
 }

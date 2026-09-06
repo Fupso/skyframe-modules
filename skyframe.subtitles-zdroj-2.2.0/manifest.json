@@ -1,7 +1,7 @@
 {
   "id": "skyframe.subtitles",
   "name": "Titulky",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "SkyFrame Community",
   "description": "AI prepis reči do titulkov (Whisper, offline) priamo v Editore — editor segmentov, štýl titulkov a vypálenie v jednom exporte s ostatnými úpravami.",
   "icon": "💬",
