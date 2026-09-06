@@ -1,39 +1,18 @@
-var __defProp = Object.defineProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-
 // ../framesbuild/react-shim.js
-var react_shim_exports = {};
-__export(react_shim_exports, {
-  Fragment: () => Fragment,
-  createContext: () => createContext,
-  default: () => react_shim_default,
-  forwardRef: () => forwardRef,
-  useCallback: () => useCallback,
-  useContext: () => useContext,
-  useEffect: () => useEffect,
-  useLayoutEffect: () => useLayoutEffect,
-  useMemo: () => useMemo,
-  useReducer: () => useReducer,
-  useRef: () => useRef,
-  useState: () => useState,
-  useSyncExternalStore: () => useSyncExternalStore
-});
-var useState = useState;
-var useEffect = useEffect;
-var useRef = useRef;
-var useMemo = useMemo;
-var useCallback = useCallback;
-var useReducer = useReducer;
-var useContext = useContext;
-var createContext = createContext;
-var Fragment = Fragment;
-var useSyncExternalStore = useSyncExternalStore;
-var useLayoutEffect = useLayoutEffect;
-var forwardRef = forwardRef;
-var react_shim_default = react_shim_exports;
+var R = window.React;
+var useState = R.useState;
+var useEffect = R.useEffect;
+var useRef = R.useRef;
+var useMemo = R.useMemo;
+var useCallback = R.useCallback;
+var useReducer = R.useReducer;
+var useContext = R.useContext;
+var createContext = R.createContext;
+var Fragment = R.Fragment;
+var useSyncExternalStore = R.useSyncExternalStore;
+var useLayoutEffect = R.useLayoutEffect;
+var forwardRef = R.forwardRef;
+var react_shim_default = R;
 
 // src/index.jsx
 var api = window.SkyFrame;
