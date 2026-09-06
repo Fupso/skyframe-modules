@@ -1,0 +1,15 @@
+{
+  "title": "裁剪与旋转",
+  "rotate": "旋转",
+  "zoom": "缩放",
+  "pos_x": "水平移动",
+  "pos_y": "垂直移动",
+  "aspect": "宽高比",
+  "aspect_orig": "原始",
+  "aspect_169": "16:9 (YouTube)",
+  "aspect_916": "9:16 (Reels/TikTok)",
+  "aspect_11": "1:1（方形）",
+  "aspect_43": "4:3",
+  "aspect_34": "3:4（竖版）",
+  "tool_no_media": "请先在编辑器中打开文件。"
+}

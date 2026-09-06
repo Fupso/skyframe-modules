@@ -1,0 +1,15 @@
+{
+  "title": "Orezanie",
+  "rotate": "Rotácia",
+  "zoom": "Priblíženie",
+  "pos_x": "Posun vodorovne",
+  "pos_y": "Posun zvislo",
+  "aspect": "Pomer strán",
+  "aspect_orig": "Pôvodný",
+  "aspect_169": "16:9 (YouTube)",
+  "aspect_916": "9:16 (Reels/TikTok)",
+  "aspect_11": "1:1 (štvorec)",
+  "aspect_43": "4:3",
+  "aspect_34": "3:4 (portrét)",
+  "tool_no_media": "Najprv otvor súbor v Editore."
+}

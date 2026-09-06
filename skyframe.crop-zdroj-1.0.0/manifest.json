@@ -1,0 +1,15 @@
+{
+  "id": "skyframe.crop",
+  "name": "Orezanie",
+  "version": "1.0.0",
+  "author": "SkyFrame Community",
+  "description": "Rotácia (narovnanie horizontu) a výrez obrazu — zoom, posun, pomer strán (16:9, 9:16…). Nástroj Editora: kombinuje sa s ostatnými úpravami do jedného výstupu.",
+  "icon": "🔲",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [],
+  "provides": [
+    "editor_tool"
+  ],
+  "min_core_version": "3.4.0"
+}

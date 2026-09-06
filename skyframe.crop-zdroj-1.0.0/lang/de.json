@@ -1,0 +1,15 @@
+{
+  "title": "Zuschnitt & Drehung",
+  "rotate": "Drehung",
+  "zoom": "Zoom",
+  "pos_x": "Horizontal verschieben",
+  "pos_y": "Vertikal verschieben",
+  "aspect": "Seitenverhältnis",
+  "aspect_orig": "Original",
+  "aspect_169": "16:9 (YouTube)",
+  "aspect_916": "9:16 (Reels/TikTok)",
+  "aspect_11": "1:1 (Quadrat)",
+  "aspect_43": "4:3",
+  "aspect_34": "3:4 (Porträt)",
+  "tool_no_media": "Zuerst eine Datei im Editor öffnen."
+}

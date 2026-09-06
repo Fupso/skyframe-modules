@@ -1,0 +1,15 @@
+{
+  "title": "Crop & rotate",
+  "rotate": "Rotation",
+  "zoom": "Zoom",
+  "pos_x": "Horizontal shift",
+  "pos_y": "Vertical shift",
+  "aspect": "Aspect ratio",
+  "aspect_orig": "Original",
+  "aspect_169": "16:9 (YouTube)",
+  "aspect_916": "9:16 (Reels/TikTok)",
+  "aspect_11": "1:1 (square)",
+  "aspect_43": "4:3",
+  "aspect_34": "3:4 (portrait)",
+  "tool_no_media": "Open a file in the Editor first."
+}
