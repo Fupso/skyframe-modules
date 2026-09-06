@@ -1,0 +1,11 @@
+{
+  "title": "Geschwindigkeitsrampe",
+  "enabled": "Aktiviert",
+  "start": "Abschnittsbeginn",
+  "duration": "Abschnittslänge",
+  "factor": "Abschnittstempo",
+  "hint": "Unter 1× verlangsamt, über 1× beschleunigt. Der Ton wird automatisch angepasst.",
+  "slow": "verlangsamen",
+  "fast": "beschleunigen",
+  "tool_no_media": "Zuerst ein Video im Editor öffnen."
+}

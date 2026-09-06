@@ -1,0 +1,11 @@
+{
+  "title": "Rampa rýchlosti",
+  "enabled": "Zapnutá",
+  "start": "Začiatok sekcie",
+  "duration": "Dĺžka sekcie",
+  "factor": "Rýchlosť sekcie",
+  "hint": "Pod 1× je spomalenie, nad 1× zrýchlenie. Zvuk sa prispôsobí automaticky.",
+  "slow": "spomalenie",
+  "fast": "zrýchlenie",
+  "tool_no_media": "Najprv otvor video v Editore."
+}
