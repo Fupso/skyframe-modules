@@ -1,0 +1,18 @@
+{
+  "id": "skyframe.timelapse",
+  "name": "Časozber",
+  "version": "2.0.0",
+  "author": "SkyFrame Community",
+  "description": "Časozber priamo v Editore — zrýchlenie 1–240× ako krok v zásobníku úprav, v jednom exporte spolu s ostatnými nástrojmi.",
+  "icon": "⏩",
+  "entry_point": "index.js",
+  "enabled": true,
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [
+    "editor_tool"
+  ],
+  "min_core_version": "3.4.0"
+}

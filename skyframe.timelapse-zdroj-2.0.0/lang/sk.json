@@ -1,0 +1,11 @@
+{
+  "title": "Časozber",
+  "speed": "Zrýchlenie",
+  "speed_hi": "Vlastné zrýchlenie (nad 60×)",
+  "target_len": "Cieľová dĺžka (0 = vypnuté)",
+  "audio_mode": "Zvuk",
+  "audio_speed": "Zrýchlený zvuk",
+  "audio_mute": "Bez zvuku",
+  "lbl_mute": "bez zvuku",
+  "stub": "Nástroj Časozber nájdeš v Editore — v pravom paneli nástrojov."
+}

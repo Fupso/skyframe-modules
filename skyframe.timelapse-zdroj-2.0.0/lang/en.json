@@ -1,0 +1,11 @@
+{
+  "title": "Timelapse",
+  "speed": "Speed-up",
+  "speed_hi": "Custom speed (above 60×)",
+  "target_len": "Target length (0 = off)",
+  "audio_mode": "Audio",
+  "audio_speed": "Sped-up audio",
+  "audio_mute": "No audio",
+  "lbl_mute": "muted",
+  "stub": "The Timelapse tool lives in the Editor — in the right-hand tool panel."
+}

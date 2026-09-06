@@ -1,0 +1,11 @@
+{
+  "title": "Zeitraffer",
+  "speed": "Beschleunigung",
+  "speed_hi": "Eigene Beschleunigung (über 60×)",
+  "target_len": "Ziellänge (0 = aus)",
+  "audio_mode": "Ton",
+  "audio_speed": "Beschleunigter Ton",
+  "audio_mute": "Ohne Ton",
+  "lbl_mute": "stumm",
+  "stub": "Das Zeitraffer-Werkzeug findest du im Editor — im rechten Werkzeugpanel."
+}

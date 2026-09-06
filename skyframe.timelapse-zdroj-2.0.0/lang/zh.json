@@ -1,0 +1,11 @@
+{
+  "title": "延时摄影",
+  "speed": "加速倍数",
+  "speed_hi": "自定义加速（60倍以上）",
+  "target_len": "目标时长（0 = 关闭）",
+  "audio_mode": "音频",
+  "audio_speed": "加速音频",
+  "audio_mute": "无音频",
+  "lbl_mute": "静音",
+  "stub": "“延时摄影”工具位于编辑器中 — 在右侧工具面板。"
+}
