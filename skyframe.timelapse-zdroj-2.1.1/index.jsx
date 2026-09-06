@@ -66,6 +66,10 @@ api.registerTool({
       ? `⏩ ${fr}× (≈ ${fmt(outLen)})`
       : `⏩ ${fr}×`;
 
+    if (ctx.hasAudio === false) {
+      // zdroj nemá zvukovú stopu (dron) — af by zhodil render
+      return { label, vf: `setpts=PTS/${f.toFixed(6)}` };
+    }
     if (values.audio === "mute") {
       // zvuk úplne vypnúť (jednoduché a bezpečné pri každej dĺžke)
       return { label: `${label} · ${t("lbl_mute", "bez zvuku")}`, vf: `setpts=PTS/${f.toFixed(6)}`, af: "volume=0" };
