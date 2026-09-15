@@ -32,12 +32,14 @@
   "lang_cs": "Czech",
   "merge": "Merge with next",
   "insert_after": "Insert after this",
-  "shift_back": "Shift −0.5 s",
-  "shift_fwd": "Shift +0.5 s",
+  "shift_back": "Shift −0.5 s (following ones move too)",
+  "shift_fwd": "Shift +0.5 s (following ones move too)",
   "seg_dur": "Duration",
   "seg_start": "Start",
   "seg_end": "End",
   "segments_below": "✏️ Edit segments ({n}) in the bottom panel ⬇",
   "seg_count": "{n} subtitles",
-  "no_segments": "No subtitles yet — transcribe speech with the button in the right panel, or add one manually."
+  "no_segments": "No subtitles yet — transcribe speech with the button in the right panel, or add one manually.",
+  "sort_fix": "Sort & fix",
+  "sort_fix_hint": "Sorts subtitles by time and removes overlaps"
 }

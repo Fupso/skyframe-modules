@@ -32,12 +32,14 @@
   "lang_cs": "Čeština",
   "merge": "Spojiť s ďalším",
   "insert_after": "Vložiť nový za tento",
-  "shift_back": "Posunúť −0,5 s",
-  "shift_fwd": "Posunúť +0,5 s",
+  "shift_back": "Posunúť −0,5 s (nasledujúce idú tiež)",
+  "shift_fwd": "Posunúť +0,5 s (nasledujúce idú tiež)",
   "seg_dur": "Trvanie",
   "seg_start": "Začiatok",
   "seg_end": "Koniec",
   "segments_below": "✏️ Segmenty ({n}) upravuješ v spodnom paneli ⬇",
   "seg_count": "{n} titulkov",
-  "no_segments": "Zatiaľ žiadne titulky — prepíš reč tlačidlom v pravom paneli, alebo pridaj titulok ručne."
+  "no_segments": "Zatiaľ žiadne titulky — prepíš reč tlačidlom v pravom paneli, alebo pridaj titulok ručne.",
+  "sort_fix": "Zoradiť a opraviť",
+  "sort_fix_hint": "Zotriedi titulky podľa času a odstráni prekrytie"
 }

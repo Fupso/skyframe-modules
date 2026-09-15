@@ -32,12 +32,14 @@
   "lang_cs": "捷克语",
   "merge": "与下一条合并",
   "insert_after": "在此后插入",
-  "shift_back": "前移 −0.5 秒",
-  "shift_fwd": "后移 +0.5 秒",
+  "shift_back": "前移 0.5 秒（后续字幕一并移动）",
+  "shift_fwd": "后移 0.5 秒（后续字幕一并移动）",
   "seg_dur": "时长",
   "seg_start": "开始",
   "seg_end": "结束",
   "segments_below": "✏️ 在底部面板中编辑片段（{n}）⬇",
   "seg_count": "{n} 条字幕",
-  "no_segments": "暂无字幕——使用右侧面板中的按钮转录，或手动添加。"
+  "no_segments": "暂无字幕——使用右侧面板中的按钮转录，或手动添加。",
+  "sort_fix": "排序并修复",
+  "sort_fix_hint": "按时间排序字幕并消除重叠"
 }

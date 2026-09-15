@@ -186,17 +186,54 @@ function makeSegOps(segments, value, onChange, timeScale) {
     const end = nxt ? Math.min(nxt.start, start + 2) : start + 2;
     commit(onChange, value, [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)], timeScale);
   };
-  // posun celého segmentu — ohraničený susedmi, aby sa titulky neprekrývali
+  // hranice podľa ČASU (zoznam nemusí byť zoradený): najneskorší koniec
+  // segmentu končiacoho predo mnou a najskorší začiatok segmentu za mnou
+  const timeBounds = (i) => {
+    const g = segments[i];
+    let minStart = 0, maxEnd = Infinity;
+    for (let j = 0; j < segments.length; j++) {
+      if (j === i) continue;
+      const o = segments[j];
+      if (o.end <= g.start + 1e-6) minStart = Math.max(minStart, o.end);
+      if (o.start >= g.end - 1e-6) maxEnd = Math.min(maxEnd, o.start);
+    }
+    return { minStart, maxEnd };
+  };
+  // posun celého segmentu s ripple efektom — dopredu tlačí všetky
+  // nasledujúce (v čase), dozadu sa zastaví o predchádzajúci
   const shift = (i, delta) => {
     const g = segments[i];
-    const prev = segments[i - 1], nxt = segments[i + 1];
+    const before = segments.filter((o, j) => j !== i && o.end <= g.start + 1e-6);
+    const minStart = before.length ? Math.max(...before.map((o) => o.end)) : 0;
     const len = g.end - g.start;
-    const minStart = prev ? prev.end : 0;
-    const maxEnd = nxt ? nxt.start : Infinity;
-    const start = Math.min(Math.max(minStart, g.start + delta), Math.max(minStart, maxEnd - len));
-    upd(i, { start, end: start + len });
+    const start = Math.max(minStart, g.start + delta);
+    const res = segments.map((s2, j) => (j === i ? { ...s2, start, end: start + len } : { ...s2 }));
+    // reťazovo posuň segmenty, ktoré boli v čase za posúvaným
+    const afterIdx = segments
+      .map((o, j) => ({ o, j }))
+      .filter((x) => x.j !== i && x.o.start >= g.end - 1e-6)
+      .sort((a, b) => a.o.start - b.o.start)
+      .map((x) => x.j);
+    let prevEnd = start + len;
+    for (const j of afterIdx) {
+      if (res[j].start < prevEnd - 1e-6) {
+        const push = prevEnd - res[j].start;
+        res[j] = { ...res[j], start: res[j].start + push, end: res[j].end + push };
+      }
+      prevEnd = Math.max(prevEnd, res[j].end);
+    }
+    commit(onChange, value, res, timeScale);
   };
-  return { upd, del, add, split, merge, insertAfter, shift };
+  // zotriedi podľa času a ustrihne konce presahujúce do ďalšieho titulku
+  const sortFix = () => {
+    const sorted = [...segments].sort((a, b) => a.start - b.start);
+    for (let k = 0; k < sorted.length - 1; k++) {
+      if (sorted[k].end > sorted[k + 1].start) sorted[k] = { ...sorted[k], end: sorted[k + 1].start };
+    }
+    const fixed = sorted.map((g) => (g.end <= g.start ? { ...g, end: g.start + 0.1 } : g));
+    commit(onChange, value, fixed, timeScale);
+  };
+  return { upd, del, add, split, merge, insertAfter, shift, sortFix, timeBounds };
 }
 
 // Pravý panel — prepis (model + tlačidlo). Zoznam segmentov žije v spodnom
@@ -290,6 +327,11 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
       <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, opacity: 0.6 }}>💬 {tt("seg_count", "{n} titulkov", { n: segments.length })}</span>
         <button style={miniBtn} onClick={ops.add}>＋ {t("add", "Pridať titulok")}</button>
+        {segments.length > 1 && (
+          <button style={miniBtn} title={t("sort_fix_hint", "Zotriedi titulky podľa času a odstráni prekrytie")} onClick={ops.sortFix}>
+            ⇅ {t("sort_fix", "Zoradiť a opraviť")}
+          </button>
+        )}
         {segments.length > 0 && (
           <button style={miniBtn} disabled={saveBusy} onClick={() => { void saveSrt(); }}>
             {saveBusy ? t("srt_saving", "⏳ Ukladám…") : `💾 ${t("srt_save", "Uložiť SRT")}`}
@@ -305,7 +347,7 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
         )}
       </div>
       {/* zoznam segmentov — jeden riadok = jeden titulok */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 8px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "4px 8px" }}>
         {segments.length === 0 && (
           <div style={{ fontSize: 11, opacity: 0.5, padding: 8 }}>
             {t("no_segments", "Zatiaľ žiadne titulky — prepíš reč tlačidlom v pravom paneli, alebo pridaj titulok ručne.")}
@@ -319,7 +361,7 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
               defaultValue={fmtTime(g.start)}
               key={`s${i}-${g.start}`}
               title={t("seg_start", "Začiatok")}
-              onBlur={(e) => { let v = parseTime(e.target.value); const prev = segments[i - 1]; if (v != null && prev && v < prev.end) v = prev.end; if (v != null && v < g.end) ops.upd(i, { start: v }); else e.target.value = fmtTime(g.start); }}
+              onBlur={(e) => { let v = parseTime(e.target.value); if (v != null) { const b = ops.timeBounds(i); if (v < b.minStart) v = b.minStart; } if (v != null && v < g.end) ops.upd(i, { start: v }); else e.target.value = fmtTime(g.start); }}
             />
             <span style={{ fontSize: 10, opacity: 0.5, flexShrink: 0 }}>→</span>
             <input
@@ -327,7 +369,7 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
               defaultValue={fmtTime(g.end)}
               key={`e${i}-${g.end}`}
               title={t("seg_end", "Koniec")}
-              onBlur={(e) => { let v = parseTime(e.target.value); const nxt = segments[i + 1]; if (v != null && nxt && v > nxt.start) v = nxt.start; if (v != null && v > g.start) ops.upd(i, { end: v }); else e.target.value = fmtTime(g.end); }}
+              onBlur={(e) => { let v = parseTime(e.target.value); if (v != null) { const b = ops.timeBounds(i); if (v > b.maxEnd) v = b.maxEnd; } if (v != null && v > g.start) ops.upd(i, { end: v }); else e.target.value = fmtTime(g.end); }}
             />
             <span style={{ fontSize: 10, opacity: 0.45, flexShrink: 0, width: 34 }}>{(g.end - g.start).toFixed(1)}s</span>
             <input
