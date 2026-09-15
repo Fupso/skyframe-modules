@@ -1,5 +1,6 @@
-// ../framesbuild/react-shim.js
+// ../../framesbuild-shim.js
 var R = window.React;
+var framesbuild_shim_default = R;
 var useState = R.useState;
 var useEffect = R.useEffect;
 var useRef = R.useRef;
@@ -7,17 +8,13 @@ var useMemo = R.useMemo;
 var useCallback = R.useCallback;
 var useReducer = R.useReducer;
 var useContext = R.useContext;
-var createContext = R.createContext;
+var createElement = R.createElement;
 var Fragment = R.Fragment;
-var useSyncExternalStore = R.useSyncExternalStore;
-var useLayoutEffect = R.useLayoutEffect;
-var forwardRef = R.forwardRef;
-var react_shim_default = R;
 
 // index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
-var { useState: useState2, useEffect: useEffect2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
+var { useState: useState2, useEffect: useEffect2, useSyncExternalStore } = framesbuild_shim_default;
 var tt = (k, f, vars) => {
   let str = t(k, f);
   for (const [kk, vv] of Object.entries(vars ?? {})) str = str.replaceAll(`{${kk}}`, String(vv));
@@ -27,7 +24,7 @@ var MODELS = ["base", "small", "medium", "large-turbo", "large"];
 var initialState = {
   status: null,
   // {runtime_installed, models: []}
-  model: "small",
+  model: "large-turbo",
   busy: false,
   busyLabel: "",
   progress: -1,
@@ -47,7 +44,7 @@ var store = {
   }
 };
 function useStore() {
-  return useSyncExternalStore2(store.subscribe, store.getState);
+  return useSyncExternalStore(store.subscribe, store.getState);
 }
 function watchJob(jobId, onProgress) {
   return new Promise((resolve) => {
@@ -204,7 +201,28 @@ function SubtitlesField({ value, onChange, values, ctx }) {
     const next = [...segments.slice(0, i), a, b, ...segments.slice(i + 1)];
     commit(onChange, value, next, timeScale);
   };
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement(
+  const merge = (i) => {
+    if (i >= segments.length - 1) return;
+    const a = segments[i], b = segments[i + 1];
+    const joined = { start: a.start, end: b.end, text: (a.text + " " + b.text).trim() };
+    const next = [...segments.slice(0, i), joined, ...segments.slice(i + 2)];
+    commit(onChange, value, next, timeScale);
+  };
+  const insertAfter = (i) => {
+    const g = segments[i];
+    const nxt = segments[i + 1];
+    const start = g.end;
+    const end = nxt ? Math.min(nxt.start, start + 2) : start + 2;
+    const next = [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)];
+    commit(onChange, value, next, timeScale);
+  };
+  const shift = (i, delta) => {
+    const g = segments[i];
+    const start = Math.max(0, g.start + delta);
+    const end = Math.max(start + 0.1, g.end + delta);
+    upd(i, { start, end });
+  };
+  return /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ framesbuild_shim_default.createElement(
     "select",
     {
       value: s.model,
@@ -214,9 +232,9 @@ function SubtitlesField({ value, onChange, values, ctx }) {
     },
     MODELS.map((m) => {
       const inst = (s.status?.models ?? []).includes(m);
-      return /* @__PURE__ */ react_shim_default.createElement("option", { key: m, value: m }, m, inst ? " \u2713" : "");
+      return /* @__PURE__ */ framesbuild_shim_default.createElement("option", { key: m, value: m }, m, inst ? " \u2713" : "");
     })
-  ), /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ framesbuild_shim_default.createElement(
     "button",
     {
       style: btnPrimary,
@@ -224,7 +242,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
       onClick: () => void transcribe(ctx, onChange, value, values?.lang ?? "auto")
     },
     s.busy ? `${s.busyLabel || t("transcribing", "Prepisujem\u2026")} ${s.progress >= 0 ? Math.round(s.progress) + " %" : ""}` : t("transcribe", "\u{1F399}\uFE0F Prep\xEDsa\u0165 re\u010D")
-  )), s.error && /* @__PURE__ */ react_shim_default.createElement("div", { style: { color: "#f87171", fontSize: 11 } }, s.error), segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { style: { maxHeight: 220, overflowY: "auto", paddingRight: 2 } }, segments.map((g, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i, style: rowStyle }, /* @__PURE__ */ react_shim_default.createElement(
+  )), s.error && /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { color: "#f87171", fontSize: 11 } }, s.error), segments.length > 0 && /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { maxHeight: 300, overflowY: "auto", paddingRight: 2 } }, segments.map((g, i) => /* @__PURE__ */ framesbuild_shim_default.createElement("div", { key: i, style: rowStyle }, /* @__PURE__ */ framesbuild_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.45, width: 22, textAlign: "right", flexShrink: 0 }, title: `${t("seg_dur", "Trvanie")}: ${(g.end - g.start).toFixed(1)} s` }, i + 1), /* @__PURE__ */ framesbuild_shim_default.createElement(
     "input",
     {
       style: { ...inpStyle, width: 58, fontFamily: "monospace" },
@@ -236,7 +254,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
         else e.target.value = fmtTime(g.start);
       }
     }
-  ), /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ framesbuild_shim_default.createElement(
     "input",
     {
       style: { ...inpStyle, width: 58, fontFamily: "monospace" },
@@ -248,7 +266,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
         else e.target.value = fmtTime(g.end);
       }
     }
-  ), /* @__PURE__ */ react_shim_default.createElement(
+  ), /* @__PURE__ */ framesbuild_shim_default.createElement(
     "input",
     {
       style: { ...inpStyle, flex: 1, minWidth: 0 },
@@ -259,16 +277,16 @@ function SubtitlesField({ value, onChange, values, ctx }) {
         if (e.target.value !== g.text) upd(i, { text: e.target.value });
       }
     }
-  ), /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, title: t("split", "Rozdeli\u0165"), onClick: () => split(i) }, "\u2702"), /* @__PURE__ */ react_shim_default.createElement("button", { style: { ...btnStyle, color: "#f87171" }, title: t("del", "Zmaza\u0165"), onClick: () => del(i) }, "\u2715")))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, onClick: add }, "\uFF0B ", t("add", "Prida\u0165 titulok")), segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("button", { style: btnStyle, disabled: saveBusy, onClick: () => {
+  ), /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: { ...btnStyle, padding: "3px 5px" }, title: t("shift_back", "Posun\xFA\u0165 \u22120,5 s"), onClick: () => shift(i, -0.5) }, "\u25C2"), /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: { ...btnStyle, padding: "3px 5px" }, title: t("shift_fwd", "Posun\xFA\u0165 +0,5 s"), onClick: () => shift(i, 0.5) }, "\u25B8"), /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: btnStyle, title: t("split", "Rozdeli\u0165"), onClick: () => split(i) }, "\u2702"), /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: btnStyle, title: t("insert_after", "Vlo\u017Ei\u0165 za"), onClick: () => insertAfter(i) }, "\uFF0B"), i < segments.length - 1 && /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: btnStyle, title: t("merge", "Spoji\u0165 s \u010Fal\u0161\xEDm"), onClick: () => merge(i) }, "\u21F6"), /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: { ...btnStyle, color: "#f87171" }, title: t("del", "Zmaza\u0165"), onClick: () => del(i) }, "\u2715")))), /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: btnStyle, onClick: add }, "\uFF0B ", t("add", "Prida\u0165 titulok")), segments.length > 0 && /* @__PURE__ */ framesbuild_shim_default.createElement("button", { style: btnStyle, disabled: saveBusy, onClick: () => {
     void saveSrt();
-  } }, saveBusy ? t("srt_saving", "\u23F3 Uklad\xE1m\u2026") : `\u{1F4BE} ${t("srt_save", "Ulo\u017Ei\u0165 SRT")}`), segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement(
+  } }, saveBusy ? t("srt_saving", "\u23F3 Uklad\xE1m\u2026") : `\u{1F4BE} ${t("srt_save", "Ulo\u017Ei\u0165 SRT")}`), segments.length > 0 && /* @__PURE__ */ framesbuild_shim_default.createElement(
     "button",
     {
       style: { ...btnStyle, color: "#f87171" },
       onClick: () => onChange(null)
     },
     t("clear", "Zru\u0161i\u0165 titulky")
-  )), saveMsg && /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 10, color: saveMsg.startsWith("\u2705") ? "#34d399" : "#f87171", wordBreak: "break-all" } }, saveMsg));
+  )), saveMsg && /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { fontSize: 10, color: saveMsg.startsWith("\u2705") ? "#34d399" : "#f87171", wordBreak: "break-all" } }, saveMsg));
 }
 var clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 api.registerTool({
@@ -283,6 +301,7 @@ api.registerTool({
       options: [
         { value: "auto", labelKey: "lang_auto" },
         { value: "sk", labelKey: "lang_sk" },
+        { value: "cs", labelKey: "lang_cs" },
         { value: "en", labelKey: "lang_en" },
         { value: "de", labelKey: "lang_de" },
         { value: "ru", labelKey: "lang_ru" },
@@ -318,7 +337,7 @@ api.registerTool({
   }
 });
 function SubtitlesToolStub() {
-  return react_shim_default.createElement(
+  return framesbuild_shim_default.createElement(
     "div",
     { style: { padding: 24, opacity: 0.7, fontSize: 13 } },
     t("stub", "N\xE1stroj Titulky n\xE1jde\u0161 v Editore \u2014 v pravom paneli n\xE1strojov.")

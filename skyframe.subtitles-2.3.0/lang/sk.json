@@ -28,5 +28,11 @@
   "srt_save": "Uložiť SRT",
   "srt_saving": "⏳ Ukladám…",
   "srt_saved": "✅ Uložené: {p}",
-  "srt_failed": "❌ {e}"
+  "srt_failed": "❌ {e}",
+  "lang_cs": "Čeština",
+  "merge": "Spojiť s ďalším",
+  "insert_after": "Vložiť nový za tento",
+  "shift_back": "Posunúť −0,5 s",
+  "shift_fwd": "Posunúť +0,5 s",
+  "seg_dur": "Trvanie"
 }

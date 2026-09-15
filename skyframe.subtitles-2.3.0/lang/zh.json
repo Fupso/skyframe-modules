@@ -28,5 +28,11 @@
   "srt_save": "保存 SRT",
   "srt_saving": "⏳ 保存中…",
   "srt_saved": "✅ 已保存：{p}",
-  "srt_failed": "❌ {e}"
+  "srt_failed": "❌ {e}",
+  "lang_cs": "捷克语",
+  "merge": "与下一条合并",
+  "insert_after": "在此后插入",
+  "shift_back": "前移 −0.5 秒",
+  "shift_fwd": "后移 +0.5 秒",
+  "seg_dur": "时长"
 }

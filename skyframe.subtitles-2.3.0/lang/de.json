@@ -28,5 +28,11 @@
   "srt_save": "SRT speichern",
   "srt_saving": "⏳ Speichern…",
   "srt_saved": "✅ Gespeichert: {p}",
-  "srt_failed": "❌ {e}"
+  "srt_failed": "❌ {e}",
+  "lang_cs": "Tschechisch",
+  "merge": "Mit nächstem verbinden",
+  "insert_after": "Danach einfügen",
+  "shift_back": "−0,5 s verschieben",
+  "shift_fwd": "+0,5 s verschieben",
+  "seg_dur": "Dauer"
 }
