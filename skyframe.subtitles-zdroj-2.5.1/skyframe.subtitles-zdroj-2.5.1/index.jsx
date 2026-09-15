@@ -474,7 +474,8 @@ api.registerTool({
     const raw = values.preset && PRESETS[values.preset] ? { ...values, ...PRESETS[values.preset] } : values;
     const fs = clamp(Number(raw.fontSize) || 20, 8, 72);
     const margin = clamp(Number(raw.marginV) || 0, 0, 400);
-    const align = raw.position === "top" ? 8 : raw.position === "middle" ? 5 : 2;
+    // ffmpeg force_style číta Alignment v STAROM SSA číslovaní: 2=dole, 10=stred, 6=hore
+    const align = raw.position === "top" ? 6 : raw.position === "middle" ? 10 : 2;
     const isBox = raw.background === "box";
     const outline = clamp(Number(raw.outline ?? 2) || 0, 0, 6);
     const shadow = clamp(Number(raw.shadow) || 0, 0, 4);
