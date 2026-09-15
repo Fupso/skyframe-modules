@@ -34,5 +34,10 @@
   "insert_after": "Insert after this",
   "shift_back": "Shift −0.5 s",
   "shift_fwd": "Shift +0.5 s",
-  "seg_dur": "Duration"
+  "seg_dur": "Duration",
+  "seg_start": "Start",
+  "seg_end": "End",
+  "segments_below": "✏️ Edit segments ({n}) in the bottom panel ⬇",
+  "seg_count": "{n} subtitles",
+  "no_segments": "No subtitles yet — transcribe speech with the button in the right panel, or add one manually."
 }

@@ -152,6 +152,51 @@ const btnStyle = {
 };
 const btnPrimary = { ...btnStyle, background: "#3b82f6", color: "#fff", fontWeight: 600 };
 
+// Operácie nad segmentami — zdieľané pravým panelom aj spodným panelom
+function makeSegOps(segments, value, onChange, timeScale) {
+  const upd = (i, patch) => {
+    const next = segments.map((g, j) => (j === i ? { ...g, ...patch } : g));
+    commit(onChange, value, next, timeScale);
+  };
+  const del = (i) => commit(onChange, value, segments.filter((_, j) => j !== i), timeScale);
+  const add = () => {
+    const last = segments[segments.length - 1];
+    const start = last ? last.end : 0;
+    commit(onChange, value, [...segments, { start, end: start + 2, text: "" }], timeScale);
+  };
+  const split = (i) => {
+    const g = segments[i];
+    const mid = (g.start + g.end) / 2;
+    const words = g.text.split(" ");
+    const half = Math.ceil(words.length / 2);
+    const a = { ...g, end: mid, text: words.slice(0, half).join(" ") || g.text };
+    const b = { start: mid, end: g.end, text: words.slice(half).join(" ") };
+    commit(onChange, value, [...segments.slice(0, i), a, b, ...segments.slice(i + 1)], timeScale);
+  };
+  const merge = (i) => {
+    if (i >= segments.length - 1) return;
+    const a = segments[i], b = segments[i + 1];
+    const joined = { start: a.start, end: b.end, text: (a.text + " " + b.text).trim() };
+    commit(onChange, value, [...segments.slice(0, i), joined, ...segments.slice(i + 2)], timeScale);
+  };
+  const insertAfter = (i) => {
+    const g = segments[i];
+    const nxt = segments[i + 1];
+    const start = g.end;
+    const end = nxt ? Math.min(nxt.start, start + 2) : start + 2;
+    commit(onChange, value, [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)], timeScale);
+  };
+  const shift = (i, delta) => {
+    const g = segments[i];
+    const start = Math.max(0, g.start + delta);
+    const end = Math.max(start + 0.1, g.end + delta);
+    upd(i, { start, end });
+  };
+  return { upd, del, add, split, merge, insertAfter, shift };
+}
+
+// Pravý panel — prepis (model + tlačidlo). Zoznam segmentov žije v spodnom
+// paneli (krok 76f), kde má celú šírku okna.
 function SubtitlesField({ value, onChange, values, ctx }) {
   const timeScale = ctx?.timeScale > 0 ? ctx.timeScale : 1;
   const s = useStore();
@@ -172,73 +217,8 @@ function SubtitlesField({ value, onChange, values, ctx }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeScale]);
 
-  const [saveMsg, setSaveMsg] = useState("");
-  const [saveBusy, setSaveBusy] = useState(false);
-  // uloží titulky ako .srt do výstupného priečinka — časy ŠKÁLOVANÉ,
-  // aby sedeli na exportované video (rovnako ako vypálené titulky)
-  const saveSrt = async () => {
-    if (segments.length === 0 || saveBusy) return;
-    setSaveBusy(true); setSaveMsg("");
-    try {
-      const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
-      const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
-      const p = await api.invoke("export_srt", { segments: scaled, outputName: null });
-      setSaveMsg(tt("srt_saved", "✅ Uložené: {p}", { p }));
-    } catch (e) {
-      setSaveMsg(tt("srt_failed", "❌ {e}", { e: String(e) }));
-    } finally {
-      setSaveBusy(false);
-    }
-  };
-
-  const upd = (i, patch) => {
-    const next = segments.map((g, j) => (j === i ? { ...g, ...patch } : g));
-    commit(onChange, value, next, timeScale);
-  };
-  const del = (i) => commit(onChange, value, segments.filter((_, j) => j !== i), timeScale);
-  const add = () => {
-    const last = segments[segments.length - 1];
-    const start = last ? last.end : 0;
-    commit(onChange, value, [...segments, { start, end: start + 2, text: "" }], timeScale);
-  };
-  const split = (i) => {
-    const g = segments[i];
-    const mid = (g.start + g.end) / 2;
-    const words = g.text.split(" ");
-    const half = Math.ceil(words.length / 2);
-    const a = { ...g, end: mid, text: words.slice(0, half).join(" ") || g.text };
-    const b = { start: mid, end: g.end, text: words.slice(half).join(" ") };
-    const next = [...segments.slice(0, i), a, b, ...segments.slice(i + 1)];
-    commit(onChange, value, next, timeScale);
-  };
-  // krok 76d — spojiť s nasledujúcim segmentom
-  const merge = (i) => {
-    if (i >= segments.length - 1) return;
-    const a = segments[i], b = segments[i + 1];
-    const joined = { start: a.start, end: b.end, text: (a.text + " " + b.text).trim() };
-    const next = [...segments.slice(0, i), joined, ...segments.slice(i + 2)];
-    commit(onChange, value, next, timeScale);
-  };
-  // krok 76d — vložiť nový segment za tento
-  const insertAfter = (i) => {
-    const g = segments[i];
-    const nxt = segments[i + 1];
-    const start = g.end;
-    const end = nxt ? Math.min(nxt.start, start + 2) : start + 2;
-    const next = [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)];
-    commit(onChange, value, next, timeScale);
-  };
-  // krok 76d — posun celého segmentu v čase
-  const shift = (i, delta) => {
-    const g = segments[i];
-    const start = Math.max(0, g.start + delta);
-    const end = Math.max(start + 0.1, g.end + delta);
-    upd(i, { start, end });
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* prepis */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <select
           value={s.model}
@@ -262,63 +242,108 @@ function SubtitlesField({ value, onChange, values, ctx }) {
         </button>
       </div>
       {s.error && <div style={{ color: "#f87171", fontSize: 11 }}>{s.error}</div>}
-
-      {/* segmenty */}
       {segments.length > 0 && (
-        <div style={{ maxHeight: 300, overflowY: "auto", paddingRight: 2 }}>
-          {segments.map((g, i) => (
-            <div key={i} style={rowStyle}>
-              <span style={{ fontSize: 10, opacity: 0.45, width: 22, textAlign: "right", flexShrink: 0 }} title={`${t("seg_dur", "Trvanie")}: ${(g.end - g.start).toFixed(1)} s`}>{i + 1}</span>
-              <input
-                style={{ ...inpStyle, width: 58, fontFamily: "monospace" }}
-                defaultValue={fmtTime(g.start)}
-                key={`s${i}-${g.start}`}
-                onBlur={(e) => { const v = parseTime(e.target.value); if (v != null && v < g.end) upd(i, { start: v }); else e.target.value = fmtTime(g.start); }}
-              />
-              <input
-                style={{ ...inpStyle, width: 58, fontFamily: "monospace" }}
-                defaultValue={fmtTime(g.end)}
-                key={`e${i}-${g.end}`}
-                onBlur={(e) => { const v = parseTime(e.target.value); if (v != null && v > g.start) upd(i, { end: v }); else e.target.value = fmtTime(g.end); }}
-              />
-              <input
-                style={{ ...inpStyle, flex: 1, minWidth: 0 }}
-                defaultValue={g.text}
-                key={`t${i}-${g.text}`}
-                placeholder={t("text_ph", "text titulku…")}
-                onBlur={(e) => { if (e.target.value !== g.text) upd(i, { text: e.target.value }); }}
-              />
-              <button style={{ ...btnStyle, padding: "3px 5px" }} title={t("shift_back", "Posunúť −0,5 s")} onClick={() => shift(i, -0.5)}>◂</button>
-              <button style={{ ...btnStyle, padding: "3px 5px" }} title={t("shift_fwd", "Posunúť +0,5 s")} onClick={() => shift(i, 0.5)}>▸</button>
-              <button style={btnStyle} title={t("split", "Rozdeliť")} onClick={() => split(i)}>✂</button>
-              <button style={btnStyle} title={t("insert_after", "Vložiť za")} onClick={() => insertAfter(i)}>＋</button>
-              {i < segments.length - 1 && (
-                <button style={btnStyle} title={t("merge", "Spojiť s ďalším")} onClick={() => merge(i)}>⇶</button>
-              )}
-              <button style={{ ...btnStyle, color: "#f87171" }} title={t("del", "Zmazať")} onClick={() => del(i)}>✕</button>
-            </div>
-          ))}
+        <div style={{ fontSize: 11, opacity: 0.6 }}>
+          {tt("segments_below", "✏️ Segmenty ({n}) upravuješ v spodnom paneli ⬇", { n: segments.length })}
         </div>
       )}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <button style={btnStyle} onClick={add}>＋ {t("add", "Pridať titulok")}</button>
+    </div>
+  );
+}
+
+// Spodný panel — zoznam segmentov cez celú šírku, všetko v jednom riadku
+function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
+  const timeScale = ctx?.timeScale > 0 ? ctx.timeScale : 1;
+  const value = values?.subs ?? null;
+  const onChange = (v) => onChangeField("subs", v);
+  const segments = Array.isArray(value?.segments) ? value.segments : [];
+  const ops = makeSegOps(segments, value, onChange, timeScale);
+
+  const [saveMsg, setSaveMsg] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  // uloží titulky ako .srt do výstupného priečinka — časy ŠKÁLOVANÉ,
+  // aby sedeli na exportované video (rovnako ako vypálené titulky)
+  const saveSrt = async () => {
+    if (segments.length === 0 || saveBusy) return;
+    setSaveBusy(true); setSaveMsg("");
+    try {
+      const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
+      const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
+      const p = await api.invoke("export_srt", { segments: scaled, outputName: null });
+      setSaveMsg(tt("srt_saved", "✅ Uložené: {p}", { p }));
+    } catch (e) {
+      setSaveMsg(tt("srt_failed", "❌ {e}", { e: String(e) }));
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const miniBtn = { ...btnStyle, whiteSpace: "nowrap", flexShrink: 0 };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {/* hlavička: akcie nad celým zoznamom */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, opacity: 0.6 }}>💬 {tt("seg_count", "{n} titulkov", { n: segments.length })}</span>
+        <button style={miniBtn} onClick={ops.add}>＋ {t("add", "Pridať titulok")}</button>
         {segments.length > 0 && (
-          <button style={btnStyle} disabled={saveBusy} onClick={() => { void saveSrt(); }}>
+          <button style={miniBtn} disabled={saveBusy} onClick={() => { void saveSrt(); }}>
             {saveBusy ? t("srt_saving", "⏳ Ukladám…") : `💾 ${t("srt_save", "Uložiť SRT")}`}
           </button>
         )}
         {segments.length > 0 && (
-          <button
-            style={{ ...btnStyle, color: "#f87171" }}
-            onClick={() => onChange(null)}
-          >
+          <button style={{ ...miniBtn, color: "#f87171" }} onClick={() => onChange(null)}>
             {t("clear", "Zrušiť titulky")}
           </button>
         )}
+        {saveMsg && (
+          <span style={{ fontSize: 10, color: saveMsg.startsWith("✅") ? "#34d399" : "#f87171", wordBreak: "break-all" }}>{saveMsg}</span>
+        )}
       </div>
-      {saveMsg && (
-        <div style={{ fontSize: 10, color: saveMsg.startsWith("✅") ? "#34d399" : "#f87171", wordBreak: "break-all" }}>{saveMsg}</div>
-      )}
+      {/* zoznam segmentov — jeden riadok = jeden titulok */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 8px" }}>
+        {segments.length === 0 && (
+          <div style={{ fontSize: 11, opacity: 0.5, padding: 8 }}>
+            {t("no_segments", "Zatiaľ žiadne titulky — prepíš reč tlačidlom v pravom paneli, alebo pridaj titulok ručne.")}
+          </div>
+        )}
+        {segments.map((g, i) => (
+          <div key={i} style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 3, padding: "3px 6px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6 }}>
+            <span style={{ fontSize: 10, opacity: 0.45, width: 20, textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
+            <input
+              style={{ ...inpStyle, width: 64, fontFamily: "monospace", flexShrink: 0 }}
+              defaultValue={fmtTime(g.start)}
+              key={`s${i}-${g.start}`}
+              title={t("seg_start", "Začiatok")}
+              onBlur={(e) => { const v = parseTime(e.target.value); if (v != null && v < g.end) ops.upd(i, { start: v }); else e.target.value = fmtTime(g.start); }}
+            />
+            <span style={{ fontSize: 10, opacity: 0.5, flexShrink: 0 }}>→</span>
+            <input
+              style={{ ...inpStyle, width: 64, fontFamily: "monospace", flexShrink: 0 }}
+              defaultValue={fmtTime(g.end)}
+              key={`e${i}-${g.end}`}
+              title={t("seg_end", "Koniec")}
+              onBlur={(e) => { const v = parseTime(e.target.value); if (v != null && v > g.start) ops.upd(i, { end: v }); else e.target.value = fmtTime(g.end); }}
+            />
+            <span style={{ fontSize: 10, opacity: 0.45, flexShrink: 0, width: 34 }}>{(g.end - g.start).toFixed(1)}s</span>
+            <input
+              style={{ ...inpStyle, flex: 1, minWidth: 80, fontSize: 12 }}
+              defaultValue={g.text}
+              key={`t${i}-${g.text}`}
+              placeholder={t("text_ph", "text titulku…")}
+              onBlur={(e) => { if (e.target.value !== g.text) ops.upd(i, { text: e.target.value }); }}
+            />
+            <button style={miniBtn} title={t("shift_back", "Posunúť −0,5 s")} onClick={() => ops.shift(i, -0.5)}>◂ 0,5s</button>
+            <button style={miniBtn} title={t("shift_fwd", "Posunúť +0,5 s")} onClick={() => ops.shift(i, 0.5)}>▸ 0,5s</button>
+            <button style={miniBtn} title={t("split", "Rozdeliť")} onClick={() => ops.split(i)}>✂ {t("split", "Rozdeliť")}</button>
+            <button style={miniBtn} title={t("insert_after", "Vložiť za")} onClick={() => ops.insertAfter(i)}>＋ {t("insert_after", "Vložiť za")}</button>
+            {i < segments.length - 1 && (
+              <button style={miniBtn} title={t("merge", "Spojiť s ďalším")} onClick={() => ops.merge(i)}>⇶ {t("merge", "Spojiť")}</button>
+            )}
+            <button style={{ ...miniBtn, color: "#f87171" }} title={t("del", "Zmazať")} onClick={() => ops.del(i)}>✕</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -332,6 +357,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 api.registerTool({
   icon: "💬",
   labelKey: "title",
+  bottomPanel: SubtitlesBottomPanel,
   fields: [
     { id: "lang", type: "select", labelKey: "lang", default: "auto",
       options: [

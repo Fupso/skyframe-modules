@@ -34,5 +34,10 @@
   "insert_after": "Vložiť nový za tento",
   "shift_back": "Posunúť −0,5 s",
   "shift_fwd": "Posunúť +0,5 s",
-  "seg_dur": "Trvanie"
+  "seg_dur": "Trvanie",
+  "seg_start": "Začiatok",
+  "seg_end": "Koniec",
+  "segments_below": "✏️ Segmenty ({n}) upravuješ v spodnom paneli ⬇",
+  "seg_count": "{n} titulkov",
+  "no_segments": "Zatiaľ žiadne titulky — prepíš reč tlačidlom v pravom paneli, alebo pridaj titulok ručne."
 }

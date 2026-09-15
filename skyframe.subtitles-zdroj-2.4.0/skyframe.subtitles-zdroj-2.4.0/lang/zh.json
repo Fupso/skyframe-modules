@@ -34,5 +34,10 @@
   "insert_after": "在此后插入",
   "shift_back": "前移 −0.5 秒",
   "shift_fwd": "后移 +0.5 秒",
-  "seg_dur": "时长"
+  "seg_dur": "时长",
+  "seg_start": "开始",
+  "seg_end": "结束",
+  "segments_below": "✏️ 在底部面板中编辑片段（{n}）⬇",
+  "seg_count": "{n} 条字幕",
+  "no_segments": "暂无字幕——使用右侧面板中的按钮转录，或手动添加。"
 }
