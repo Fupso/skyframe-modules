@@ -57,5 +57,11 @@
   "bg_box": "Box za textom",
   "bg_color": "Farba pozadia",
   "bg_opacity": "Krytie pozadia",
-  "pos_middle": "Stred"
+  "pos_middle": "Stred",
+  "translate_to": "Preložiť do",
+  "tr_off": "Vypnuté",
+  "translate_btn": "Preložiť",
+  "translating": "⏳ Prekladám…",
+  "tr_done": "✅ Preložené ({n} titulkov)",
+  "tr_failed": "❌ {e}"
 }

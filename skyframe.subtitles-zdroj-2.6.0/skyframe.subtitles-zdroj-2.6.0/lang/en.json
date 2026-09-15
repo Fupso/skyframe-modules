@@ -57,5 +57,11 @@
   "bg_box": "Box behind text",
   "bg_color": "Background color",
   "bg_opacity": "Background opacity",
-  "pos_middle": "Middle"
+  "pos_middle": "Middle",
+  "translate_to": "Translate to",
+  "tr_off": "Off",
+  "translate_btn": "Translate",
+  "translating": "⏳ Translating…",
+  "tr_done": "✅ Translated ({n} subtitles)",
+  "tr_failed": "❌ {e}"
 }

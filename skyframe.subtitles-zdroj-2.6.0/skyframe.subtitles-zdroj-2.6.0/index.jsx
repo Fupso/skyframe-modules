@@ -29,6 +29,8 @@ const initialState = {
   busyLabel: "",
   progress: -1,
   error: "",
+  trBusy: false,
+  trMsg: "",
 };
 
 let state = { ...initialState };
@@ -321,6 +323,24 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
 
   const miniBtn = { ...btnStyle, whiteSpace: "nowrap", flexShrink: 0 };
 
+  // M2 — preklad cez core (DeepL / OpenAI podľa nastavenia v AI centre)
+  const s = useStore();
+  const translateTarget = values?.translate_to ?? "off";
+  const doTranslate = async () => {
+    if (segments.length === 0 || s.trBusy) return;
+    store.setState({ trBusy: true, trMsg: "" });
+    try {
+      const source = values?.lang && values.lang !== "auto" ? values.lang : null;
+      const texts = segments.map((g) => g.text);
+      const translated = await api.invoke("translate_segments", { texts, target: translateTarget, source });
+      const next = segments.map((g, i) => ({ ...g, text: translated[i] ?? g.text }));
+      await commit(onChange, value, next, timeScale);
+      store.setState({ trBusy: false, trMsg: tt("tr_done", "✅ Preložené ({n} titulkov)", { n: next.length }) });
+    } catch (e) {
+      store.setState({ trBusy: false, trMsg: tt("tr_failed", "❌ {e}", { e: String(e) }) });
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* hlavička: akcie nad celým zoznamom */}
@@ -331,6 +351,14 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
           <button style={miniBtn} title={t("sort_fix_hint", "Zotriedi titulky podľa času a odstráni prekrytie")} onClick={ops.sortFix}>
             ⇅ {t("sort_fix", "Zoradiť a opraviť")}
           </button>
+        )}
+        {segments.length > 0 && translateTarget !== "off" && (
+          <button style={{ ...miniBtn, background: "#3b82f6", color: "#fff" }} disabled={s.trBusy} onClick={() => { void doTranslate(); }}>
+            {s.trBusy ? t("translating", "⏳ Prekladám…") : `🌐 ${t("translate_btn", "Preložiť")} → ${translateTarget.toUpperCase()}`}
+          </button>
+        )}
+        {s.trMsg && (
+          <span style={{ fontSize: 10, color: s.trMsg.startsWith("✅") ? "#34d399" : "#f87171" }}>{s.trMsg}</span>
         )}
         {segments.length > 0 && (
           <button style={miniBtn} disabled={saveBusy} onClick={() => { void saveSrt(); }}>
@@ -426,6 +454,16 @@ api.registerTool({
     { id: "lang", type: "select", labelKey: "lang", default: "auto",
       options: [
         { value: "auto", labelKey: "lang_auto" },
+        { value: "sk", labelKey: "lang_sk" },
+        { value: "cs", labelKey: "lang_cs" },
+        { value: "en", labelKey: "lang_en" },
+        { value: "de", labelKey: "lang_de" },
+        { value: "ru", labelKey: "lang_ru" },
+        { value: "zh", labelKey: "lang_zh" },
+      ] },
+    { id: "translate_to", type: "select", labelKey: "translate_to", default: "off",
+      options: [
+        { value: "off", labelKey: "tr_off" },
         { value: "sk", labelKey: "lang_sk" },
         { value: "cs", labelKey: "lang_cs" },
         { value: "en", labelKey: "lang_en" },

@@ -57,5 +57,11 @@
   "bg_box": "Плашка за текстом",
   "bg_color": "Цвет фона",
   "bg_opacity": "Непрозрачность фона",
-  "pos_middle": "Середина"
+  "pos_middle": "Середина",
+  "translate_to": "Перевести на",
+  "tr_off": "Выкл",
+  "translate_btn": "Перевести",
+  "translating": "⏳ Перевожу…",
+  "tr_done": "✅ Переведено ({n} субтитров)",
+  "tr_failed": "❌ {e}"
 }

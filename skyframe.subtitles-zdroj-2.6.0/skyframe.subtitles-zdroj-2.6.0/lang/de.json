@@ -57,5 +57,11 @@
   "bg_box": "Box hinter Text",
   "bg_color": "Hintergrundfarbe",
   "bg_opacity": "Hintergrund-Deckkraft",
-  "pos_middle": "Mitte"
+  "pos_middle": "Mitte",
+  "translate_to": "Übersetzen nach",
+  "tr_off": "Aus",
+  "translate_btn": "Übersetzen",
+  "translating": "⏳ Übersetze…",
+  "tr_done": "✅ Übersetzt ({n} Untertitel)",
+  "tr_failed": "❌ {e}"
 }
