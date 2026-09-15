@@ -41,5 +41,21 @@
   "seg_count": "{n} Untertitel",
   "no_segments": "Noch keine Untertitel — transkribiere im rechten Panel oder füge manuell hinzu.",
   "sort_fix": "Sortieren & reparieren",
-  "sort_fix_hint": "Sortiert Untertitel nach Zeit und entfernt Überlappungen"
+  "sort_fix_hint": "Sortiert Untertitel nach Zeit und entfernt Überlappungen",
+  "preset": "Preset",
+  "preset_custom": "Eigenes",
+  "preset_youtube": "YouTube",
+  "preset_film": "Film",
+  "preset_netflix": "Netflix",
+  "font": "Schrift",
+  "bold": "Fett",
+  "text_color": "Textfarbe",
+  "outline_color": "Konturfarbe",
+  "outline_w": "Konturstärke",
+  "background": "Hintergrund",
+  "bg_none": "Keiner (nur Kontur)",
+  "bg_box": "Box hinter Text",
+  "bg_color": "Hintergrundfarbe",
+  "bg_opacity": "Hintergrund-Deckkraft",
+  "pos_middle": "Mitte"
 }

@@ -41,5 +41,21 @@
   "seg_count": "{n} 条字幕",
   "no_segments": "暂无字幕——使用右侧面板中的按钮转录，或手动添加。",
   "sort_fix": "排序并修复",
-  "sort_fix_hint": "按时间排序字幕并消除重叠"
+  "sort_fix_hint": "按时间排序字幕并消除重叠",
+  "preset": "预设",
+  "preset_custom": "自定义",
+  "preset_youtube": "YouTube",
+  "preset_film": "电影",
+  "preset_netflix": "Netflix",
+  "font": "字体",
+  "bold": "粗体",
+  "text_color": "文字颜色",
+  "outline_color": "描边颜色",
+  "outline_w": "描边粗细",
+  "background": "背景",
+  "bg_none": "无（仅描边）",
+  "bg_box": "文字底框",
+  "bg_color": "背景颜色",
+  "bg_opacity": "背景不透明度",
+  "pos_middle": "居中"
 }

@@ -400,6 +400,24 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// #rrggbb → ASS &HAABBGGRR (alpha 00 = nepriehľadné, FF = plne priehľadné)
+function hexToAss(hex, alpha = 0) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return "&H00FFFFFF";
+  const n = parseInt(m[1], 16);
+  const h2 = (x) => x.toString(16).padStart(2, "0").toUpperCase();
+  return `&H${h2(alpha)}${h2(n & 255)}${h2((n >> 8) & 255)}${h2((n >> 16) & 255)}`;
+}
+
+// krok 76e — presety štýlu titulkov (prepíšu vlastné nastavenia)
+const PRESETS = {
+  youtube: { fontName: "Arial", fontSize: 26, bold: true, textColor: "#ffffff", outlineColor: "#000000", outline: 3, background: "none", bgColor: "#000000", bgOpacity: 60, position: "bottom", marginV: 36, shadow: 0 },
+  film:    { fontName: "Georgia", fontSize: 20, bold: false, textColor: "#ffffff", outlineColor: "#000000", outline: 1, background: "none", bgColor: "#000000", bgOpacity: 60, position: "bottom", marginV: 30, shadow: 0 },
+  netflix: { fontName: "Arial", fontSize: 22, bold: false, textColor: "#ffffff", outlineColor: "#000000", outline: 0, background: "none", bgColor: "#000000", bgOpacity: 60, position: "bottom", marginV: 36, shadow: 2 },
+};
+
+const FONT_OPTIONS = ["Arial", "Arial Black", "Verdana", "Tahoma", "Georgia", "Impact", "Trebuchet MS", "Courier New"];
+
 api.registerTool({
   icon: "💬",
   labelKey: "title",
@@ -417,10 +435,31 @@ api.registerTool({
       ] },
     { id: "subs", type: "custom", labelKey: "segments", component: SubtitlesField },
     { id: "sec_style", type: "separator", labelKey: "sec_style" },
+    { id: "preset", type: "select", labelKey: "preset", default: "custom",
+      options: [
+        { value: "custom", labelKey: "preset_custom" },
+        { value: "youtube", labelKey: "preset_youtube" },
+        { value: "film", labelKey: "preset_film" },
+        { value: "netflix", labelKey: "preset_netflix" },
+      ] },
+    { id: "fontName", type: "select", labelKey: "font", default: "Arial",
+      options: FONT_OPTIONS.map((f) => ({ value: f, labelKey: f })) },
     { id: "fontSize", type: "number", labelKey: "font_size", min: 8, max: 72, step: 1, default: 20 },
+    { id: "bold", type: "checkbox", labelKey: "bold", default: false },
+    { id: "textColor", type: "color", labelKey: "text_color", default: "#ffffff" },
+    { id: "outlineColor", type: "color", labelKey: "outline_color", default: "#000000" },
+    { id: "outline", type: "number", labelKey: "outline_w", min: 0, max: 6, step: 0.5, default: 2 },
+    { id: "background", type: "select", labelKey: "background", default: "none",
+      options: [
+        { value: "none", labelKey: "bg_none" },
+        { value: "box", labelKey: "bg_box" },
+      ] },
+    { id: "bgColor", type: "color", labelKey: "bg_color", default: "#000000" },
+    { id: "bgOpacity", type: "slider", labelKey: "bg_opacity", min: 0, max: 100, step: 5, unit: "%", default: 60 },
     { id: "position", type: "select", labelKey: "position", default: "bottom",
       options: [
         { value: "bottom", labelKey: "pos_bottom" },
+        { value: "middle", labelKey: "pos_middle" },
         { value: "top", labelKey: "pos_top" },
       ] },
     { id: "marginV", type: "number", labelKey: "margin_v", min: 0, max: 200, step: 2, default: 36 },
@@ -431,12 +470,31 @@ api.registerTool({
     const segments = subs && Array.isArray(subs.segments) ? subs.segments : [];
     if (!subs?.srtPath || segments.length === 0) return null;
 
-    const fs = clamp(Number(values.fontSize) || 20, 8, 72);
-    const margin = clamp(Number(values.marginV) || 0, 0, 400);
-    const align = values.position === "top" ? 8 : 2;
+    // preset prepíše vlastné nastavenia (krok 76e)
+    const raw = values.preset && PRESETS[values.preset] ? { ...values, ...PRESETS[values.preset] } : values;
+    const fs = clamp(Number(raw.fontSize) || 20, 8, 72);
+    const margin = clamp(Number(raw.marginV) || 0, 0, 400);
+    const align = raw.position === "top" ? 8 : raw.position === "middle" ? 5 : 2;
+    const isBox = raw.background === "box";
+    const outline = clamp(Number(raw.outline ?? 2) || 0, 0, 6);
+    const shadow = clamp(Number(raw.shadow) || 0, 0, 4);
+    const opacity = clamp(Number(raw.bgOpacity ?? 60) || 0, 0, 100);
+    const style = [
+      `FontName=${raw.fontName || "Arial"}`,
+      `FontSize=${fs}`,
+      `Bold=${raw.bold ? -1 : 0}`,
+      `PrimaryColour=${hexToAss(raw.textColor || "#ffffff")}`,
+      `OutlineColour=${hexToAss(raw.outlineColor || "#000000")}`,
+      `BackColour=${hexToAss(raw.bgColor || "#000000", Math.round(255 * (1 - opacity / 100)))}`,
+      `BorderStyle=${isBox ? 3 : 1}`,
+      `Outline=${isBox ? 0 : outline}`,
+      `Shadow=${isBox ? 0 : shadow}`,
+      `Alignment=${align}`,
+      `MarginV=${margin || 36}`,
+    ].join(",");
     // escaping pre subtitles filter (Windows: \ → \\, : → \:)
     const esc = String(subs.srtPath).replace(/\\/g, "\\\\").replace(/:/g, "\\:");
-    const vf = `subtitles=filename='${esc}':force_style='FontName=Arial,FontSize=${fs},PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=${align},MarginV=${margin || 36}'`;
+    const vf = `subtitles=filename='${esc}':force_style='${style}'`;
     return { label: `💬 ${t("lbl_count", "titulky")} (${segments.length})`, vf };
   },
 });
