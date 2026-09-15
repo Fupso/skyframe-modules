@@ -186,11 +186,15 @@ function makeSegOps(segments, value, onChange, timeScale) {
     const end = nxt ? Math.min(nxt.start, start + 2) : start + 2;
     commit(onChange, value, [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)], timeScale);
   };
+  // posun celého segmentu — ohraničený susedmi, aby sa titulky neprekrývali
   const shift = (i, delta) => {
     const g = segments[i];
-    const start = Math.max(0, g.start + delta);
-    const end = Math.max(start + 0.1, g.end + delta);
-    upd(i, { start, end });
+    const prev = segments[i - 1], nxt = segments[i + 1];
+    const len = g.end - g.start;
+    const minStart = prev ? prev.end : 0;
+    const maxEnd = nxt ? nxt.start : Infinity;
+    const start = Math.min(Math.max(minStart, g.start + delta), Math.max(minStart, maxEnd - len));
+    upd(i, { start, end: start + len });
   };
   return { upd, del, add, split, merge, insertAfter, shift };
 }
@@ -315,7 +319,7 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
               defaultValue={fmtTime(g.start)}
               key={`s${i}-${g.start}`}
               title={t("seg_start", "Začiatok")}
-              onBlur={(e) => { const v = parseTime(e.target.value); if (v != null && v < g.end) ops.upd(i, { start: v }); else e.target.value = fmtTime(g.start); }}
+              onBlur={(e) => { let v = parseTime(e.target.value); const prev = segments[i - 1]; if (v != null && prev && v < prev.end) v = prev.end; if (v != null && v < g.end) ops.upd(i, { start: v }); else e.target.value = fmtTime(g.start); }}
             />
             <span style={{ fontSize: 10, opacity: 0.5, flexShrink: 0 }}>→</span>
             <input
@@ -323,7 +327,7 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
               defaultValue={fmtTime(g.end)}
               key={`e${i}-${g.end}`}
               title={t("seg_end", "Koniec")}
-              onBlur={(e) => { const v = parseTime(e.target.value); if (v != null && v > g.start) ops.upd(i, { end: v }); else e.target.value = fmtTime(g.end); }}
+              onBlur={(e) => { let v = parseTime(e.target.value); const nxt = segments[i + 1]; if (v != null && nxt && v > nxt.start) v = nxt.start; if (v != null && v > g.start) ops.upd(i, { end: v }); else e.target.value = fmtTime(g.end); }}
             />
             <span style={{ fontSize: 10, opacity: 0.45, flexShrink: 0, width: 34 }}>{(g.end - g.start).toFixed(1)}s</span>
             <input
