@@ -63,5 +63,15 @@
   "translate_btn": "Übersetzen",
   "translating": "⏳ Übersetze…",
   "tr_done": "✅ Übersetzt ({n} Untertitel)",
-  "tr_failed": "❌ {e}"
+  "tr_failed": "❌ {e}",
+  "tab_orig": "Originalsprache",
+  "tab_orig_short": "Orig",
+  "tab_del": "Diese Sprachversion löschen",
+  "srt_save_all": "Alle SRT",
+  "srt_all_hint": "Exportiert SRT für jede Sprache",
+  "srt_saved_all": "✅ {n} SRT gespeichert (letzte: {p})",
+  "mkv_save": "MKV mit Spuren",
+  "mkv_hint": "MKV mit umschaltbaren Untertitelspuren — ohne Re-Encode",
+  "mkv_saved": "✅ MKV gespeichert: {p}",
+  "mkv_failed": "❌ {e}"
 }

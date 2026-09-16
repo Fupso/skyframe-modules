@@ -63,5 +63,15 @@
   "translate_btn": "Перевести",
   "translating": "⏳ Перевожу…",
   "tr_done": "✅ Переведено ({n} субтитров)",
-  "tr_failed": "❌ {e}"
+  "tr_failed": "❌ {e}",
+  "tab_orig": "Исходный язык",
+  "tab_orig_short": "Ориг",
+  "tab_del": "Удалить эту языковую версию",
+  "srt_save_all": "Все SRT",
+  "srt_all_hint": "Сохраняет SRT для каждого языка",
+  "srt_saved_all": "✅ Сохранено {n} SRT (последний: {p})",
+  "mkv_save": "MKV с дорожками",
+  "mkv_hint": "MKV с переключаемыми дорожками субтитров — без перекодирования",
+  "mkv_saved": "✅ MKV сохранён: {p}",
+  "mkv_failed": "❌ {e}"
 }

@@ -94,7 +94,7 @@ async function commit(onChange, value, segments, timeScale = 1) {
     const srtPath = await api.invoke("write_temp_srt", { segments: scaled, previous: value?.srtPath ?? null });
     lastWrittenPath = srtPath;
     lastScale = ts;
-    onChange({ segments, srtPath });
+    onChange({ ...value, segments, srtPath });
   } catch (e) {
     store.setState({ error: String(e) });
   }
@@ -323,21 +323,81 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
 
   const miniBtn = { ...btnStyle, whiteSpace: "nowrap", flexShrink: 0 };
 
-  // M2 — preklad cez core (DeepL / OpenAI podľa nastavenia v AI centre)
+  // M2/M3 — preklad cez core + jazykové varianty (multi-track)
   const s = useStore();
   const translateTarget = values?.translate_to ?? "off";
+  const variants = (value && typeof value.variants === "object" && value.variants) || {};
+  const activeLang = value?.activeLang ?? "orig";
+  const origLangCode = (values?.lang && values.lang !== "auto") ? values.lang : "und";
+  const variantLangs = ["orig", ...Object.keys(variants).filter((k) => k !== "orig" && Array.isArray(variants[k]) && variants[k].length > 0)];
+  const scaledSegs = (segs) => {
+    const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
+    return ts === 1 ? segs : segs.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
+  };
+  const switchLang = async (next) => {
+    if (next === activeLang) return;
+    const v = { ...variants, [activeLang]: segments };
+    const nextSegs = Array.isArray(v[next]) ? v[next] : [];
+    await commit(onChange, { ...value, variants: v, activeLang: next }, nextSegs, timeScale);
+  };
+  const deleteVariant = async (lang) => {
+    const v = { ...variants, [activeLang]: segments };
+    delete v[lang];
+    const orig = Array.isArray(v.orig) ? v.orig : [];
+    await commit(onChange, { ...value, variants: v, activeLang: "orig" }, orig, timeScale);
+  };
   const doTranslate = async () => {
     if (segments.length === 0 || s.trBusy) return;
     store.setState({ trBusy: true, trMsg: "" });
     try {
       const source = values?.lang && values.lang !== "auto" ? values.lang : null;
-      const texts = segments.map((g) => g.text);
+      // prekladáme vždy z ORIGINÁLU — nie z už preloženej verzie
+      const origSegs = activeLang === "orig" ? segments : (Array.isArray(variants.orig) && variants.orig.length ? variants.orig : segments);
+      const texts = origSegs.map((g) => g.text);
       const translated = await api.invoke("translate_segments", { texts, target: translateTarget, source });
-      const next = segments.map((g, i) => ({ ...g, text: translated[i] ?? g.text }));
-      await commit(onChange, value, next, timeScale);
-      store.setState({ trBusy: false, trMsg: tt("tr_done", "✅ Preložené ({n} titulkov)", { n: next.length }) });
+      const newSegs = origSegs.map((g, i) => ({ ...g, text: translated[i] ?? g.text }));
+      const v = { ...variants, [activeLang]: segments, [translateTarget]: newSegs };
+      await commit(onChange, { ...value, variants: v, activeLang: translateTarget }, newSegs, timeScale);
+      store.setState({ trBusy: false, trMsg: tt("tr_done", "✅ Preložené ({n} titulkov)", { n: newSegs.length }) });
     } catch (e) {
       store.setState({ trBusy: false, trMsg: tt("tr_failed", "❌ {e}", { e: String(e) }) });
+    }
+  };
+  // všetky jazykové verzie → SRT súbory (titulky-sk.srt, titulky-de.srt, ...)
+  const saveAllSrt = async () => {
+    if (segments.length === 0 || saveBusy) return;
+    setSaveBusy(true); setSaveMsg("");
+    try {
+      const cur = { ...variants, [activeLang]: segments };
+      let n = 0, lastPath = "";
+      for (const [lang, segs] of Object.entries(cur)) {
+        if (!Array.isArray(segs) || segs.length === 0) continue;
+        const code = lang === "orig" ? origLangCode : lang;
+        lastPath = await api.invoke("export_srt", { segments: scaledSegs(segs), outputName: `titulky-${code}` });
+        n++;
+      }
+      setSaveMsg(tt("srt_saved_all", "✅ Uložené {n} SRT (posledný: {p})", { n, p: lastPath }));
+    } catch (e) {
+      setSaveMsg(tt("srt_failed", "❌ {e}", { e: String(e) }));
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+  // MKV s prepínateľnými titulkovými stopami (stream copy v core — bez re-enkódu)
+  const muxMkv = async () => {
+    if (segments.length === 0 || saveBusy) return;
+    setSaveBusy(true); setSaveMsg("");
+    try {
+      const cur = { ...variants, [activeLang]: segments };
+      const tracks = Object.entries(cur)
+        .filter(([, segs]) => Array.isArray(segs) && segs.length > 0)
+        .map(([lang, segs]) => ({ lang: lang === "orig" ? origLangCode : lang, segments: scaledSegs(segs) }));
+      const p = await api.invoke("mux_subtitles_mkv", { input: ctx.mediaPath, tracks, outputName: null });
+      setSaveMsg(tt("mkv_saved", "✅ MKV uložené: {p}", { p }));
+    } catch (e) {
+      setSaveMsg(tt("mkv_failed", "❌ {e}", { e: String(e) }));
+    } finally {
+      setSaveBusy(false);
     }
   };
 
@@ -346,6 +406,24 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
       {/* hlavička: akcie nad celým zoznamom */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, opacity: 0.6 }}>💬 {tt("seg_count", "{n} titulkov", { n: segments.length })}</span>
+        {variantLangs.length > 1 && (
+          <span style={{ display: "flex", gap: 3, alignItems: "center" }}>
+            {variantLangs.map((lang) => (
+              <span key={lang} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <button
+                  style={{ ...miniBtn, background: lang === activeLang ? "#3b82f6" : miniBtn.background, color: lang === activeLang ? "#fff" : miniBtn.color, fontWeight: lang === activeLang ? 700 : 400 }}
+                  title={lang === "orig" ? t("tab_orig", "Pôvodný jazyk") : lang.toUpperCase()}
+                  onClick={() => { void switchLang(lang); }}
+                >
+                  {lang === "orig" ? `🅾 ${t("tab_orig_short", "Orig")}` : lang.toUpperCase()}
+                </button>
+                {lang !== "orig" && lang === activeLang && (
+                  <button style={{ ...miniBtn, color: "#f87171", padding: "3px 5px" }} title={t("tab_del", "Zmazať túto jazykovú verziu")} onClick={() => { void deleteVariant(lang); }}>✕</button>
+                )}
+              </span>
+            ))}
+          </span>
+        )}
         <button style={miniBtn} onClick={ops.add}>＋ {t("add", "Pridať titulok")}</button>
         {segments.length > 1 && (
           <button style={miniBtn} title={t("sort_fix_hint", "Zotriedi titulky podľa času a odstráni prekrytie")} onClick={ops.sortFix}>
@@ -364,6 +442,16 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
           <button style={miniBtn} disabled={saveBusy} onClick={() => { void saveSrt(); }}>
             {saveBusy ? t("srt_saving", "⏳ Ukladám…") : `💾 ${t("srt_save", "Uložiť SRT")}`}
           </button>
+        )}
+        {segments.length > 0 && variantLangs.length > 1 && (
+          <>
+            <button style={miniBtn} disabled={saveBusy} title={t("srt_all_hint", "Uloží SRT pre každý jazyk (titulky-sk.srt, …)")} onClick={() => { void saveAllSrt(); }}>
+              {`💾 ${t("srt_save_all", "Všetky SRT")}`}
+            </button>
+            <button style={{ ...miniBtn, background: "#059669", color: "#fff" }} disabled={saveBusy || !ctx.mediaPath} title={t("mkv_hint", "MKV s prepínateľnými titulkovými stopami — bez re-enkódu, okamžité")} onClick={() => { void muxMkv(); }}>
+              {saveBusy ? t("srt_saving", "⏳ Ukladám…") : `📦 ${t("mkv_save", "MKV so stopami")}`}
+            </button>
+          </>
         )}
         {segments.length > 0 && (
           <button style={{ ...miniBtn, color: "#f87171" }} onClick={() => onChange(null)}>

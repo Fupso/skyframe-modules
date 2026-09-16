@@ -63,5 +63,15 @@
   "translate_btn": "Translate",
   "translating": "⏳ Translating…",
   "tr_done": "✅ Translated ({n} subtitles)",
-  "tr_failed": "❌ {e}"
+  "tr_failed": "❌ {e}",
+  "tab_orig": "Original language",
+  "tab_orig_short": "Orig",
+  "tab_del": "Delete this language version",
+  "srt_save_all": "All SRTs",
+  "srt_all_hint": "Exports SRT for each language (titulky-sk.srt, …)",
+  "srt_saved_all": "✅ Saved {n} SRT files (last: {p})",
+  "mkv_save": "MKV with tracks",
+  "mkv_hint": "MKV with switchable subtitle tracks — stream copy, instant",
+  "mkv_saved": "✅ MKV saved: {p}",
+  "mkv_failed": "❌ {e}"
 }

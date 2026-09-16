@@ -63,5 +63,15 @@
   "translate_btn": "翻译",
   "translating": "⏳ 翻译中…",
   "tr_done": "✅ 已翻译（{n} 条字幕）",
-  "tr_failed": "❌ {e}"
+  "tr_failed": "❌ {e}",
+  "tab_orig": "原始语言",
+  "tab_orig_short": "原文",
+  "tab_del": "删除此语言版本",
+  "srt_save_all": "全部 SRT",
+  "srt_all_hint": "为每种语言导出 SRT",
+  "srt_saved_all": "✅ 已保存 {n} 个 SRT（最后：{p}）",
+  "mkv_save": "MKV 多字幕轨",
+  "mkv_hint": "带可切换字幕轨道的 MKV — 直接封装，无需重编码",
+  "mkv_saved": "✅ MKV 已保存：{p}",
+  "mkv_failed": "❌ {e}"
 }

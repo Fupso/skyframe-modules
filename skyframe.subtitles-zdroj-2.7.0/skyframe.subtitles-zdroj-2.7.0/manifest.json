@@ -1,9 +1,9 @@
 {
   "id": "skyframe.subtitles",
   "name": "Titulky",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "author": "SkyFrame Community",
-  "description": "AI prepis reči do titulkov (Whisper, offline) priamo v Editore — editor segmentov, štýl titulkov a vypálenie v jednom exporte s ostatnými úpravami.",
+  "description": "AI prepis reči do titulkov (Whisper, offline) priamo v Editore — editor segmentov, štýl, preklad do viacerých jazykov a export SRT pre každý jazyk alebo MKV s prepínateľnými titulkovými stopami.",
   "icon": "💬",
   "entry_point": "index.js",
   "enabled": true,
@@ -15,7 +15,7 @@
   "provides": [
     "editor_tool"
   ],
-  "min_core_version": "3.8.0",
+  "min_core_version": "3.9.2",
   "ai_models": [
     {
       "id": "whisper-base",

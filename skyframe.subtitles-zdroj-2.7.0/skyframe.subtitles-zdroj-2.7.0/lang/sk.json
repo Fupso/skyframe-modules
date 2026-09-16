@@ -63,5 +63,15 @@
   "translate_btn": "Preložiť",
   "translating": "⏳ Prekladám…",
   "tr_done": "✅ Preložené ({n} titulkov)",
-  "tr_failed": "❌ {e}"
+  "tr_failed": "❌ {e}",
+  "tab_orig": "Pôvodný jazyk",
+  "tab_orig_short": "Orig",
+  "tab_del": "Zmazať túto jazykovú verziu",
+  "srt_save_all": "Všetky SRT",
+  "srt_all_hint": "Uloží SRT pre každý jazyk (titulky-sk.srt, …)",
+  "srt_saved_all": "✅ Uložené {n} SRT (posledný: {p})",
+  "mkv_save": "MKV so stopami",
+  "mkv_hint": "MKV s prepínateľnými titulkovými stopami — bez re-enkódu, okamžité",
+  "mkv_saved": "✅ MKV uložené: {p}",
+  "mkv_failed": "❌ {e}"
 }
