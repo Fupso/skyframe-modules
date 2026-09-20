@@ -66,6 +66,7 @@ const initialState = {
   aiStatus: null,       // {licensed, runtimeInstalled, modelInstalled} | null
   maskLoading: false,
   maskProgress: -1,     // progres výpočtu AI masky videa (-1 = nič)
+  maskPhase: null,      // "quick" | "full" | null — čo sa práve počíta
   presets: [],          // používateľské štýly z configu
   baseThumb: null,      // HTMLImageElement ukážkovej fotky
   thumbs: {},           // presetId -> dataURL miniatúry s filtrom
@@ -85,6 +86,9 @@ const DEFAULT_GRADE = {
   aiMask: false,
   maskPath: "",         // cesta k AI maske pre aktuálne médium
   maskFor: "",          // pre ktoré médium je maska
+  maskStart: 0,         // začiatok okna rýchlej masky v časovej osi (s)
+  maskLen: 0,           // dĺžka okna rýchlej masky (s); 0 = celé video
+  maskQuick: false,     // true = len rýchla maska (náhľad), plná sa počíta
   curves: null,         // [[x,y],...] | null (master krivka)
   wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },  // tieň/stredy/svetlá [dx,dy]
 };
@@ -254,8 +258,11 @@ function skyGraphLuma(chain) {
 }
 
 /** Graf „AI obloha" — maska zo súboru [I0] (core ju dodá ako vstup). */
-function skyGraphAi(chain) {
-  return `[IN]split=2[base][t];[t]${chain}[tinted];[I0][tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay[OUT]`;
+function skyGraphAi(chain, maskStart = 0) {
+  // rýchla maska pokrýva len okno [maskStart, +len] — posunieme ju v čase;
+  // mimo okna framesync zopakuje okrajovú masku (len náhľad, export čaká plnú)
+  const src = maskStart > 0.001 ? `[I0]setpts=PTS+${maskStart.toFixed(3)}/TB[mv];[mv]` : `[I0]`;
+  return `[IN]split=2[base][t];[t]${chain}[tinted];${src}[tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay=eof_action=pass[OUT]`;
 }
 
 function presetName(p) {
@@ -704,6 +711,61 @@ function FiltersField({ value, onChange, ctx }) {
     return () => { dead = true; };
   }, [v.aiMask, media?.path]);
 
+  // AI maska videa: najprv RÝCHLA maska pre okno okolo pozície (náhľad je za
+  // pár sekúnd), potom PLNÁ maska na pozadí (export čaká na ňu). Oba joby sa
+  // cachujú — opätovné otvorenie média je okamžité.
+  const maskJobRef = useRef(null);
+  useEffect(() => {
+    if (!v.aiMask || !media || media.kind !== "video") return;
+    if (v.maskFor === media.path && v.maskPath && !v.maskQuick) return; // plná hotová
+    if (maskJobRef.current === media.path) return; // už beží
+    maskJobRef.current = media.path;
+    let dead = false;
+    const unsubs = [];
+    (async () => {
+      const mpath = media.path;
+      const runJob = async (args) => {
+        const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId, ...args });
+        return await new Promise((resolve) => {
+          api.listenJob(jobId, (job) => {
+            store.setState({ maskProgress: job.progress ?? -1 });
+            if (job.status !== "running") resolve(job);
+          }).then((u) => unsubs.push(u));
+        });
+      };
+      try {
+        // 1) rýchla maska: 14 s okno od aktuálnej pozície prehrávača
+        const pos = Math.max(0, Number(ctx?.positionSec) || 0);
+        const q0 = Math.max(0, pos - 2);
+        store.setState({ maskPhase: "quick", maskProgress: 0 });
+        const q = await runJob({ startSec: q0, seconds: 14 });
+        if (dead) return;
+        if (q.status === "done" && q.result) {
+          setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
+        }
+        // 2) plná maska na pozadí
+        store.setState({ maskPhase: "full", maskProgress: 0 });
+        const f = await runJob({});
+        if (dead) return;
+        if (f.status === "done" && f.result) {
+          setV({ maskPath: f.result, maskFor: mpath, maskStart: 0, maskLen: 0, maskQuick: false });
+        } else if (f.status === "error") {
+          console.error("[filtre] plná maska:", f.message);
+        }
+      } catch (e) {
+        console.error("[filtre] ai maska videa:", e);
+      } finally {
+        if (!dead) store.setState({ maskPhase: null, maskProgress: -1 });
+      }
+    })();
+    return () => {
+      dead = true;
+      unsubs.forEach((u) => u && u());
+      if (maskJobRef.current === media.path) maskJobRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v.aiMask, media?.path]);
+
   const pick = (p) => {
     if (v.presetId === p.id) {
       setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } });
@@ -840,51 +902,29 @@ function FiltersField({ value, onChange, ctx }) {
             />
             🤖 {t("ai_mask", "AI maska (presnejšia)")}
           </label>
-          {v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath ? (
+          {v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath && !v.maskQuick ? (
             <p style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
               ✓ {t("ai_video_ready", "AI maska videa je pripravená (cache).")}
             </p>
           ) : v.aiMask && media?.kind === "video" ? (
             <div style={{ marginTop: 6 }}>
-              {s.maskLoading ? (
+              {s.maskPhase === "quick" && (
                 <p style={{ fontSize: 11, opacity: 0.8 }}>
-                  ⏳ {t("mask_loading", "Počítam AI masku…")} {s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""}
+                  ⚡ {t("mask_quick", "Rýchla maska pre náhľad…")} {s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""}
                 </p>
-              ) : (
-                <button
-                  className="px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
-                  onClick={async () => {
-                    const mpath = media?.path;
-                    if (!mpath) return;
-                    store.setState({ maskLoading: true, maskProgress: 0 });
-                    try {
-                      const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId });
-                      await new Promise((resolve) => {
-                        let un;
-                        api.listenJob(jobId, (job) => {
-                          store.setState({ maskProgress: job.progress ?? -1 });
-                          if (job.status !== "running") { un?.(); resolve(job); }
-                        }).then((u) => { un = u; });
-                      }).then((job) => {
-                        if (job.status === "done" && job.result) {
-                          setV({ maskPath: job.result, maskFor: mpath });
-                          store.setState({ maskLoading: false, maskProgress: -1 });
-                        } else {
-                          store.setState({ maskLoading: false, maskProgress: -1 });
-                          if (job.status === "error") console.error("[filtre] ai maska videa:", job.message);
-                        }
-                      });
-                    } catch (e) {
-                      store.setState({ maskLoading: false, maskProgress: -1 });
-                      console.error("[filtre] ai maska videa:", e);
-                    }
-                  }}
-                >
-                  🤖 {t("ai_video_prepare", "Pripraviť AI masku videa")}
-                </button>
+              )}
+              {s.maskPhase === "full" && (
+                <p style={{ fontSize: 11, opacity: 0.8 }}>
+                  🤖 {t("mask_full", "Plná maska na pozadí…")} {s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""}
+                </p>
+              )}
+              {v.maskQuick && v.maskPath && (
+                <p style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>
+                  {t("mask_quick_note", "Náhľad beží na rýchlej maske — plná sa dopočítava. Export počká na plnú masku.")}
+                </p>
               )}
               <p style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>
-                {t("ai_video_hint", "AI prebehne každú 3. snímku, výsledok sa cachuje — druhýkrát je okamžitý.")}
+                {t("ai_video_hint", "Maska sa cachuje — druhýkrát je okamžitá. Prechody medzi snímkami sú vyhladené.")}
               </p>
             </div>
           ) : null}
@@ -1066,7 +1106,12 @@ api.registerTool({
     }
     if (v.maskPath && v.maskFor === ctx.mediaPath) {
       // foto aj video — maska videa je cachovaný súbor na zdrojovom fps (krok 45)
-      return { label, graph: skyGraphAi(chain), inputs: [v.maskPath] };
+      return {
+        label: label + (v.maskQuick ? " ⏳" : ""),
+        graph: skyGraphAi(chain, Number(v.maskStart) || 0),
+        inputs: [v.maskPath],
+        incomplete: !!v.maskQuick, // export blokuje, kým nedorazí plná maska
+      };
     }
     return null; // maska sa počíta / nie je podporovaná
   },

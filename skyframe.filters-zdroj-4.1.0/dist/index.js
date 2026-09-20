@@ -51,6 +51,8 @@ var initialState = {
   maskLoading: false,
   maskProgress: -1,
   // progres výpočtu AI masky videa (-1 = nič)
+  maskPhase: null,
+  // "quick" | "full" | null — čo sa práve počíta
   presets: [],
   // používateľské štýly z configu
   baseThumb: null,
@@ -78,6 +80,12 @@ var DEFAULT_GRADE = {
   // cesta k AI maske pre aktuálne médium
   maskFor: "",
   // pre ktoré médium je maska
+  maskStart: 0,
+  // začiatok okna rýchlej masky v časovej osi (s)
+  maskLen: 0,
+  // dĺžka okna rýchlej masky (s); 0 = celé video
+  maskQuick: false,
+  // true = len rýchla maska (náhľad), plná sa počíta
   curves: null,
   // [[x,y],...] | null (master krivka)
   wheels: { s: [0, 0], m: [0, 0], h: [0, 0] }
@@ -207,8 +215,9 @@ function buildChain(style, intensity, curves, wheels) {
 function skyGraphLuma(chain) {
   return `[IN]split=3[base][t][mm];[t]${chain}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[OUT]`;
 }
-function skyGraphAi(chain) {
-  return `[IN]split=2[base][t];[t]${chain}[tinted];[I0][tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay[OUT]`;
+function skyGraphAi(chain, maskStart = 0) {
+  const src = maskStart > 1e-3 ? `[I0]setpts=PTS+${maskStart.toFixed(3)}/TB[mv];[mv]` : `[I0]`;
+  return `[IN]split=2[base][t];[t]${chain}[tinted];${src}[tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay=eof_action=pass[OUT]`;
 }
 function presetName(p) {
   return p.nameKey ? t(p.nameKey, p.id) : p.name || p.id;
@@ -631,6 +640,54 @@ function FiltersField({ value, onChange, ctx }) {
       dead = true;
     };
   }, [v.aiMask, media?.path]);
+  const maskJobRef = useRef(null);
+  useEffect2(() => {
+    if (!v.aiMask || !media || media.kind !== "video") return;
+    if (v.maskFor === media.path && v.maskPath && !v.maskQuick) return;
+    if (maskJobRef.current === media.path) return;
+    maskJobRef.current = media.path;
+    let dead = false;
+    const unsubs = [];
+    (async () => {
+      const mpath = media.path;
+      const runJob = async (args) => {
+        const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId, ...args });
+        return await new Promise((resolve) => {
+          api.listenJob(jobId, (job) => {
+            store.setState({ maskProgress: job.progress ?? -1 });
+            if (job.status !== "running") resolve(job);
+          }).then((u) => unsubs.push(u));
+        });
+      };
+      try {
+        const pos = Math.max(0, Number(ctx?.positionSec) || 0);
+        const q0 = Math.max(0, pos - 2);
+        store.setState({ maskPhase: "quick", maskProgress: 0 });
+        const q = await runJob({ startSec: q0, seconds: 14 });
+        if (dead) return;
+        if (q.status === "done" && q.result) {
+          setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
+        }
+        store.setState({ maskPhase: "full", maskProgress: 0 });
+        const f = await runJob({});
+        if (dead) return;
+        if (f.status === "done" && f.result) {
+          setV({ maskPath: f.result, maskFor: mpath, maskStart: 0, maskLen: 0, maskQuick: false });
+        } else if (f.status === "error") {
+          console.error("[filtre] pln\xE1 maska:", f.message);
+        }
+      } catch (e) {
+        console.error("[filtre] ai maska videa:", e);
+      } finally {
+        if (!dead) store.setState({ maskPhase: null, maskProgress: -1 });
+      }
+    })();
+    return () => {
+      dead = true;
+      unsubs.forEach((u) => u && u());
+      if (maskJobRef.current === media.path) maskJobRef.current = null;
+    };
+  }, [v.aiMask, media?.path]);
   const pick = (p) => {
     if (v.presetId === p.id) {
       setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } });
@@ -761,45 +818,7 @@ function FiltersField({ value, onChange, ctx }) {
       disabled: !ai?.licensed,
       onChange: (e) => setV({ aiMask: e.target.checked })
     }
-  ), "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)")), v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath ? /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : v.aiMask && media?.kind === "video" ? /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskLoading ? /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : "") : /* @__PURE__ */ framesbuild_shim_default.createElement(
-    "button",
-    {
-      className: "px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600",
-      onClick: async () => {
-        const mpath = media?.path;
-        if (!mpath) return;
-        store.setState({ maskLoading: true, maskProgress: 0 });
-        try {
-          const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId });
-          await new Promise((resolve) => {
-            let un;
-            api.listenJob(jobId, (job) => {
-              store.setState({ maskProgress: job.progress ?? -1 });
-              if (job.status !== "running") {
-                un?.();
-                resolve(job);
-              }
-            }).then((u) => {
-              un = u;
-            });
-          }).then((job) => {
-            if (job.status === "done" && job.result) {
-              setV({ maskPath: job.result, maskFor: mpath });
-              store.setState({ maskLoading: false, maskProgress: -1 });
-            } else {
-              store.setState({ maskLoading: false, maskProgress: -1 });
-              if (job.status === "error") console.error("[filtre] ai maska videa:", job.message);
-            }
-          });
-        } catch (e) {
-          store.setState({ maskLoading: false, maskProgress: -1 });
-          console.error("[filtre] ai maska videa:", e);
-        }
-      }
-    },
-    "\u{1F916} ",
-    t("ai_video_prepare", "Pripravi\u0165 AI masku videa")
-  ), /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("ai_video_hint", "AI prebehne ka\u017Ed\xFA 3. sn\xEDmku, v\xFDsledok sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xFD."))) : null, v.aiMask && s.maskLoading && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ framesbuild_shim_default.createElement(
+  ), "\u{1F916} ", t("ai_mask", "AI maska (presnej\u0161ia)")), v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath && !v.maskQuick ? /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : v.aiMask && media?.kind === "video" ? /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskPhase === "quick" && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u26A1 ", t("mask_quick", "R\xFDchla maska pre n\xE1h\u013Ead\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""), s.maskPhase === "full" && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u{1F916} ", t("mask_full", "Pln\xE1 maska na pozad\xED\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""), v.maskQuick && v.maskPath && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("mask_quick_note", "N\xE1h\u013Ead be\u017E\xED na r\xFDchlej maske \u2014 pln\xE1 sa dopo\u010D\xEDtava. Export po\u010Dk\xE1 na pln\xFA masku.")), /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("ai_video_hint", "Maska sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xE1. Prechody medzi sn\xEDmkami s\xFA vyhladen\xE9."))) : null, v.aiMask && s.maskLoading && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ framesbuild_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ framesbuild_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ framesbuild_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ openGrade: !s.openGrade }),
@@ -932,7 +951,13 @@ api.registerTool({
       return { label, graph: skyGraphLuma(chain) };
     }
     if (v.maskPath && v.maskFor === ctx.mediaPath) {
-      return { label, graph: skyGraphAi(chain), inputs: [v.maskPath] };
+      return {
+        label: label + (v.maskQuick ? " \u23F3" : ""),
+        graph: skyGraphAi(chain, Number(v.maskStart) || 0),
+        inputs: [v.maskPath],
+        incomplete: !!v.maskQuick
+        // export blokuje, kým nedorazí plná maska
+      };
     }
     return null;
   }
