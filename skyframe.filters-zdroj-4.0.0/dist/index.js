@@ -251,9 +251,26 @@ function makeThumb(baseImg, style, curves, wheels) {
   return cv.toDataURL("image/jpeg", 0.82);
 }
 async function loadImageFromPath(path) {
+  if (api.readFileBytes) {
+    try {
+      const bytes = await api.readFileBytes(path);
+      const ext = String(path).split(".").pop().toLowerCase();
+      const mime = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", bmp: "image/bmp" }[ext] || "image/jpeg";
+      const url2 = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      return await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("obraz sa neda nacitat"));
+        img.src = url2;
+      });
+    } catch (e) {
+      console.warn("[filtre] readFileBytes zlyhalo, sk\xFA\u0161am fileSrc:", e);
+    }
+  }
   const url = api.fileSrc ? api.fileSrc(path) : path;
   return await new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = url;
@@ -655,6 +672,7 @@ function FiltersField({ value, onChange, ctx }) {
       }
     } catch (e) {
       console.error("[filtre] filter z fotky:", e);
+      store.setState({ saveError: `${t("photo_fail", "Filter z fotky zlyhal")}: ${String(e)}` });
     } finally {
       store.setState({ photoBusy: false });
     }

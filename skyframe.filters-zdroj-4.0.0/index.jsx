@@ -306,9 +306,29 @@ function makeThumb(baseImg, style, curves, wheels) {
 // ---------------------------------------------------------------------------
 
 async function loadImageFromPath(path) {
+  // Preferuj čítanie bajtov cez core → Blob URL (čistý canvas, getImageData
+  // funguje). asset:// URL bez crossOrigin by canvas „potápala" (tainted)
+  // a analýza fotky by ticho zlyhala.
+  if (api.readFileBytes) {
+    try {
+      const bytes = await api.readFileBytes(path);
+      const ext = String(path).split(".").pop().toLowerCase();
+      const mime = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", bmp: "image/bmp" }[ext] || "image/jpeg";
+      const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      return await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("obraz sa neda nacitat"));
+        img.src = url;
+      });
+    } catch (e) {
+      console.warn("[filtre] readFileBytes zlyhalo, skúšam fileSrc:", e);
+    }
+  }
   const url = api.fileSrc ? api.fileSrc(path) : path;
   return await new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = url;
@@ -729,6 +749,7 @@ function FiltersField({ value, onChange, ctx }) {
       }
     } catch (e) {
       console.error("[filtre] filter z fotky:", e);
+      store.setState({ saveError: `${t("photo_fail", "Filter z fotky zlyhal")}: ${String(e)}` });
     } finally {
       store.setState({ photoBusy: false });
     }
