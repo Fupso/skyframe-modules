@@ -85,22 +85,129 @@ function parseTime(str) {
 // zapíše SRT cez core a potvrdí nové dáta do toolValues (autosave + rebuild kroku)
 let lastWrittenPath = ""; // čerstvosť: po reštarte appky sa SRT vždy regeneruje
 let lastScale = 1;
-async function commit(onChange, value, segments, timeScale = 1) {
+async function commit(onChange, value, segments, timeScale = 1, karaCtx = null) {
   try {
     // segmenty držíme v čase ZDROJA (editor ich tak ukazuje), do SRT idú
     // škálované — subtitles filter ich kreslí na časovú os PO časozbere
     const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
-    const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
+    const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text, words: g.words ? g.words.map((w) => ({ start: w.start * ts, end: w.end * ts, text: w.text })) : undefined }));
     const srtPath = await api.invoke("write_temp_srt", { segments: scaled, previous: value?.srtPath ?? null });
     lastWrittenPath = srtPath;
     lastScale = ts;
-    onChange({ ...value, segments, srtPath });
+    // M4 karaoke: ASS s \k tagmi (word-level), píšeme vedľa SRT
+    let assPath = value?.assPath ?? null;
+    if (karaCtx?.on) {
+      const ass = buildKaraokeAss(scaled, karaCtx.style);
+      assPath = await api.invoke("write_temp_subs", { content: ass, ext: "ass", previous: assPath });
+    }
+    onChange({ ...value, segments, srtPath, assPath: karaCtx?.on ? assPath : null });
   } catch (e) {
     store.setState({ error: String(e) });
   }
 }
 
-async function transcribe(ctx, onChange, value, lang) {
+// ---------------------------------------------------------------------------
+// M4 — karaoke ASS generátor (word-level \k tagy)
+// ---------------------------------------------------------------------------
+
+function fmtAssTime(sec) {
+  const cs = Math.max(0, Math.round(sec * 100));
+  const h = Math.floor(cs / 360000);
+  const m = Math.floor((cs % 360000) / 6000);
+  const s2 = Math.floor((cs % 6000) / 100);
+  const c = cs % 100;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s2).padStart(2, "0")}.${String(c).padStart(2, "0")}`;
+}
+function escapeAss(txt) {
+  return String(txt).replace(/\\/g, "\\").replace(/\{/g, "\(").replace(/\}/g, "\)").replace(/\n/g, " ");
+}
+
+// karaoke štýl z raw hodnôt (preset už zmergovaný volajúcim)
+function buildKaraokeAss(scaledSegments, raw) {
+  // v ASS súbore štandardné číslovanie: 2 dole, 5 stred, 8 hore (libass natívne)
+  const align = raw.position === "top" ? 8 : raw.position === "middle" ? 5 : 2;
+  const isBox = raw.background === "box";
+  const opacity = clampN(Number(raw.bgOpacity ?? 60) || 0, 0, 100);
+  const alpha = Math.round(255 * (1 - opacity / 100));
+  const primary = hexToAss(raw.karaokeColor || "#ffd230");   // zaspievaná farba
+  const secondary = hexToAss(raw.textColor || "#ffffff");    // čakajúca farba
+  const outlineC = hexToAss(raw.outlineColor || "#000000");
+  const backC = hexToAss(raw.bgColor || "#000000", alpha);
+  const outline = isBox ? 0 : clampN(Number(raw.outline ?? 2) || 0, 0, 6);
+  const shadow = isBox ? 0 : clampN(Number(raw.shadow) || 0, 0, 4);
+  const margin = clampN(Number(raw.marginV) || 36, 0, 400);
+  const fs = clampN(Number(raw.fontSize) || 20, 8, 72) * 2; // PlayRes 720p vs reálne — škáluje libass
+  const style = `Style: Karaoke,${raw.fontName || "Arial"},${fs},${primary},${secondary},${outlineC},${backC},${raw.bold ? -1 : 0},0,0,0,100,100,0,0,${isBox ? 3 : 1},${outline},${shadow},${align},20,20,${margin},1`;
+  const events = scaledSegments.map((g) => {
+    // slová: ak sedí spojený text, použi word-level časy; inak rozdeľ rovnomerne
+    let words = Array.isArray(g.words) && g.words.length > 0 &&
+      g.words.map((w) => w.text).join(" ").trim() === g.text.trim()
+      ? g.words
+      : null;
+    let parts;
+    if (words) {
+      parts = words.map((w) => ({ text: w.text, dur: Math.max(1, Math.round((w.end - w.start) * 100)) }));
+    } else {
+      const ws = g.text.split(/\s+/).filter(Boolean);
+      const total = Math.max(1, Math.round((g.end - g.start) * 100));
+      const each = Math.max(1, Math.round(total / Math.max(1, ws.length)));
+      parts = ws.map((w) => ({ text: w, dur: each }));
+    }
+    const kar = parts.map((p2) => `{\\k${p2.dur}}${escapeAss(p2.text)}`).join(" ");
+    return `Dialogue: 0,${fmtAssTime(g.start)},${fmtAssTime(g.end)},Karaoke,,0,0,0,,${kar}`;
+  });
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "PlayResX: 1280",
+    "PlayResY: 720",
+    "ScaledBorderAndShadow: yes",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    style,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ...events,
+    "",
+  ].join("\n");
+}
+
+// zbalí word-level segmenty (každé slovo zvlášť) do čitateľných riadkov
+function packWordsIntoLines(words) {
+  const lines = [];
+  let cur = [];
+  for (const w of words) {
+    const text = w.text.trim();
+    if (!text) continue;
+    const ww = { start: w.start, end: w.end, text };
+    const gap = cur.length ? ww.start - cur[cur.length - 1].end : 0;
+    const joined = cur.map((x) => x.text).join(" ");
+    if (cur.length && (gap > 0.6 || cur.length >= 7 || (joined + " " + text).length > 42)) {
+      lines.push(cur);
+      cur = [];
+    }
+    cur.push(ww);
+  }
+  if (cur.length) lines.push(cur);
+  return lines.map((ws) => ({
+    start: ws[0].start,
+    end: ws[ws.length - 1].end,
+    text: ws.map((x) => x.text).join(" "),
+    words: ws,
+  }));
+}
+function clampN(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// karaoke kontext pre commit: zapnuté? → štýl (preset už zmergovaný)
+function makeKaraCtx(values) {
+  if (!values?.karaoke) return null;
+  const raw = values.preset && PRESETS[values.preset] ? { ...values, ...PRESETS[values.preset] } : values;
+  return { on: true, style: raw };
+}
+
+async function transcribe(ctx, onChange, value, lang, karaCtx = null) {
   const ts = ctx?.timeScale > 0 ? ctx.timeScale : 1;
   if (!ctx.mediaPath) return;
   store.setState({ busy: true, progress: -1, busyLabel: "", error: "" });
@@ -120,15 +227,17 @@ async function transcribe(ctx, onChange, value, lang) {
       lang: lang || "auto",
       model,
       moduleId: api.moduleId,
+      wordMode: !!karaCtx?.on,
     });
     const res = await watchJob(jobId, (j) =>
       store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" })
     );
     if (res.status === "done" && res.result) {
       const data = JSON.parse(res.result);
-      const segments = (data.segments ?? []).map((g) => ({ start: g.start, end: g.end, text: g.text }));
+      let segments = (data.segments ?? []).map((g) => ({ start: g.start, end: g.end, text: String(g.text ?? "").trim() }));
+      if (karaCtx?.on) segments = packWordsIntoLines(segments);
       store.setState({ busy: false });
-      await commit(onChange, value, segments, ts);
+      await commit(onChange, value, segments, ts, karaCtx);
     } else if (res.status === "cancelled") {
       store.setState({ busy: false });
     } else {
@@ -155,16 +264,16 @@ const btnStyle = {
 const btnPrimary = { ...btnStyle, background: "#3b82f6", color: "#fff", fontWeight: 600 };
 
 // Operácie nad segmentami — zdieľané pravým panelom aj spodným panelom
-function makeSegOps(segments, value, onChange, timeScale) {
+function makeSegOps(segments, value, onChange, timeScale, karaCtx = null) {
   const upd = (i, patch) => {
     const next = segments.map((g, j) => (j === i ? { ...g, ...patch } : g));
-    commit(onChange, value, next, timeScale);
+    commit(onChange, value, next, timeScale, karaCtx);
   };
-  const del = (i) => commit(onChange, value, segments.filter((_, j) => j !== i), timeScale);
+  const del = (i) => commit(onChange, value, segments.filter((_, j) => j !== i), timeScale, karaCtx);
   const add = () => {
     const last = segments[segments.length - 1];
     const start = last ? last.end : 0;
-    commit(onChange, value, [...segments, { start, end: start + 2, text: "" }], timeScale);
+    commit(onChange, value, [...segments, { start, end: start + 2, text: "" }], timeScale, karaCtx);
   };
   const split = (i) => {
     const g = segments[i];
@@ -173,20 +282,20 @@ function makeSegOps(segments, value, onChange, timeScale) {
     const half = Math.ceil(words.length / 2);
     const a = { ...g, end: mid, text: words.slice(0, half).join(" ") || g.text };
     const b = { start: mid, end: g.end, text: words.slice(half).join(" ") };
-    commit(onChange, value, [...segments.slice(0, i), a, b, ...segments.slice(i + 1)], timeScale);
+    commit(onChange, value, [...segments.slice(0, i), a, b, ...segments.slice(i + 1)], timeScale, karaCtx);
   };
   const merge = (i) => {
     if (i >= segments.length - 1) return;
     const a = segments[i], b = segments[i + 1];
     const joined = { start: a.start, end: b.end, text: (a.text + " " + b.text).trim() };
-    commit(onChange, value, [...segments.slice(0, i), joined, ...segments.slice(i + 2)], timeScale);
+    commit(onChange, value, [...segments.slice(0, i), joined, ...segments.slice(i + 2)], timeScale, karaCtx);
   };
   const insertAfter = (i) => {
     const g = segments[i];
     const nxt = segments[i + 1];
     const start = g.end;
     const end = nxt ? Math.min(nxt.start, start + 2) : start + 2;
-    commit(onChange, value, [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)], timeScale);
+    commit(onChange, value, [...segments.slice(0, i + 1), { start, end: Math.max(end, start + 0.5), text: "" }, ...segments.slice(i + 1)], timeScale, karaCtx);
   };
   // hranice podľa ČASU (zoznam nemusí byť zoradený): najneskorší koniec
   // segmentu končiacoho predo mnou a najskorší začiatok segmentu za mnou
@@ -209,7 +318,11 @@ function makeSegOps(segments, value, onChange, timeScale) {
     const minStart = before.length ? Math.max(...before.map((o) => o.end)) : 0;
     const len = g.end - g.start;
     const start = Math.max(minStart, g.start + delta);
-    const res = segments.map((s2, j) => (j === i ? { ...s2, start, end: start + len } : { ...s2 }));
+    const res = segments.map((s2, j) => {
+      if (j !== i) return { ...s2 };
+      const d = start - s2.start;
+      return { ...s2, start, end: start + len, words: s2.words ? s2.words.map((w) => ({ ...w, start: w.start + d, end: w.end + d })) : undefined };
+    });
     // reťazovo posuň segmenty, ktoré boli v čase za posúvaným
     const afterIdx = segments
       .map((o, j) => ({ o, j }))
@@ -224,7 +337,7 @@ function makeSegOps(segments, value, onChange, timeScale) {
       }
       prevEnd = Math.max(prevEnd, res[j].end);
     }
-    commit(onChange, value, res, timeScale);
+    commit(onChange, value, res, timeScale, karaCtx);
   };
   // zotriedi podľa času a ustrihne konce presahujúce do ďalšieho titulku
   const sortFix = () => {
@@ -233,7 +346,7 @@ function makeSegOps(segments, value, onChange, timeScale) {
       if (sorted[k].end > sorted[k + 1].start) sorted[k] = { ...sorted[k], end: sorted[k + 1].start };
     }
     const fixed = sorted.map((g) => (g.end <= g.start ? { ...g, end: g.start + 0.1 } : g));
-    commit(onChange, value, fixed, timeScale);
+    commit(onChange, value, fixed, timeScale, karaCtx);
   };
   return { upd, del, add, split, merge, insertAfter, shift, sortFix, timeBounds };
 }
@@ -244,6 +357,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
   const timeScale = ctx?.timeScale > 0 ? ctx.timeScale : 1;
   const s = useStore();
   const segments = Array.isArray(value?.segments) ? value.segments : [];
+  const karaCtx = makeKaraCtx(values);
 
   useEffect(() => {
     refreshStatus();
@@ -255,10 +369,21 @@ function SubtitlesField({ value, onChange, values, ctx }) {
   // write_temp_srt znova, inak by export zlyhal na neexistujúcom súbore
   useEffect(() => {
     if (segments.length > 0 && (value?.srtPath !== lastWrittenPath || timeScale !== lastScale)) {
-      void commit(onChange, value, segments, timeScale);
+      void commit(onChange, value, segments, timeScale, karaCtx);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeScale]);
+
+  // M4 karaoke: zmena štýlu → pregenerovať ASS (\k časy zostávajú)
+  const karaSig = karaCtx ? JSON.stringify([karaCtx.style.karaokeColor, karaCtx.style.textColor, karaCtx.style.outlineColor, karaCtx.style.bgColor, karaCtx.style.bgOpacity, karaCtx.style.fontName, karaCtx.style.fontSize, karaCtx.style.bold, karaCtx.style.position, karaCtx.style.marginV, karaCtx.style.outline, karaCtx.style.shadow, karaCtx.style.background]) : "";
+  const karaSigRef = useRef(karaSig);
+  useEffect(() => {
+    if (!karaCtx || segments.length === 0) { karaSigRef.current = karaSig; return; }
+    if (karaSig === karaSigRef.current) return;
+    karaSigRef.current = karaSig;
+    void commit(onChange, value, segments, timeScale, karaCtx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [karaSig]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -277,7 +402,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
         <button
           style={btnPrimary}
           disabled={s.busy || !ctx.mediaPath}
-          onClick={() => void transcribe(ctx, onChange, value, values?.lang ?? "auto")}
+          onClick={() => void transcribe(ctx, onChange, value, values?.lang ?? "auto", karaCtx)}
         >
           {s.busy
             ? `${s.busyLabel || t("transcribing", "Prepisujem…")} ${s.progress >= 0 ? Math.round(s.progress) + " %" : ""}`
@@ -300,7 +425,8 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
   const value = values?.subs ?? null;
   const onChange = (v) => onChangeField("subs", v);
   const segments = Array.isArray(value?.segments) ? value.segments : [];
-  const ops = makeSegOps(segments, value, onChange, timeScale);
+  const karaCtx = makeKaraCtx(values);
+  const ops = makeSegOps(segments, value, onChange, timeScale, karaCtx);
 
   const [saveMsg, setSaveMsg] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
@@ -338,13 +464,13 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
     if (next === activeLang) return;
     const v = { ...variants, [activeLang]: segments };
     const nextSegs = Array.isArray(v[next]) ? v[next] : [];
-    await commit(onChange, { ...value, variants: v, activeLang: next }, nextSegs, timeScale);
+    await commit(onChange, { ...value, variants: v, activeLang: next }, nextSegs, timeScale, karaCtx);
   };
   const deleteVariant = async (lang) => {
     const v = { ...variants, [activeLang]: segments };
     delete v[lang];
     const orig = Array.isArray(v.orig) ? v.orig : [];
-    await commit(onChange, { ...value, variants: v, activeLang: "orig" }, orig, timeScale);
+    await commit(onChange, { ...value, variants: v, activeLang: "orig" }, orig, timeScale, karaCtx);
   };
   const doTranslate = async () => {
     if (segments.length === 0 || s.trBusy) return;
@@ -357,7 +483,7 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
       const translated = await api.invoke("translate_segments", { texts, target: translateTarget, source });
       const newSegs = origSegs.map((g, i) => ({ ...g, text: translated[i] ?? g.text }));
       const v = { ...variants, [activeLang]: segments, [translateTarget]: newSegs };
-      await commit(onChange, { ...value, variants: v, activeLang: translateTarget }, newSegs, timeScale);
+      await commit(onChange, { ...value, variants: v, activeLang: translateTarget }, newSegs, timeScale, karaCtx);
       store.setState({ trBusy: false, trMsg: tt("tr_done", "✅ Preložené ({n} titulkov)", { n: newSegs.length }) });
     } catch (e) {
       store.setState({ trBusy: false, trMsg: tt("tr_failed", "❌ {e}", { e: String(e) }) });
@@ -560,6 +686,8 @@ api.registerTool({
         { value: "zh", labelKey: "lang_zh" },
       ] },
     { id: "subs", type: "custom", labelKey: "segments", component: SubtitlesField },
+    { id: "karaoke", type: "checkbox", labelKey: "karaoke", default: false },
+    { id: "karaokeColor", type: "color", labelKey: "karaoke_color", default: "#ffd230" },
     { id: "sec_style", type: "separator", labelKey: "sec_style" },
     { id: "preset", type: "select", labelKey: "preset", default: "custom",
       options: [
@@ -619,6 +747,11 @@ api.registerTool({
       `Alignment=${align}`,
       `MarginV=${margin || 36}`,
     ].join(",");
+    // M4 karaoke: ASS má štýl zapečený v sebe — žiadny force_style
+    if (values.karaoke && subs.assPath) {
+      const escA = String(subs.assPath).replace(/\\/g, "\\\\").replace(/:/g, "\\:");
+      return { label: `🎤 ${t("lbl_count", "titulky")} (${segments.length})`, vf: `subtitles=filename='${escA}'` };
+    }
     // escaping pre subtitles filter (Windows: \ → \\, : → \:)
     const esc = String(subs.srtPath).replace(/\\/g, "\\\\").replace(/:/g, "\\:");
     const vf = `subtitles=filename='${esc}':force_style='${style}'`;

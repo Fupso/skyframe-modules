@@ -73,5 +73,7 @@
   "mkv_save": "MKV mit Spuren",
   "mkv_hint": "MKV mit umschaltbaren Untertitelspuren — ohne Re-Encode",
   "mkv_saved": "✅ MKV gespeichert: {p}",
-  "mkv_failed": "❌ {e}"
+  "mkv_failed": "❌ {e}",
+  "karaoke": "🎤 Karaoke (wortweise)",
+  "karaoke_color": "Gesungene Farbe"
 }
