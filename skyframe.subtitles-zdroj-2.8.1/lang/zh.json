@@ -73,7 +73,5 @@
   "mkv_save": "MKV 多字幕轨",
   "mkv_hint": "带可切换字幕轨道的 MKV — 直接封装，无需重编码",
   "mkv_saved": "✅ MKV 已保存：{p}",
-  "mkv_failed": "❌ {e}",
-  "karaoke": "🎤 卡拉OK（逐词）",
-  "karaoke_color": "已唱颜色"
+  "mkv_failed": "❌ {e}"
 }

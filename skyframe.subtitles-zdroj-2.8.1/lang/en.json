@@ -73,7 +73,5 @@
   "mkv_save": "MKV with tracks",
   "mkv_hint": "MKV with switchable subtitle tracks — stream copy, instant",
   "mkv_saved": "✅ MKV saved: {p}",
-  "mkv_failed": "❌ {e}",
-  "karaoke": "🎤 Karaoke (word-level)",
-  "karaoke_color": "Sung color"
+  "mkv_failed": "❌ {e}"
 }

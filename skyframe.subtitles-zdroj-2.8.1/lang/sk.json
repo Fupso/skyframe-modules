@@ -73,7 +73,5 @@
   "mkv_save": "MKV so stopami",
   "mkv_hint": "MKV s prepínateľnými titulkovými stopami — bez re-enkódu, okamžité",
   "mkv_saved": "✅ MKV uložené: {p}",
-  "mkv_failed": "❌ {e}",
-  "karaoke": "🎤 Karaoke (po slovách)",
-  "karaoke_color": "Farba zaspievaného"
+  "mkv_failed": "❌ {e}"
 }
