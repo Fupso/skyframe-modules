@@ -1,16 +1,5 @@
 // ../../framesbuild-shim.js
-var React = {
-  useState: (v) => [typeof v === "function" ? v() : v, () => {
-  }],
-  useEffect: () => {
-  },
-  useMemo: (f) => f(),
-  useRef: (v) => ({ current: v }),
-  useCallback: (f) => f,
-  useSyncExternalStore: (sub, get) => get(),
-  createElement: () => null,
-  Fragment: "Fragment"
-};
+var React = window.React;
 var useState = React.useState;
 var useEffect = React.useEffect;
 var useMemo = React.useMemo;
