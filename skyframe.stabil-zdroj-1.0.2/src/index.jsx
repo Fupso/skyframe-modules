@@ -12,9 +12,9 @@ api.registerTool({
   labelKey: "title",
   fields: [
     { id: "enabled", type: "checkbox", labelKey: "enabled", default: true },
-    { id: "rx", type: "slider", labelKey: "rx", min: 16, max: 64, step: 16, unit: "px", default: 16 },
-    { id: "ry", type: "slider", labelKey: "ry", min: 16, max: 64, step: 16, unit: "px", default: 16 },
-    { id: "blocksize", type: "slider", labelKey: "blocksize", min: 4, max: 32, step: 4, default: 8, hintKey: "blocksize_hint" },
+    { id: "rx", type: "slider", labelKey: "rx", min: 16, max: 64, step: 16, unit: "px", default: 32 },
+    { id: "ry", type: "slider", labelKey: "ry", min: 16, max: 64, step: 16, unit: "px", default: 32 },
+    { id: "blocksize", type: "slider", labelKey: "blocksize", min: 4, max: 32, step: 4, default: 16, hintKey: "blocksize_hint" },
     {
       id: "edge", type: "select", labelKey: "edge", default: "mirror",
       options: [

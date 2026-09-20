@@ -359,11 +359,9 @@ function analyzePhotoStyle(img) {
 // ---------------------------------------------------------------------------
 
 async function savePresets(presets) {
-  try {
-    await api.invoke("set_module_config", { id: api.moduleId, config: { presets } });
-  } catch (e) {
-    console.error("[filtre] ukladanie štýlov:", e);
-  }
+  // chybu necháme vybublať — volajúci ju ukáže používateľovi (tiché zlyhanie
+  // = „filter sa neuložil" a nikto nevie prečo)
+  await api.invoke("set_module_config", { id: api.moduleId, config: { presets } });
 }
 
 // ---------------------------------------------------------------------------
@@ -720,7 +718,15 @@ function FiltersField({ value, onChange, ctx }) {
       const thumb = makeThumb(st.baseThumb || img, style); // ak nie je base, aspoň samotná fotka
       const presets = [...st.presets, { id, name, style, photoPath }];
       store.setState({ presets, thumbs: { ...st.thumbs, [id]: thumb }, openCustom: true });
-      savePresets(presets);
+      // okamžite aplikuj nový filter — používateľ čaká, že sa po výbere
+      // fotky filter hneď použije (predtým sa len pridal do zoznamu)
+      setV({ style, presetId: id, presetName: name, curves: null, wheels: { ...NEUTRAL_WHEELS } });
+      try {
+        await savePresets(presets);
+      } catch (e) {
+        store.setState({ saveError: String(e) });
+        console.error("[filtre] ukladanie filtra z fotky:", e);
+      }
     } catch (e) {
       console.error("[filtre] filter z fotky:", e);
     } finally {
@@ -955,6 +961,9 @@ function FiltersField({ value, onChange, ctx }) {
       >
         {s.photoBusy ? `⏳ ${t("photo_analyzing", "Analyzujem fotku…")}` : `➕ ${t("add_from_photo", "Nový filter z fotky")}`}
       </button>
+      {s.saveError && (
+        <div style={{ color: "#f87171", fontSize: 11, marginTop: -4, marginBottom: 8 }}>{t("save_failed", "Uloženie zlyhalo")}: {s.saveError}</div>
+      )}
 
       {/* Rollovateľný zoznam filtrov v sekciách */}
       <div style={{ paddingRight: 2 }}>

@@ -1,7 +1,7 @@
 {
   "id": "skyframe.filters",
   "name": "Filtre",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "author": "SkyFrame Community",
   "description": "Farebné štýly, krivky, farebné kolieska a AI maska oblohy — deklaratívny nástroj Editora. Hodnoty sa ukladajú v session, kombinuje sa s ostatnými nástrojmi do jedného výstupu (WYSIWYG).",
   "icon": "🎨",
