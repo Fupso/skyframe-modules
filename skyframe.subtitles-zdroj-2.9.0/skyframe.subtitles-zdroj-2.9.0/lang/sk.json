@@ -73,5 +73,9 @@
   "mkv_save": "MKV so stopami",
   "mkv_hint": "MKV s prepínateľnými titulkovými stopami — bez re-enkódu, okamžité",
   "mkv_saved": "✅ MKV uložené: {p}",
-  "mkv_failed": "❌ {e}"
+  "mkv_failed": "❌ {e}",
+  "animated": "Animované po slovách",
+  "anim_words": "Slová v skupine",
+  "anim_color": "Farba aktívneho slova",
+  "anim_upper": "VŠETKO VEĽKÝM"
 }

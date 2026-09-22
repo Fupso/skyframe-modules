@@ -73,5 +73,9 @@
   "mkv_save": "MKV with tracks",
   "mkv_hint": "MKV with switchable subtitle tracks — stream copy, instant",
   "mkv_saved": "✅ MKV saved: {p}",
-  "mkv_failed": "❌ {e}"
+  "mkv_failed": "❌ {e}",
+  "animated": "Animated word-by-word",
+  "anim_words": "Words per group",
+  "anim_color": "Active word color",
+  "anim_upper": "ALL CAPS"
 }

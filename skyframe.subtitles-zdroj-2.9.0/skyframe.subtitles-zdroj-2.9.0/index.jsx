@@ -85,16 +85,109 @@ function parseTime(str) {
 // zapíše SRT cez core a potvrdí nové dáta do toolValues (autosave + rebuild kroku)
 let lastWrittenPath = ""; // čerstvosť: po reštarte appky sa SRT vždy regeneruje
 let lastScale = 1;
+
+// ── Animované titulky po slovách (krok 90, Hormozi štýl) ─────────────────
+// Zo segmentov (slov z word-mode prepisu, alebo viet — tie sa rozdelia
+// rovnomerne) zloží ASS: skupina N slov, aktívne slovo žlté + „pop" zoom.
+function assTime(sec) {
+  const cs = Math.round(Math.max(0, sec) * 100);
+  const h = Math.floor(cs / 360000), m = Math.floor((cs % 360000) / 6000), ss = Math.floor((cs % 6000) / 100);
+  return `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}.${String(cs % 100).padStart(2, "0")}`;
+}
+function escAssText(x) {
+  return String(x).replace(/[{}]/g, "").replace(/\r?\n/g, " ").trim();
+}
+function buildAnimatedAss(segments, values) {
+  const perGroup = clamp(Math.round(Number(values?.animWords) || 2), 1, 4);
+  const upper = values?.animUpper !== false;
+  const hi = hexToAss(values?.animColor || "#ffff00"); // &HAABBGGRR
+  const fs = clamp(Math.round((Number(values?.fontSize) || 26) * 1.5), 12, 110);
+  const align = values?.position === "top" ? 8 : values?.position === "middle" ? 5 : 2;
+  const margin = clamp(Number(values?.marginV) || 36, 0, 400);
+  const outW = clamp(Number(values?.outline ?? 2) || 2, 1, 6);
+
+  // rozbaľ segmenty na slová (veta bez word časov → rovnomerné rozdelenie)
+  const all = [];
+  for (const g of segments) {
+    const parts = String(g.text).trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) continue;
+    const d = (g.end - g.start) / parts.length;
+    parts.forEach((w, i) => all.push({
+      start: g.start + i * d,
+      end: i === parts.length - 1 ? g.end : g.start + (i + 1) * d,
+      text: upper ? w.toUpperCase() : w,
+    }));
+  }
+  all.sort((a, b) => a.start - b.start);
+
+  // rozdeľ na „riadky" — pauza > 0,8 s medzi slovami začína novú skupinu,
+  // aby sa do jednej skupiny nemiešal koniec a začiatok dvoch viet
+  const lines = [];
+  let cur = [];
+  for (const w of all) {
+    if (cur.length && w.start - cur[cur.length - 1].end > 0.8) { lines.push(cur); cur = []; }
+    cur.push(w);
+  }
+  if (cur.length) lines.push(cur);
+
+  const events = [];
+  for (const line of lines) {
+    for (let i = 0; i < line.length; i += perGroup) {
+      const chunk = line.slice(i, i + perGroup);
+      const chunkEnd = chunk[chunk.length - 1].end;
+      const isLastInLine = i + perGroup >= line.length;
+      chunk.forEach((w, j) => {
+        const evStart = w.start;
+        // chvostík +0,1 s len na konci riadku (pred pauzou) — inak by sa event
+        // prekryl s prvým eventom ďalšej skupiny
+        const evEnd = j + 1 < chunk.length ? chunk[j + 1].start : chunkEnd + (isLastInLine ? 0.1 : 0);
+        const txt = chunk.map((cw, k) => (k === j
+          ? `{\\c${hi}&\\fscx100\\fscy100\\t(0,90,\\fscx118\\fscy118)}${escAssText(cw.text)}{\\r}`
+          : escAssText(cw.text))).join(" ");
+        events.push(`Dialogue: 0,${assTime(evStart)},${assTime(evEnd)},WC,,0,0,0,,${txt}`);
+      });
+    }
+  }
+
+  return [
+    "[Script Info]",
+    "Title: Rod Studio word captions",
+    "ScriptType: v4.00+",
+    "PlayResX: 1920",
+    "PlayResY: 1080",
+    "ScaledBorderAndShadow: yes",
+    "WrapStyle: 0",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: WC,${values?.fontName || "Arial"},${fs},${hexToAss(values?.textColor || "#ffffff")},&H000000FF,${hexToAss(values?.outlineColor || "#000000")},&H64000000,-1,0,0,0,100,100,0,0,1,${outW},1,${align},40,40,${margin},1`,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ...events,
+    "",
+  ].join("\r\n");
+}
+
 async function commit(onChange, value, segments, timeScale = 1) {
   try {
     // segmenty držíme v čase ZDROJA (editor ich tak ukazuje), do SRT idú
     // škálované — subtitles filter ich kreslí na časovú os PO časozbere
     const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
     const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
-    const srtPath = await api.invoke("write_temp_srt", { segments: scaled, previous: value?.srtPath ?? null });
-    lastWrittenPath = srtPath;
-    lastScale = ts;
-    onChange({ ...value, segments, srtPath });
+    if (value?.animated) {
+      // animovaný režim: karaoke ASS (štýl je zabudovaný v súbore)
+      const ass = buildAnimatedAss(scaled, value);
+      const assPath = await api.invoke("write_temp_subs", { content: ass, ext: "ass", previous: value?.assPath ?? value?.srtPath ?? null });
+      lastWrittenPath = assPath;
+      lastScale = ts;
+      onChange({ ...value, segments, srtPath: null, assPath });
+    } else {
+      const srtPath = await api.invoke("write_temp_srt", { segments: scaled, previous: value?.srtPath ?? value?.assPath ?? null });
+      lastWrittenPath = srtPath;
+      lastScale = ts;
+      onChange({ ...value, segments, srtPath, assPath: null });
+    }
   } catch (e) {
     store.setState({ error: String(e) });
   }
@@ -120,6 +213,8 @@ async function transcribe(ctx, onChange, value, lang) {
       lang: lang || "auto",
       model,
       moduleId: api.moduleId,
+      // animovaný režim: každé slovo s vlastným časom (-ml 1)
+      wordMode: !!value?.animated,
     });
     const res = await watchJob(jobId, (j) =>
       store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" })
@@ -254,7 +349,8 @@ function SubtitlesField({ value, onChange, values, ctx }) {
   // temp .srt neprežije reštart appky — obnovenú session preženieme cez
   // write_temp_srt znova, inak by export zlyhal na neexistujúcom súbore
   useEffect(() => {
-    if (segments.length > 0 && (value?.srtPath !== lastWrittenPath || timeScale !== lastScale)) {
+    const activePath = value?.animated ? value?.assPath : value?.srtPath;
+    if (segments.length > 0 && (activePath !== lastWrittenPath || timeScale !== lastScale)) {
       void commit(onChange, value, segments, timeScale);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -560,6 +656,10 @@ api.registerTool({
         { value: "zh", labelKey: "lang_zh" },
       ] },
     { id: "subs", type: "custom", labelKey: "segments", component: SubtitlesField },
+    { id: "animated", type: "checkbox", labelKey: "animated", default: false },
+    { id: "animWords", type: "number", labelKey: "anim_words", min: 1, max: 4, step: 1, default: 2 },
+    { id: "animColor", type: "color", labelKey: "anim_color", default: "#ffff00" },
+    { id: "animUpper", type: "checkbox", labelKey: "anim_upper", default: true },
     { id: "sec_style", type: "separator", labelKey: "sec_style" },
     { id: "preset", type: "select", labelKey: "preset", default: "custom",
       options: [
@@ -594,6 +694,12 @@ api.registerTool({
     if (ctx.kind !== "video") return null;
     const subs = values.subs;
     const segments = subs && Array.isArray(subs.segments) ? subs.segments : [];
+    // animovaný režim (krok 90): karaoke ASS, štýl zabudovaný v súbore
+    if (values.animated) {
+      if (!subs?.assPath || segments.length === 0) return null;
+      const escA = String(subs.assPath).replace(/\\/g, "\\\\").replace(/:/g, "\\:");
+      return { label: `⚡💬 ${t("lbl_count", "titulky")} (${segments.length})`, vf: `subtitles=filename='${escA}'` };
+    }
     if (!subs?.srtPath || segments.length === 0) return null;
 
     // preset prepíše vlastné nastavenia (krok 76e)
