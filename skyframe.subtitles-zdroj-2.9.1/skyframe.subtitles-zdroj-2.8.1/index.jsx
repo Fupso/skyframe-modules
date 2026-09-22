@@ -8,7 +8,7 @@ import React from "react";
 
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
-const { useState, useEffect, useSyncExternalStore } = React;
+const { useState, useEffect, useSyncExternalStore, useRef } = React;
 const tt = (k, f, vars) => {
   let str = t(k, f);
   for (const [kk, vv] of Object.entries(vars ?? {})) str = str.replaceAll(`{${kk}}`, String(vv));
@@ -84,6 +84,7 @@ function parseTime(str) {
 
 // zapíše SRT cez core a potvrdí nové dáta do toolValues (autosave + rebuild kroku)
 let lastWrittenPath = ""; // čerstvosť: po reštarte appky sa SRT vždy regeneruje
+let lastAnimated = false; // top-level hodnota poľa "animated" (commit dostáva len subs objekt)
 let lastScale = 1;
 
 // ── Animované titulky po slovách (krok 90, Hormozi štýl) ─────────────────
@@ -175,7 +176,7 @@ async function commit(onChange, value, segments, timeScale = 1) {
     // škálované — subtitles filter ich kreslí na časovú os PO časozbere
     const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
     const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
-    if (value?.animated) {
+    if (lastAnimated) {
       // animovaný režim: karaoke ASS (štýl je zabudovaný v súbore)
       const ass = buildAnimatedAss(scaled, value);
       const assPath = await api.invoke("write_temp_subs", { content: ass, ext: "ass", previous: value?.assPath ?? value?.srtPath ?? null });
@@ -214,7 +215,7 @@ async function transcribe(ctx, onChange, value, lang) {
       model,
       moduleId: api.moduleId,
       // animovaný režim: každé slovo s vlastným časom (-ml 1)
-      wordMode: !!value?.animated,
+      wordMode: lastAnimated,
     });
     const res = await watchJob(jobId, (j) =>
       store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" })
@@ -340,6 +341,19 @@ function SubtitlesField({ value, onChange, values, ctx }) {
   const s = useStore();
   const segments = Array.isArray(value?.segments) ? value.segments : [];
 
+  // prepnutie Animované po slovách: precommitni existujúce titulky do
+  // druhého formátu (SRT ↔ karaoke ASS), inak by krok zmizol z pipeline
+  const animated = !!values?.animated;
+  lastAnimated = animated;
+  const animRef = useRef(animated);
+  useEffect(() => {
+    lastAnimated = animated;
+    if (animRef.current === animated) return;
+    animRef.current = animated;
+    if (segments.length > 0) void commit(onChange, value, segments, timeScale);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animated]);
+
   useEffect(() => {
     refreshStatus();
     const iv = setInterval(refreshStatus, 6000);
@@ -349,7 +363,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
   // temp .srt neprežije reštart appky — obnovenú session preženieme cez
   // write_temp_srt znova, inak by export zlyhal na neexistujúcom súbore
   useEffect(() => {
-    const activePath = value?.animated ? value?.assPath : value?.srtPath;
+    const activePath = lastAnimated ? value?.assPath : value?.srtPath;
     if (segments.length > 0 && (activePath !== lastWrittenPath || timeScale !== lastScale)) {
       void commit(onChange, value, segments, timeScale);
     }
@@ -393,6 +407,7 @@ function SubtitlesField({ value, onChange, values, ctx }) {
 // Spodný panel — zoznam segmentov cez celú šírku, všetko v jednom riadku
 function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
   const timeScale = ctx?.timeScale > 0 ? ctx.timeScale : 1;
+  lastAnimated = !!values?.animated;
   const value = values?.subs ?? null;
   const onChange = (v) => onChangeField("subs", v);
   const segments = Array.isArray(value?.segments) ? value.segments : [];
@@ -695,6 +710,7 @@ api.registerTool({
     const subs = values.subs;
     const segments = subs && Array.isArray(subs.segments) ? subs.segments : [];
     // animovaný režim (krok 90): karaoke ASS, štýl zabudovaný v súbore
+    lastAnimated = !!values.animated;
     if (values.animated) {
       if (!subs?.assPath || segments.length === 0) return null;
       const escA = String(subs.assPath).replace(/\\/g, "\\\\").replace(/:/g, "\\:");
