@@ -71,6 +71,8 @@ const initialState = {
   maskProgress: -1,     // progres výpočtu AI masky videa (-1 = nič)
   maskPhase: null,      // "quick" | "full" | null — čo sa práve počíta
   presets: [],          // používateľské štýly z configu
+  saveFlash: false,     // krátke „✓ Uložené" na tlačidle
+  saveError: null,      // posledná chyba ukladania presetu (viditeľná v UI)
   baseThumb: null,      // HTMLImageElement ukážkovej fotky
   thumbs: {},           // presetId -> dataURL miniatúry s filtrom
   photoBusy: false,     // prebieha analýza fotky
@@ -864,6 +866,10 @@ function FiltersField({ value, onChange, ctx }) {
   const v = { ...DEFAULT_GRADE, ...(value ?? {}) };
   const setV = (patch) => onChange({ ...v, ...patch });
   const [hslColor, setHslColor] = useState("r"); // vybraná farba HSL panelu (4.2.0)
+  // čerstvá hodnota pre serializované commity (async gap by inak prepisoval novšie staršími)
+  const vRef = useRef(v);
+  vRef.current = v;
+  const adjustQueueRef = useRef(Promise.resolve());
   const media = ctx?.mediaPath ? { path: ctx.mediaPath, kind: ctx.kind } : null;
 
   // Live náhľad počas ťahania (krok 42): SVG LUT cez core, 0 ms latencia.
@@ -889,21 +895,38 @@ function FiltersField({ value, onChange, ctx }) {
     api.setEditorLiveFilter(lut ? { ...spec, lut3d: lut } : spec);
   };
 
-  // Vibrancia/HSL: commit = vygeneruj 3D LUT cez core a jediným setV
-  // zapíš hodnoty aj cestu — len jeden proxy render na zmenu (4.2.0)
-  const commitAdjust = async (patch) => {
-    const nv = { ...v, ...patch };
-    let lutPath = "";
-    if (adjustActive(nv) && api.invoke) {
+  // Vibrancia/HSL: commity sa ZLÚČIA a oneskoria o 400 ms po poslednom
+  // pohybe slidera — jedno ladenie = jeden commit = jeden proxy render
+  // (predtým každé pustenie slidera spustilo nový render → 10 jobov naraz).
+  // Fronta adjustQueueRef zostáva: async commity sa nepredbiehajú.
+  const pendingAdjustRef = useRef(null);
+  const adjustTimerRef = useRef(null);
+  const runAdjustCommit = (patch) => {
+    adjustQueueRef.current = adjustQueueRef.current.then(async () => {
+      const nv = { ...vRef.current, ...patch };
+      if (!adjustActive(nv) || !api.invoke) {
+        setV({ ...patch, hslLutPath: "" });
+        return;
+      }
       try {
         const content = buildAdjustCube(nv.vibrance, nv.hsl);
-        lutPath = await api.invoke("save_lut_file", { name: `hsl-${hashString(content)}`, content });
+        const path = await api.invoke("save_lut_file", { name: `hsl-${hashString(content)}`, content });
+        setV({ ...patch, hslLutPath: path });
       } catch (e) {
         console.error("[filtre] generovanie HSL LUT:", e);
         store.setState({ saveError: String(e) });
       }
-    }
-    setV({ ...patch, hslLutPath: lutPath });
+    });
+  };
+  const commitAdjust = (patch) => {
+    pendingAdjustRef.current = { ...(pendingAdjustRef.current || {}), ...patch };
+    if (adjustTimerRef.current) clearTimeout(adjustTimerRef.current);
+    adjustTimerRef.current = setTimeout(() => {
+      adjustTimerRef.current = null;
+      const p = pendingAdjustRef.current;
+      pendingAdjustRef.current = null;
+      if (p) runAdjustCommit(p);
+    }, 400);
   };
 
   // Import LUT (.cube) — obsah sa skopíruje do app_dir/luts (stabilná cesta)
@@ -1071,17 +1094,41 @@ function FiltersField({ value, onChange, ctx }) {
   }, [v.aiMask, media?.path]);
 
   const pick = (p) => {
+    // preset prepíše hodnoty — zahoď čakajúci oneskorený commit zo sliderov,
+    // inak by o 400 ms prepísal práve vybraný preset starými hodnotami
+    pendingAdjustRef.current = null;
+    if (adjustTimerRef.current) { clearTimeout(adjustTimerRef.current); adjustTimerRef.current = null; }
     if (v.presetId === p.id) {
       setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "" });
     } else {
-      setV({
+      const np = {
         style: p.style,
         presetId: p.id,
         presetName: p.name || null,
         curves: p.curves ? p.curves.map((pt) => [...pt]) : null,
         wheels: p.wheels ? { s: [...(p.wheels.s || [0, 0])], m: [...(p.wheels.m || [0, 0])], h: [...(p.wheels.h || [0, 0])] } : { ...NEUTRAL_WHEELS },
-        temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "",
-      });
+        temp: p.temp || 0,
+        tint: p.tint || 0,
+        vibrance: p.vibrance || 0,
+        hsl: p.hsl ? JSON.parse(JSON.stringify(p.hsl)) : null,
+        lutPath: p.lutPath || "",
+        lutName: p.lutName || "",
+        hslLutPath: "",
+      };
+      // vibrancia/HSL z presetu → regeneruj 3D LUT súbor (rovnaké hodnoty = rovnaký súbor)
+      if (adjustActive(np) && api.invoke) {
+        adjustQueueRef.current = adjustQueueRef.current.then(async () => {
+          try {
+            const content = buildAdjustCube(np.vibrance, np.hsl);
+            const path = await api.invoke("save_lut_file", { name: `hsl-${hashString(content)}`, content });
+            setV({ ...np, hslLutPath: path });
+          } catch {
+            setV(np);
+          }
+        });
+      } else {
+        setV(np);
+      }
     }
   };
 
@@ -1388,7 +1435,7 @@ function FiltersField({ value, onChange, ctx }) {
             <button
               className="w-full px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
               onClick={() => {
-                if (!v.curves && !wheelsActive(v.wheels) && !v.style) return;
+                if (!v.curves && !wheelsActive(v.wheels) && !v.style && !(v.temp || v.tint || adjustActive(v) || v.lutPath)) return;
                 const st = store.getState();
                 const id = `custom_${Date.now()}`;
                 const name = `${t("custom_grade_prefix", "Úprava")} ${st.presets.length + 1}`;
@@ -1398,6 +1445,13 @@ function FiltersField({ value, onChange, ctx }) {
                   style: v.style || mkStyle(0, 0, 0, 100, 100, 100),
                   curves: v.curves ? v.curves.map((pt) => [...pt]) : undefined,
                   wheels: wheelsActive(v.wheels) ? { s: [...v.wheels.s], m: [...v.wheels.m], h: [...v.wheels.h] } : undefined,
+                  // 4.2.0: ulož aj nové polia (teplota/tónovanie/vibrancia/HSL/LUT)
+                  temp: v.temp || undefined,
+                  tint: v.tint || undefined,
+                  vibrance: v.vibrance || undefined,
+                  hsl: v.hsl ? JSON.parse(JSON.stringify(v.hsl)) : undefined,
+                  lutPath: v.lutPath || undefined,
+                  lutName: v.lutName || undefined,
                 };
                 let thumb = null;
                 try { if (st.baseThumb) thumb = makeThumb(st.baseThumb, preset.style, preset.curves || null, preset.wheels || null); } catch {}
@@ -1407,11 +1461,26 @@ function FiltersField({ value, onChange, ctx }) {
                   thumbs: thumb ? { ...st.thumbs, [id]: thumb } : st.thumbs,
                   openCustom: true,
                 });
-                savePresets(presets);
+                void (async () => {
+                  try {
+                    await savePresets(presets);
+                    console.log("[filtre] preset uložený:", name);
+                    store.setState({ saveError: null, saveFlash: true });
+                    setTimeout(() => store.setState({ saveFlash: false }), 2000);
+                  } catch (e) {
+                    console.error("[filtre] ukladanie presetu zlyhalo:", e);
+                    store.setState({ saveError: String(e && e.message ? e.message : e) });
+                  }
+                })();
               }}
             >
-              💾 {t("save_grade", "Uložiť ako vlastný filter")}
+              {s.saveFlash ? `✓ ${t("saved_ok", "Uložené")}` : `💾 ${t("save_grade", "Uložiť ako vlastný filter")}`}
             </button>
+            {s.saveError && (
+              <div className="mt-1 px-2 py-1 text-[11px] rounded bg-red-900/40 border border-red-700 text-red-300">
+                ⚠️ {t("save_error", "Uloženie zlyhalo")}: {s.saveError}
+              </div>
+            )}
           </div>
         )}
       </div>
