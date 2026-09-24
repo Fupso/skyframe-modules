@@ -1,20 +1,44 @@
-// skyframe.audiotools v2.2.0 — Zvuk (deklaratívny nástroj Editora, kroky 51+53)
+// skyframe.audiotools v2.5.0 — Zvuk (deklaratívny nástroj Editora)
 // Žiadna vlastná stránka: polia vykresľuje core v pravom paneli Editora,
 // úpravy sa skladajú do zásobníka a aplikujú v JEDNOM exporte spolu
 // s ostatnými nástrojmi (filtre, časozber…). Hodnoty sa auto-ukladajú
 // v session — pád programu nestratí rozpracovanosť.
-// v2.2.0: hudobný podmaz cez audio graf (druhý vstup) — mix alebo náhrada
-// pôvodného zvuku, hudba sa automaticky loopuje na dĺžku videa.
+// v2.5.0: čistenie zvuku — klasické FFT (afftdn) alebo AI hlas (RNNoise/
+// arnndn, model bd.rnnn sa stiahne raz cez core príkaz ensure_denoise_model).
+// Čistenie ide v reťazci PRVÉ (denoise pred normalizáciou — inak loudnorm
+// zdvihne aj šum).
 
 import React from "react";
 
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
 
+// AI model sa sťahuje lenivo — až keď používateľ režim AI naozaj použije
+let denoiseModelPath = null;
+let denoiseModelRequested = false;
+function ensureDenoiseModel() {
+  if (denoiseModelRequested || !api.invoke) return;
+  denoiseModelRequested = true;
+  api.invoke("ensure_denoise_model")
+    .then((p) => { if (typeof p === "string" && p) denoiseModelPath = p.replace(/\\/g, "/"); })
+    .catch(() => { /* offline / zlyhal download — AI režim použije klasický fallback */ });
+}
+
 api.registerTool({
   icon: "🔊",
   labelKey: "title",
   fields: [
+    { id: "sec_denoise", type: "separator", labelKey: "sec_denoise" },
+    {
+      id: "denoiseMode", type: "select", labelKey: "denoise_mode", default: "off",
+      options: [
+        { value: "off", labelKey: "denoise_mode_off" },
+        { value: "fft", labelKey: "denoise_mode_fft" },
+        { value: "ai", labelKey: "denoise_mode_ai" },
+      ],
+    },
+    { id: "denoiseStrength", type: "slider", labelKey: "denoise_strength", min: 1, max: 30, step: 1, unit: " dB", default: 12 },
+    { id: "aiMix", type: "slider", labelKey: "ai_mix", min: 0, max: 100, step: 5, unit: " %", default: 85 },
     { id: "sec_vol", type: "separator", labelKey: "sec_volume" },
     { id: "volume", type: "slider", labelKey: "volume", min: 0, max: 300, step: 1, unit: " %", default: 100 },
     { id: "normalize", type: "checkbox", labelKey: "normalize", default: false },
@@ -23,6 +47,12 @@ api.registerTool({
     { id: "fadeOut", type: "time", labelKey: "fade_out", min: 0, max: 30, step: 0.5, unit: "s", default: 0, fromEnd: true },
     { id: "sec_sil", type: "separator", labelKey: "sec_silence" },
     { id: "removeSilence", type: "checkbox", labelKey: "remove_silence", default: false },
+    { id: "sec_fx", type: "separator", labelKey: "sec_fx" },
+    { id: "bass", type: "slider", labelKey: "fx_bass", min: -20, max: 20, step: 1, unit: " dB", default: 0 },
+    { id: "treble", type: "slider", labelKey: "fx_treble", min: -20, max: 20, step: 1, unit: " dB", default: 0 },
+    { id: "echo", type: "checkbox", labelKey: "fx_echo", default: false },
+    { id: "reverb", type: "checkbox", labelKey: "fx_reverb", default: false },
+    { id: "chorus", type: "checkbox", labelKey: "fx_chorus", default: false },
     { id: "sec_music", type: "separator", labelKey: "sec_music" },
     {
       id: "musicPath", type: "file", labelKey: "music_file",
@@ -46,6 +76,28 @@ api.registerTool({
     // reťazec úprav pôvodného zvuku
     const chain = [];
     const labels = [];
+
+    // ── Čistenie zvuku — PRVÉ v reťazci (pred normalizáciou!) ────────────
+    const dm = typeof values.denoiseMode === "string" ? values.denoiseMode : "off";
+    if (dm === "ai") {
+      ensureDenoiseModel();
+      if (denoiseModelPath) {
+        // arnndn akceptuje len 48 kHz; mix < 100 % zachová prirodzenosť
+        const mix = Math.max(0, Math.min(100, Number(values.aiMix ?? 85))) / 100;
+        chain.push(`aresample=48000,arnndn=m='${denoiseModelPath}':mix=${mix.toFixed(2)}`);
+        labels.push(t("lbl_denoise_ai", "AI čistenie"));
+      } else {
+        // model sa ešte sťahuje (alebo download zlyhal) — klasický fallback,
+        // export nesmie skrachovať len kvôli chýbajúcemu modelu
+        const nr = Math.max(1, Math.min(30, Number(values.denoiseStrength ?? 12)));
+        chain.push(`afftdn=nr=${nr}:nf=-45`);
+        labels.push(t("lbl_denoise_fft", "čistenie šumu"));
+      }
+    } else if (dm === "fft") {
+      const nr = Math.max(1, Math.min(30, Number(values.denoiseStrength ?? 12)));
+      chain.push(`afftdn=nr=${nr}:nf=-45`);
+      labels.push(t("lbl_denoise_fft", "čistenie šumu"));
+    }
 
     if (values.removeSilence) {
       // ticho na začiatku + všetky tiché úseky dlhšie ako 0,5 s
@@ -75,6 +127,31 @@ api.registerTool({
     if (fo > 0 && ctx.duration > fo) {
       chain.push(`afade=t=out:st=${(ctx.duration - fo).toFixed(3)}:d=${fo}`);
       labels.push(`fade out ${fo} s`);
+    }
+
+    const bass = Number(values.bass ?? 0);
+    if (Math.abs(bass) > 0.01) {
+      chain.push(`bass=g=${bass.toFixed(1)}`);
+      labels.push(`bass ${bass > 0 ? "+" : ""}${bass} dB`);
+    }
+
+    const treble = Number(values.treble ?? 0);
+    if (Math.abs(treble) > 0.01) {
+      chain.push(`treble=g=${treble.toFixed(1)}`);
+      labels.push(`treble ${treble > 0 ? "+" : ""}${treble} dB`);
+    }
+
+    if (values.echo) {
+      chain.push("aecho=0.7:0.7:50:0.35");
+      labels.push(t("lbl_echo", "echo"));
+    }
+    if (values.reverb) {
+      chain.push("aecho=0.8:0.9:40|50|60|70:0.4|0.32|0.25|0.2");
+      labels.push(t("lbl_reverb", "ozvena"));
+    }
+    if (values.chorus) {
+      chain.push("chorus=0.6:0.9:50:0.4:0.25:2");
+      labels.push(t("lbl_chorus", "chorus"));
     }
 
     const music = typeof values.musicPath === "string" && values.musicPath.trim() ? values.musicPath.trim() : null;
