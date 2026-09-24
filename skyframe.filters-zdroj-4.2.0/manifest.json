@@ -1,9 +1,9 @@
 {
   "id": "skyframe.filters",
   "name": "Filtre",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "author": "SkyFrame Community",
-  "description": "Farebné štýly, krivky, farebné kolieska a AI maska oblohy — deklaratívny nástroj Editora. Hodnoty sa ukladajú v session, kombinuje sa s ostatnými nástrojmi do jedného výstupu (WYSIWYG).",
+  "description": "Filtre a farebné ladenie v Editore — vstavané a vlastné štýly, krivky, farebné kolieska, teplota/tónovanie, vibrancia, HSL podľa farieb, import LUT (.cube), len-obloha s AI maskou.",
   "icon": "🎨",
   "entry_point": "index.js",
   "enabled": true,

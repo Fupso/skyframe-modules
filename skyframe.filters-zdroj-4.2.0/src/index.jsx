@@ -1,4 +1,7 @@
-// skyframe.filters v4.0.0 — Filtre (deklaratívny nástroj Editora, krok 66)
+// skyframe.filters v4.2.0 — Filtre (deklaratívny nástroj Editora)
+// v4.2.0: teplota + tónovanie (kanálová LUT — live náhľad 1:1 s exportom),
+// vibrancia + HSL podľa farieb (zapečené do generovaného 3D LUT cez core
+// príkaz save_lut_file → ffmpeg lut3d), import LUT (.cube) filmových lookov.
 // Čistý nástroj: žiadny vlastný náhľad ani export. Štýl sa zapíše ako krok
 // do zásobníka úprav v core — náhľad aj export robí Editor jednou vetvou
 // (WYSIWYG) a kombinuje ho s ostatnými nástrojmi (Portrét…).
@@ -91,6 +94,13 @@ const DEFAULT_GRADE = {
   maskQuick: false,     // true = len rýchla maska (náhľad), plná sa počíta
   curves: null,         // [[x,y],...] | null (master krivka)
   wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },  // tieň/stredy/svetlá [dx,dy]
+  temp: 0,            // teplota -100..100 (teplá/studená)
+  tint: 0,            // tónovanie -100..100 (zelená/purpurová)
+  vibrance: 0,        // vibrancia -100..100 (zapečená do hslLutPath)
+  hsl: null,          // {r:[h,s,l], y,g,c,b,m} | null — HSL podľa farieb
+  hslLutPath: "",     // vygenerovaný 3D LUT pre vibranciu+HSL (app_dir/luts)
+  lutPath: "",        // importovaný .cube (kópia v app_dir/luts)
+  lutName: "",        // názov importovaného LUT (zobrazenie v UI)
 };
 
 const NEUTRAL_WHEELS = { s: [0, 0], m: [0, 0], h: [0, 0] };
@@ -165,9 +175,16 @@ function wheelToRgb(off) {
  *  Poradie: offset kanálov → jas/kontrast → kolieska (váhy z kanálovej úrovne)
  *  → master krivka. Sýtosť je mimo LUT (luma-based) — rieši sa zvlášť
  *  (CSS saturate v live náhľade, eq=saturation vo ffmpeg). */
-function buildChannelLuts(style, intensity, curves, wheels) {
+function buildChannelLuts(style, intensity, curves, wheels, adj) {
   const s = style ? scaledStyle(style, intensity) : mkStyle(0, 0, 0, 100, 100, 100);
-  const off = [s.channels.r.intercept, s.channels.g.intercept, s.channels.b.intercept];
+  // teplota: teplá = +červená/-modrá; tónovanie: purpurová = +R+B / zelená = -R-B (4.2.0)
+  const tempK = ((adj && adj.temp) || 0) / 100 * 0.12;
+  const tintK = ((adj && adj.tint) || 0) / 100 * 0.12;
+  const off = [
+    s.channels.r.intercept + tempK + tintK * 0.5,
+    s.channels.g.intercept - tintK,
+    s.channels.b.intercept - tempK + tintK * 0.5,
+  ];
   const bright = ((s.css.brightness - 100) / 100) * 0.5;
   const cont = s.css.contrast / 100;
   const wS = wheels ? wheelToRgb(wheels.s || [0, 0]) : [0, 0, 0];
@@ -200,8 +217,8 @@ function isIdentityLut(lut) {
 
 /** Live LUT pre okamžitý náhľad počas ťahania (krok 42) — priamo z
  *  buildChannelLuts, takže live náhľad a ffmpeg počítajú TO ISTÉ. */
-function computeLiveSpec(style, intensity, curves, wheels) {
-  const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels);
+function computeLiveSpec(style, intensity, curves, wheels, adj) {
+  const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels, adj);
   return {
     r: luts[0].map((v) => v.toFixed(3)).join(" "),
     g: luts[1].map((v) => v.toFixed(3)).join(" "),
@@ -230,8 +247,8 @@ function isNeutralStyle(style) {
 /** Poskladá ffmpeg reťazec: celý grading ako JEDNA per-kanálová curves
  *  (33 bodov) + eq=saturation. Vďaka tomu je výstup identický s live
  *  náhľadom (rovnaká funkcia, žiadny colorbalance s pixel-luma váhami). */
-function buildChain(style, intensity, curves, wheels) {
-  const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels);
+function buildChain(style, intensity, curves, wheels, adj) {
+  const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels, adj);
   const parts = [];
   const allIdentity = luts.every(isIdentityLut);
   if (!allIdentity) {
@@ -267,6 +284,119 @@ function skyGraphAi(chain, maskStart = 0) {
 
 function presetName(p) {
   return p.nameKey ? t(p.nameKey, p.id) : p.name || p.id;
+}
+
+// ---------------------------------------------------------------------------
+// Vibrancia + HSL podľa farieb (4.2.0) — per-pixel operácie sa zapíšu do
+// generovaného 3D LUT (.cube, 17³) a export ide cez ffmpeg lut3d. Rovnaká
+// funkcia beží aj pri generovaní LUTu — žiadna druhá matematika.
+// ---------------------------------------------------------------------------
+
+const LUT_N = 17;
+/** Farby HSL panelu: kľúč → stred odtieňa (°). Poradie ako v Lightroome. */
+const HSL_COLORS = [
+  ["r", 0], ["y", 45], ["g", 110], ["c", 185], ["b", 235], ["m", 295],
+];
+
+function rgbToHsl(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h * 360, sat, l];
+}
+
+function hslToRgb(h, sat, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  const cl = (v) => Math.max(0, Math.min(1, v));
+  if (sat <= 0) return [l, l, l].map(cl);
+  const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+  const p = 2 * l - q;
+  const f = (tt) => {
+    let t0 = tt;
+    if (t0 < 0) t0 += 1;
+    if (t0 > 1) t0 -= 1;
+    if (t0 < 1 / 6) return p + (q - p) * 6 * t0;
+    if (t0 < 1 / 2) return q;
+    if (t0 < 2 / 3) return p + (q - p) * (2 / 3 - t0) * 6;
+    return p;
+  };
+  return [cl(f(h + 1 / 3)), cl(f(h)), cl(f(h - 1 / 3))];
+}
+
+/** Je vibrancia/HSL aktívna (netriviálna)? */
+function adjustActive(v) {
+  if (!v) return false;
+  if (Math.abs(v.vibrance || 0) > 0.5) return true;
+  const hsl = v.hsl || {};
+  for (const [k] of HSL_COLORS) {
+    const a = hsl[k];
+    if (a && (Math.abs(a[0]) > 0.5 || Math.abs(a[1]) > 0.5 || Math.abs(a[2]) > 0.5)) return true;
+  }
+  return false;
+}
+
+/** Zvonková váha odtieňa pre každý z 6 rozsahov (šírka ±60°, jemný prechod). */
+function hslRangeWeight(hDeg, center) {
+  let d = Math.abs(hDeg - center) % 360;
+  if (d > 180) d = 360 - d;
+  const w = Math.max(0, 1 - d / 60);
+  return w * w * (3 - 2 * w); // smoothstep — žiadne hrany medzi farbami
+}
+
+/** Jeden pixel (0..1) → vibrancia + HSL úpravy → pixel (0..1). */
+function applyAdjustPixel(r, g, b, vibrance, hsl) {
+  let [h, sat, l] = rgbToHsl(r, g, b);
+  const vib = (vibrance || 0) / 100;
+  if (Math.abs(vib) > 0.005) {
+    // vibrancia: posilní najmä málo sýte pixely, stredne sýte (pleť) šetrí
+    const k = vib * (1 - sat) * (0.25 + sat);
+    sat = Math.max(0, Math.min(1, sat + k * 1.5));
+  }
+  if (hsl) {
+    for (const [key, center] of HSL_COLORS) {
+      const a = hsl[key];
+      if (!a) continue;
+      const w = hslRangeWeight(h, center) * sat; // neutrály (sat≈0) netreba
+      if (w < 0.004) continue;
+      h += (a[0] || 0) * w;
+      sat = Math.max(0, Math.min(1, sat * (1 + ((a[1] || 0) / 100) * w)));
+      l = Math.max(0, Math.min(1, l + ((a[2] || 0) / 100) * 0.5 * w));
+    }
+  }
+  return hslToRgb(h, sat, l);
+}
+
+/** Poskladá obsah .cube súboru (17³) pre vibranciu + HSL úpravy. */
+function buildAdjustCube(vibrance, hsl) {
+  const lines = ['TITLE "SkyFrame HSL"', `LUT_3D_SIZE ${LUT_N}`];
+  for (let ri = 0; ri < LUT_N; ri++) {
+    for (let gi = 0; gi < LUT_N; gi++) {
+      for (let bi = 0; bi < LUT_N; bi++) {
+        const [r, g, b] = applyAdjustPixel(ri / (LUT_N - 1), gi / (LUT_N - 1), bi / (LUT_N - 1), vibrance, hsl);
+        lines.push(`${r.toFixed(6)} ${g.toFixed(6)} ${b.toFixed(6)}`);
+      }
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+/** Krátky hash reťazca — stabilný názov generovaného LUTu (rovnaké hodnoty
+ *  = rovnaký súbor, prepíše sa). */
+function hashString(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/** Cesta pre ffmpeg filter — forward slashe (lut3d v single quotes). */
+function escFilterPath(p) {
+  return String(p).replace(/\\/g, "/");
 }
 
 // ---------------------------------------------------------------------------
@@ -626,18 +756,85 @@ function Wheel({ value, onChange, label, onLive }) {
   );
 }
 
+/** Slider s lokálnym stavom počas ťahania — commit (proxy render) až pri
+ *  pustení (onPointerUp), rovnaký vzor ako kolieska/krivky (4.2.0). */
+function GradeSlider({ label, value, min, max, unit, onLive, onCommit }) {
+  const [loc, setLoc] = useState(null);
+  const shown = loc ?? value;
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8, marginBottom: 2 }}>
+        <span>{label}</span>
+        <span>{shown}{unit || ""}</span>
+      </div>
+      <input
+        type="range" min={min} max={max} value={shown}
+        onChange={(e) => {
+          const nv = parseInt(e.target.value, 10);
+          setLoc(nv);
+          onLive?.(nv);
+        }}
+        onPointerUp={() => { if (loc !== null && loc !== value) onCommit(loc); setLoc(null); }}
+        style={{ width: "100%" }}
+      />
+    </div>
+  );
+}
+
 function FiltersField({ value, onChange, ctx }) {
   const s = useStore();
   const v = { ...DEFAULT_GRADE, ...(value ?? {}) };
   const setV = (patch) => onChange({ ...v, ...patch });
+  const [hslColor, setHslColor] = useState("r"); // vybraná farba HSL panelu (4.2.0)
   const media = ctx?.mediaPath ? { path: ctx.mediaPath, kind: ctx.kind } : null;
 
   // Live náhľad počas ťahania (krok 42): SVG LUT cez core, 0 ms latencia.
   // Commit (pustenie) ide cez onChange → rebuild kroku → proxy render;
   // core live filter zhasne, keď čerstvý render dorazí.
-  const sendLive = (curves, wheels) => {
+  const sendLive = (curves, wheels, adj) => {
     if (!api.setEditorLiveFilter) return;
-    api.setEditorLiveFilter(computeLiveSpec(v.style, v.intensity, curves ?? v.curves, wheels ?? v.wheels));
+    api.setEditorLiveFilter(computeLiveSpec(
+      v.style, v.intensity, curves ?? v.curves, wheels ?? v.wheels,
+      adj ?? { temp: v.temp, tint: v.tint }));
+  };
+
+  // Vibrancia/HSL: commit = vygeneruj 3D LUT cez core a jediným setV
+  // zapíš hodnoty aj cestu — len jeden proxy render na zmenu (4.2.0)
+  const commitAdjust = async (patch) => {
+    const nv = { ...v, ...patch };
+    let lutPath = "";
+    if (adjustActive(nv) && api.invoke) {
+      try {
+        const content = buildAdjustCube(nv.vibrance, nv.hsl);
+        lutPath = await api.invoke("save_lut_file", { name: `hsl-${hashString(content)}`, content });
+      } catch (e) {
+        console.error("[filtre] generovanie HSL LUT:", e);
+        store.setState({ saveError: String(e) });
+      }
+    }
+    setV({ ...patch, hslLutPath: lutPath });
+  };
+
+  // Import LUT (.cube) — obsah sa skopíruje do app_dir/luts (stabilná cesta)
+  const importLut = async () => {
+    if (!api.pickFiles || !api.readFileBytes || !api.invoke) return;
+    const picked = await api.pickFiles([{ name: "LUT", extensions: ["cube"] }], false);
+    const path = Array.isArray(picked) ? picked[0] : picked;
+    if (!path) return;
+    try {
+      const bytes = await api.readFileBytes(path);
+      const content = new TextDecoder().decode(bytes);
+      if (!/LUT_3D_SIZE\s+\d+/.test(content)) {
+        store.setState({ saveError: t("lut_invalid", "Neplatný .cube súbor") });
+        return;
+      }
+      const base = String(path).split(/[\\/]/).pop().replace(/\.cube$/i, "");
+      const saved = await api.invoke("save_lut_file", { name: `${base}-${Date.now().toString(36)}`, content });
+      setV({ lutPath: saved, lutName: base });
+    } catch (e) {
+      console.error("[filtre] import LUT:", e);
+      store.setState({ saveError: `${t("lut_fail", "Import LUT zlyhal")}: ${String(e)}` });
+    }
   };
 
   // odchod z nástroja / unmount = live filter vypni
@@ -768,7 +965,7 @@ function FiltersField({ value, onChange, ctx }) {
 
   const pick = (p) => {
     if (v.presetId === p.id) {
-      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } });
+      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "" });
     } else {
       setV({
         style: p.style,
@@ -776,6 +973,7 @@ function FiltersField({ value, onChange, ctx }) {
         presetName: p.name || null,
         curves: p.curves ? p.curves.map((pt) => [...pt]) : null,
         wheels: p.wheels ? { s: [...(p.wheels.s || [0, 0])], m: [...(p.wheels.m || [0, 0])], h: [...(p.wheels.h || [0, 0])] } : { ...NEUTRAL_WHEELS },
+        temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "",
       });
     }
   };
@@ -983,6 +1181,97 @@ function FiltersField({ value, onChange, ctx }) {
             <span style={{ fontSize: 10, opacity: 0.5, textAlign: "center" }}>
               {t("wheel_hint", "ťahaj bodku · dvojklik = reset kolieska")}
             </span>
+
+            {/* Teplota / Tónovanie / Vibrancia (4.2.0) */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6 }}>{t("light_color", "Svetlo a farba")}</span>
+              <GradeSlider
+                label={t("temp", "Teplota")} value={v.temp || 0} min={-100} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, { temp: nv, tint: v.tint })}
+                onCommit={(nv) => setV({ temp: nv })}
+              />
+              <GradeSlider
+                label={t("tint", "Tónovanie")} value={v.tint || 0} min={-100} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, { temp: v.temp, tint: nv })}
+                onCommit={(nv) => setV({ tint: nv })}
+              />
+              <GradeSlider
+                label={t("vibrance", "Vibrancia")} value={v.vibrance || 0} min={-100} max={100}
+                onCommit={(nv) => void commitAdjust({ vibrance: nv })}
+              />
+            </div>
+
+            {/* HSL podľa farieb (4.2.0) */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6 }}>{t("hsl_section", "HSL podľa farieb")}</span>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                {HSL_COLORS.map(([key]) => {
+                  const hue = HSL_COLORS.find(([k]) => k === key)[1];
+                  const active = hslColor === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setHslColor(key)}
+                      title={t(`col_${key}`, key)}
+                      style={{
+                        width: 26, height: 26, borderRadius: "50%", cursor: "pointer",
+                        background: `hsl(${hue}, 80%, 50%)`,
+                        border: active ? "2px solid #fff" : "2px solid rgba(255,255,255,0.25)",
+                        boxShadow: active ? "0 0 0 2px #6366f1" : "none",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              {(() => {
+                const cur = (v.hsl && v.hsl[hslColor]) || [0, 0, 0];
+                const setCh = (idx) => (nv) => {
+                  const next = [...cur];
+                  next[idx] = nv;
+                  void commitAdjust({ hsl: { ...(v.hsl || {}), [hslColor]: next } });
+                };
+                return (
+                  <>
+                    <GradeSlider label={t("hsl_hue", "Odtieň")} value={cur[0]} min={-30} max={30} onCommit={setCh(0)} />
+                    <GradeSlider label={t("hsl_sat", "Sýtosť")} value={cur[1]} min={-100} max={100} onCommit={setCh(1)} />
+                    <GradeSlider label={t("hsl_light", "Jas")} value={cur[2]} min={-100} max={100} onCommit={setCh(2)} />
+                    {(Math.abs(cur[0]) > 0.5 || Math.abs(cur[1]) > 0.5 || Math.abs(cur[2]) > 0.5) && (
+                      <button
+                        className="px-2 py-1 text-[11px] rounded bg-zinc-700 hover:bg-zinc-600"
+                        onClick={() => void commitAdjust({ hsl: { ...(v.hsl || {}), [hslColor]: [0, 0, 0] } })}
+                      >
+                        ↺ {t("hsl_reset", "Reset farby")}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* LUT (.cube) import (4.2.0) */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
+              <span style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6 }}>LUT</span>
+              {v.lutPath ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <span style={{ fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    🎞️ {v.lutName || "LUT"}
+                  </span>
+                  <button
+                    className="px-2 py-1 text-[11px] rounded bg-zinc-700 hover:bg-zinc-600"
+                    onClick={() => setV({ lutPath: "", lutName: "" })}
+                  >
+                    ✕ {t("lut_clear", "Zrušiť LUT")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="w-full mt-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
+                  onClick={() => void importLut()}
+                >
+                  🎞️ {t("lut_import", "Importovať LUT (.cube)")}
+                </button>
+              )}
+            </div>
             <button
               className="w-full px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
               onClick={() => {
@@ -1056,10 +1345,10 @@ function FiltersField({ value, onChange, ctx }) {
         </Section>
       </div>
 
-      {(v.style || v.curves || wheelsActive(v.wheels)) && (
+      {(v.style || v.curves || wheelsActive(v.wheels) || (v.temp || 0) !== 0 || (v.tint || 0) !== 0 || adjustActive(v) || v.lutPath) && (
         <button
           className="w-full mt-2 px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
-          onClick={() => setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS } })}
+          onClick={() => setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "" })}
         >
           ✕ {t("clear_style", "Zrušiť všetko")}
         </button>
@@ -1089,14 +1378,19 @@ api.registerTool({
     const intensity = typeof v.intensity === "number" ? v.intensity : 80;
     const curves = v.curves ?? null;
     const wheels = v.wheels ?? null;
-    const has = style || curves || wheelsActive(wheels);
+    const adj = { temp: v.temp || 0, tint: v.tint || 0 };
+    const lutActive = adjustActive(v) && v.hslLutPath; // vygenerovaný LUT (4.2.0)
+    const has = style || curves || wheelsActive(wheels) || adj.temp !== 0 || adj.tint !== 0 || lutActive || v.lutPath;
     if (!has) return null;
-    const chain = buildChain(style, intensity, curves, wheels);
+    let chain = buildChain(style, intensity, curves, wheels, adj);
+    // 3D LUTy idú ZA kanálovou úpravou: najprv vibrancia/HSL, potom importovaný look
+    if (lutActive) chain = (chain ? chain + "," : "") + `lut3d='${escFilterPath(v.hslLutPath)}'`;
+    if (v.lutPath) chain = (chain ? chain + "," : "") + `lut3d='${escFilterPath(v.lutPath)}'`;
     if (!chain) return null;
     const name = v.presetId
       ? presetName({ id: v.presetId, nameKey: String(v.presetId).startsWith("builtin_") ? `style_${String(v.presetId).slice(8)}` : undefined, name: v.presetName })
       : t("grade_only", "Farebná úprava");
-    const extras = `${curves ? " · krivky" : ""}${wheelsActive(wheels) ? " · kolieska" : ""}`;
+    const extras = `${curves ? " · krivky" : ""}${wheelsActive(wheels) ? " · kolieska" : ""}${adj.temp !== 0 || adj.tint !== 0 ? ` · ${t("lbl_temp", "teplota")}` : ""}${lutActive ? ` · ${t("lbl_hsl", "HSL")}` : ""}${v.lutPath ? " · LUT" : ""}`;
     const label = `🎨 ${name}${style ? ` ${intensity}%` : ""}${v.skyOnly ? (v.aiMask ? " · AI obloha" : " · obloha") : ""}${extras}`;
     if (!v.skyOnly) {
       return { label, vf: chain };
