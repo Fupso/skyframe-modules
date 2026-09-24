@@ -21,7 +21,7 @@ import React from "react";
 
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
-const { useState, useEffect, useSyncExternalStore } = React;
+const { useState, useEffect, useSyncExternalStore, useRef } = React;
 
 // ---------------------------------------------------------------------------
 // Vstavané štýly (rovnaké ako v 2.x)
@@ -77,6 +77,8 @@ const initialState = {
   openCustom: true,     // rozbalená sekcia vlastných filtrov
   openBuiltin: false,   // rozbalená sekcia vstavaných filtrov
   openGrade: false,     // rozbalená sekcia kriviek a koliesok
+  liveCube: null,       // {size, data} parsovaného importovaného LUTu (live náhľad)
+  liveCubeFor: "",      // pre ktorý lutPath je naparsovaný
 };
 
 /** Predvolená hodnota grading poľa (drží ju core v session) */
@@ -386,6 +388,80 @@ function buildAdjustCube(vibrance, hsl) {
   return lines.join("\n") + "\n";
 }
 
+/** 3D LUT dáta pre LIVE náhľad (WebGL v core): {size, data} — rovnaká
+ *  matematika ako buildAdjustCube, len výstup ako pole čísel. */
+function buildAdjustLutData(vibrance, hsl, overCube) {
+  const n = LUT_N;
+  const data = new Array(n * n * n * 3);
+  let i = 0;
+  for (let ri = 0; ri < n; ri++) {
+    for (let gi = 0; gi < n; gi++) {
+      for (let bi = 0; bi < n; bi++) {
+        let [r, g, b] = applyAdjustPixel(ri / (n - 1), gi / (n - 1), bi / (n - 1), vibrance, hsl);
+        if (overCube) [r, g, b] = sampleCube(overCube, r, g, b);
+        data[i++] = r; data[i++] = g; data[i++] = b;
+      }
+    }
+  }
+  return { size: n, data };
+}
+
+/** Trilineárna interpolácia vo .cube LUTe {size, data} (modrá najrýchlejšie). */
+function sampleCube(cube, r, g, b) {
+  const n = cube.size;
+  const d = cube.data;
+  const cl = (v) => Math.max(0, Math.min(1, v));
+  const at = (ri, gi, bi) => {
+    const idx = ((ri * n + gi) * n + bi) * 3;
+    return [d[idx], d[idx + 1], d[idx + 2]];
+  };
+  const axes = [r, g, b].map((v) => {
+    const x = cl(v) * (n - 1);
+    const i0 = Math.min(n - 2, Math.floor(x));
+    return [i0, i0 + 1, x - i0];
+  });
+  const [ra, ga, ba] = axes;
+  let out = [0, 0, 0];
+  for (let c = 0; c < 3; c++) {
+    const c00 = at(ra[0], ga[0], ba[0])[c] * (1 - ba[2]) + at(ra[0], ga[0], ba[1])[c] * ba[2];
+    const c01 = at(ra[0], ga[1], ba[0])[c] * (1 - ba[2]) + at(ra[0], ga[1], ba[1])[c] * ba[2];
+    const c10 = at(ra[1], ga[0], ba[0])[c] * (1 - ba[2]) + at(ra[1], ga[0], ba[1])[c] * ba[2];
+    const c11 = at(ra[1], ga[1], ba[0])[c] * (1 - ba[2]) + at(ra[1], ga[1], ba[1])[c] * ba[2];
+    const r0 = c00 * (1 - ga[2]) + c01 * ga[2];
+    const r1 = c10 * (1 - ga[2]) + c11 * ga[2];
+    out[c] = r0 * (1 - ra[2]) + r1 * ra[2];
+  }
+  return out;
+}
+
+/** Rozparsuje .cube text → {size, data} | null (LUT_3D_SIZE + N³ riadkov). */
+function parseCube(text) {
+  const m = /LUT_3D_SIZE\s+(\d+)/.exec(text);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (!n || n < 2 || n > 256) return null;
+  const data = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith("#") || /^[A-Z_]/i.test(t)) continue;
+    const parts = t.split(/\s+/).map(Number);
+    if (parts.length >= 3 && parts.every((v) => isFinite(v))) data.push(parts[0], parts[1], parts[2]);
+    if (data.length >= n * n * n * 3) break;
+  }
+  if (data.length < n * n * n * 3) return null;
+  return { size: n, data };
+}
+
+/** Je aspoň jeden HSL kanál netriviálny? (bez ohľadu na vygenerovaný súbor) */
+function hslAny(hsl) {
+  if (!hsl) return false;
+  for (const [k] of HSL_COLORS) {
+    const a = hsl[k];
+    if (a && (Math.abs(a[0]) > 0.5 || Math.abs(a[1]) > 0.5 || Math.abs(a[2]) > 0.5)) return true;
+  }
+  return false;
+}
+
 /** Krátky hash reťazca — stabilný názov generovaného LUTu (rovnaké hodnoty
  *  = rovnaký súbor, prepíše sa). */
 function hashString(str) {
@@ -394,9 +470,11 @@ function hashString(str) {
   return h.toString(36);
 }
 
-/** Cesta pre ffmpeg filter — forward slashe (lut3d v single quotes). */
+/** Cesta pre ffmpeg filter — forward slashe + escapovaná dvojbodka
+ *  (C:/ → C\\:/), inak filter graf zje „C" ako meno voľby a cesta
+ *  sa rozbije (Windows absolútna cesta v lut3d). */
 function escFilterPath(p) {
-  return String(p).replace(/\\/g, "/");
+  return String(p).replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
 // ---------------------------------------------------------------------------
@@ -791,11 +869,24 @@ function FiltersField({ value, onChange, ctx }) {
   // Live náhľad počas ťahania (krok 42): SVG LUT cez core, 0 ms latencia.
   // Commit (pustenie) ide cez onChange → rebuild kroku → proxy render;
   // core live filter zhasne, keď čerstvý render dorazí.
-  const sendLive = (curves, wheels, adj) => {
+  // aktuálny 3D LUT pre live náhľad: vibrancia/HSL + (voliteľne) importovaný look
+  const currentLut3d = (over) => {
+    const vib = over && "vibrance" in over ? over.vibrance : (v.vibrance || 0);
+    const hsl = over && over.hsl !== undefined ? over.hsl : v.hsl;
+    const cube = (s.liveCube && s.liveCubeFor === v.lutPath) ? s.liveCube : null;
+    const adjOn = Math.abs(vib) > 0.5 || hslAny(hsl);
+    if (!adjOn && !cube) return null;
+    if (adjOn) return buildAdjustLutData(vib, hsl, cube);
+    return cube;
+  };
+
+  const sendLive = (curves, wheels, adj, lutOverride) => {
     if (!api.setEditorLiveFilter) return;
-    api.setEditorLiveFilter(computeLiveSpec(
+    const spec = computeLiveSpec(
       v.style, v.intensity, curves ?? v.curves, wheels ?? v.wheels,
-      adj ?? { temp: v.temp, tint: v.tint }));
+      adj ?? { temp: v.temp, tint: v.tint });
+    const lut = lutOverride !== undefined ? lutOverride : currentLut3d();
+    api.setEditorLiveFilter(lut ? { ...spec, lut3d: lut } : spec);
   };
 
   // Vibrancia/HSL: commit = vygeneruj 3D LUT cez core a jediným setV
@@ -830,6 +921,7 @@ function FiltersField({ value, onChange, ctx }) {
       }
       const base = String(path).split(/[\\/]/).pop().replace(/\.cube$/i, "");
       const saved = await api.invoke("save_lut_file", { name: `${base}-${Date.now().toString(36)}`, content });
+      store.setState({ liveCube: parseCube(content), liveCubeFor: saved });
       setV({ lutPath: saved, lutName: base });
     } catch (e) {
       console.error("[filtre] import LUT:", e);
@@ -841,6 +933,21 @@ function FiltersField({ value, onChange, ctx }) {
   useEffect(() => {
     return () => api.setEditorLiveFilter?.(null);
   }, []);
+
+  // obnova zo session: importovaný LUT doparsuj zo súboru (live náhľad)
+  useEffect(() => {
+    if (!v.lutPath || (s.liveCubeFor === v.lutPath && s.liveCube)) return;
+    if (!api.readFileBytes) return;
+    let dead = false;
+    (async () => {
+      try {
+        const bytes = await api.readFileBytes(v.lutPath);
+        const cube = parseCube(new TextDecoder().decode(bytes));
+        if (!dead) store.setState({ liveCube: cube, liveCubeFor: v.lutPath });
+      } catch { /* súbor chýba — live bude bez neho, export zlyhá s chybou */ }
+    })();
+    return () => { dead = true; };
+  }, [v.lutPath]);
 
   // AI stav + používateľské štýly + ukážková fotka pre miniatúry
   useEffect(() => {
@@ -1197,6 +1304,7 @@ function FiltersField({ value, onChange, ctx }) {
               />
               <GradeSlider
                 label={t("vibrance", "Vibrancia")} value={v.vibrance || 0} min={-100} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, undefined, currentLut3d({ vibrance: nv }))}
                 onCommit={(nv) => void commitAdjust({ vibrance: nv })}
               />
             </div>
@@ -1230,11 +1338,16 @@ function FiltersField({ value, onChange, ctx }) {
                   next[idx] = nv;
                   void commitAdjust({ hsl: { ...(v.hsl || {}), [hslColor]: next } });
                 };
+                const liveCh = (idx) => (nv) => {
+                  const next = [...cur];
+                  next[idx] = nv;
+                  sendLive(undefined, undefined, undefined, currentLut3d({ hsl: { ...(v.hsl || {}), [hslColor]: next } }));
+                };
                 return (
                   <>
-                    <GradeSlider label={t("hsl_hue", "Odtieň")} value={cur[0]} min={-30} max={30} onCommit={setCh(0)} />
-                    <GradeSlider label={t("hsl_sat", "Sýtosť")} value={cur[1]} min={-100} max={100} onCommit={setCh(1)} />
-                    <GradeSlider label={t("hsl_light", "Jas")} value={cur[2]} min={-100} max={100} onCommit={setCh(2)} />
+                    <GradeSlider label={t("hsl_hue", "Odtieň")} value={cur[0]} min={-30} max={30} onLive={liveCh(0)} onCommit={setCh(0)} />
+                    <GradeSlider label={t("hsl_sat", "Sýtosť")} value={cur[1]} min={-100} max={100} onLive={liveCh(1)} onCommit={setCh(1)} />
+                    <GradeSlider label={t("hsl_light", "Jas")} value={cur[2]} min={-100} max={100} onLive={liveCh(2)} onCommit={setCh(2)} />
                     {(Math.abs(cur[0]) > 0.5 || Math.abs(cur[1]) > 0.5 || Math.abs(cur[2]) > 0.5) && (
                       <button
                         className="px-2 py-1 text-[11px] rounded bg-zinc-700 hover:bg-zinc-600"
