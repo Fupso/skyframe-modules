@@ -376,11 +376,13 @@ function applyAdjustPixel(r, g, b, vibrance, hsl) {
     for (const [key, center] of HSL_COLORS) {
       const a = hsl[key];
       if (!a) continue;
-      const w = hslRangeWeight(h, center) * sat; // neutrály (sat≈0) netreba
+      // váha s podlahou: aj menej sýte pixely reagujú citeľne, neutrály (sat≈0)
+      // ostávajú chránené — inak boli zmeny takmer neviditeľné (4.3.2)
+      const w = hslRangeWeight(h, center) * (0.35 + 0.65 * sat);
       if (w < 0.004) continue;
       h += (a[0] || 0) * w;
-      sat = Math.max(0, Math.min(1, sat * (1 + ((a[1] || 0) / 100) * w)));
-      l = Math.max(0, Math.min(1, l + ((a[2] || 0) / 100) * 0.5 * w));
+      sat = Math.max(0, Math.min(1, sat * (1 + ((a[1] || 0) / 100) * w * 2.2)));
+      l = Math.max(0, Math.min(1, l + ((a[2] || 0) / 100) * 0.6 * w));
     }
   }
   return hslToRgb(h, sat, l);
@@ -1425,7 +1427,7 @@ function FiltersField({ value, onChange, ctx }) {
                 };
                 return (
                   <>
-                    <GradeSlider label={t("hsl_hue", "Odtieň")} value={cur[0]} min={-30} max={30} onLive={liveCh(0)} onCommit={setCh(0)} />
+                    <GradeSlider label={t("hsl_hue", "Odtieň")} value={cur[0]} min={-60} max={60} onLive={liveCh(0)} onCommit={setCh(0)} />
                     <GradeSlider label={t("hsl_sat", "Sýtosť")} value={cur[1]} min={-100} max={100} onLive={liveCh(1)} onCommit={setCh(1)} />
                     <GradeSlider label={t("hsl_light", "Jas")} value={cur[2]} min={-100} max={100} onLive={liveCh(2)} onCommit={setCh(2)} />
                     {(Math.abs(cur[0]) > 0.5 || Math.abs(cur[1]) > 0.5 || Math.abs(cur[2]) > 0.5) && (
