@@ -391,9 +391,12 @@ function applyAdjustPixel(r, g, b, vibrance, hsl) {
 /** Poskladá obsah .cube súboru (17³) pre vibranciu + HSL úpravy. */
 function buildAdjustCube(vibrance, hsl) {
   const lines = ['TITLE "SkyFrame HSL"', `LUT_3D_SIZE ${LUT_N}`];
-  for (let ri = 0; ri < LUT_N; ri++) {
+  // 4.3.8 — .cube ŠTANDARD: červená osa beží najrýchlejšie (tak číta ffmpeg
+  // lut3d). Predtým sa zapisovalo b-najrýchlejšie → ffmpeg mal kanály R↔B
+  // prehodené a render nesedel s live náhľadom.
+  for (let bi = 0; bi < LUT_N; bi++) {
     for (let gi = 0; gi < LUT_N; gi++) {
-      for (let bi = 0; bi < LUT_N; bi++) {
+      for (let ri = 0; ri < LUT_N; ri++) {
         const [r, g, b] = applyAdjustPixel(ri / (LUT_N - 1), gi / (LUT_N - 1), bi / (LUT_N - 1), vibrance, hsl);
         lines.push(`${r.toFixed(6)} ${g.toFixed(6)} ${b.toFixed(6)}`);
       }
@@ -463,7 +466,19 @@ function parseCube(text) {
     if (data.length >= n * n * n * 3) break;
   }
   if (data.length < n * n * n * 3) return null;
-  return { size: n, data };
+  // 4.3.8 — súbor je v .cube poradí (r najrýchlejšie); modul interne používa
+  // b najrýchlejšie (sampleCube + GL live v core) → preusporiadaj raz tu
+  const re = new Array(n * n * n * 3);
+  for (let ri = 0; ri < n; ri++) {
+    for (let gi = 0; gi < n; gi++) {
+      for (let bi = 0; bi < n; bi++) {
+        const fi = ((bi * n + gi) * n + ri) * 3; // pozícia v súbore
+        const di = ((ri * n + gi) * n + bi) * 3; // interná pozícia
+        re[di] = data[fi]; re[di + 1] = data[fi + 1]; re[di + 2] = data[fi + 2];
+      }
+    }
+  }
+  return { size: n, data: re };
 }
 
 /** Je aspoň jeden HSL kanál netriviálny? (bez ohľadu na vygenerovaný súbor) */
