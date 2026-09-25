@@ -18,6 +18,7 @@
 //   - graph + inputs: AI maska oblohy (súbor masky z core, cachovaný)
 
 import React from "react";
+import { PREVIEW_BASE_URL } from "./preview-base";
 
 const api = window.SkyFrame;
 const t = (k, f) => api.t(k, f);
@@ -1049,17 +1050,16 @@ function FiltersField({ value, onChange, ctx }) {
           store.setState({ presets: cfg.presets.filter((p) => p && p.style && p.style.channels) });
         }
       } catch {}
-      if (api.readModuleFile) {
-        try {
-          const bytes = await api.readModuleFile("assets/preview-base.jpg");
-          const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
-          const img = await new Promise((res, rej) => {
-            const im = new Image();
-            im.onload = () => res(im); im.onerror = rej; im.src = url;
-          });
-          store.setState({ baseThumb: img });
-        } catch { /* bez miniatúr sa zobrazia len názvy */ }
-      }
+      // 4.4.3 — vzorová fotka je v bundli (base64), žiadne čítanie súboru.
+      // Predtým: readModuleFile(„assets/preview-base.jpg") — keď sa súbor
+      // stratil pri balení/inštalácii, miniatúry filtrov sa negenerovali.
+      try {
+        const img = await new Promise((res, rej) => {
+          const im = new Image();
+          im.onload = () => res(im); im.onerror = rej; im.src = PREVIEW_BASE_URL;
+        });
+        store.setState({ baseThumb: img });
+      } catch { /* bez miniatúr sa zobrazia len názvy */ }
     })();
   }, []);
 
@@ -1668,10 +1668,12 @@ api.registerTool({
       return {
         label: label + (v.maskQuick ? " ⏳" : ""),
         graph: skyGraphAi(chain),
-        // plná maska: „seek:" — core ju pri seeknutom náhľade/exporte seekne
-        // rovnako ako video (časová os zdroja). Rýchla maska je len okno od
-        // pozície → nesekuje sa, sedí na náhľad priamo.
-        inputs: [v.maskQuick ? v.maskPath : `seek:${v.maskPath}`],
+        // plná maska: „seek:" — core ju seekne rovnako ako video (časová
+        // os zdroja). Rýchla maska = okno od pozície: „seekwin:<zaciatočná>:" —
+        // core ju seekne o (kurzor - začiatok okna), aby sedela na snímku
+        // aj keď sa kurzor medzi výpočtom pohol (4.4.4 — pás nespracovanej
+        // oblohy pri horizonte).
+        inputs: [v.maskQuick ? `seekwin:${(Number(v.maskStart) || 0).toFixed(3)}:${v.maskPath}` : `seek:${v.maskPath}`],
         incomplete: !!v.maskQuick, // export blokuje, kým nedorazí plná maska
       };
     }
