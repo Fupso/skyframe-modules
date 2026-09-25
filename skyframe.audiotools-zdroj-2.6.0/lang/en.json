@@ -1,7 +1,7 @@
 {
  "title": "Audio",
  "sec_volume": "Volume",
- "volume": "Volume",
+ "volume": "Original audio volume",
  "normalize": "Normalize loudness (EBU R128)",
  "sec_fade": "Fades",
  "fade_in": "Fade in",
@@ -37,5 +37,8 @@
  "denoise_strength": "Cleanup strength",
  "ai_mix": "AI share in audio",
  "lbl_denoise_ai": "AI cleanup",
- "lbl_denoise_fft": "noise cleanup"
+ "lbl_denoise_fft": "noise cleanup",
+ "music_loop": "Music repeat",
+ "music_loop_loop": "Loop to end of video",
+ "music_loop_once": "Play once (music ends)"
 }

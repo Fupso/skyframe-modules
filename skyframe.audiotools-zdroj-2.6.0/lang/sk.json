@@ -1,7 +1,7 @@
 {
  "title": "Zvuk",
  "sec_volume": "Hlasitosť",
- "volume": "Hlasitosť",
+ "volume": "Hlasitosť pôvodného zvuku",
  "normalize": "Normalizovať hlasitosť (EBU R128)",
  "sec_fade": "Prechody",
  "fade_in": "Fade in",
@@ -37,5 +37,8 @@
  "denoise_strength": "Sila čistenia",
  "ai_mix": "Podiel AI v zvuku",
  "lbl_denoise_ai": "AI čistenie",
- "lbl_denoise_fft": "čistenie šumu"
+ "lbl_denoise_fft": "čistenie šumu",
+ "music_loop": "Opakovanie hudby",
+ "music_loop_loop": "Smyčka do konca videa",
+ "music_loop_once": "Prehrať raz (hudba skončí)"
 }

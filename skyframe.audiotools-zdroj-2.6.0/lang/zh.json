@@ -1,7 +1,7 @@
 {
  "title": "音频",
  "sec_volume": "音量",
- "volume": "音量",
+ "volume": "原始音频音量",
  "normalize": "响度归一化（EBU R128）",
  "sec_fade": "淡入淡出",
  "fade_in": "淡入",
@@ -37,5 +37,8 @@
  "denoise_strength": "降噪强度",
  "ai_mix": "AI 混合比例",
  "lbl_denoise_ai": "AI 降噪",
- "lbl_denoise_fft": "降噪"
+ "lbl_denoise_fft": "降噪",
+ "music_loop": "音乐重复",
+ "music_loop_loop": "循环至视频结束",
+ "music_loop_once": "播放一次（音乐结束）"
 }

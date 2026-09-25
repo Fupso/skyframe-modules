@@ -1,7 +1,7 @@
 {
  "title": "Ton",
  "sec_volume": "Lautstärke",
- "volume": "Lautstärke",
+ "volume": "Lautstärke Originalton",
  "normalize": "Lautheit normalisieren (EBU R128)",
  "sec_fade": "Übergänge",
  "fade_in": "Fade in",
@@ -37,5 +37,8 @@
  "denoise_strength": "Stärke",
  "ai_mix": "KI-Anteil im Ton",
  "lbl_denoise_ai": "KI-Bereinigung",
- "lbl_denoise_fft": "Rauschunterdrückung"
+ "lbl_denoise_fft": "Rauschunterdrückung",
+ "music_loop": "Musikwiederholung",
+ "music_loop_loop": "Schleife bis Videoende",
+ "music_loop_once": "Einmal abspielen (Musik endet)"
 }

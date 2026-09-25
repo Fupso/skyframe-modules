@@ -1,7 +1,7 @@
 {
  "title": "Звук",
  "sec_volume": "Громкость",
- "volume": "Громкость",
+ "volume": "Громкость оригинала",
  "normalize": "Нормализовать громкость (EBU R128)",
  "sec_fade": "Переходы",
  "fade_in": "Fade in",
@@ -37,5 +37,8 @@
  "denoise_strength": "Сила очистки",
  "ai_mix": "Доля ИИ в звуке",
  "lbl_denoise_ai": "ИИ очистка",
- "lbl_denoise_fft": "очистка шума"
+ "lbl_denoise_fft": "очистка шума",
+ "music_loop": "Повтор музыки",
+ "music_loop_loop": "Петля до конца видео",
+ "music_loop_once": "Один раз (музыка закончится)"
 }

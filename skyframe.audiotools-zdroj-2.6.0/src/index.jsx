@@ -1,4 +1,4 @@
-// skyframe.audiotools v2.5.0 — Zvuk (deklaratívny nástroj Editora)
+// skyframe.audiotools v2.6.0 — Zvuk (deklaratívny nástroj Editora)
 // Žiadna vlastná stránka: polia vykresľuje core v pravom paneli Editora,
 // úpravy sa skladajú do zásobníka a aplikujú v JEDNOM exporte spolu
 // s ostatnými nástrojmi (filtre, časozber…). Hodnoty sa auto-ukladajú
@@ -63,6 +63,13 @@ api.registerTool({
       options: [
         { value: "mix", labelKey: "music_mode_mix" },
         { value: "replace", labelKey: "music_mode_replace" },
+      ],
+    },
+    {
+      id: "musicLoop", type: "select", labelKey: "music_loop", default: "loop",
+      options: [
+        { value: "loop", labelKey: "music_loop_loop" },
+        { value: "once", labelKey: "music_loop_once" },
       ],
     },
     { id: "musicVolume", type: "slider", labelKey: "music_volume", min: 0, max: 200, step: 1, unit: " %", default: 100 },
@@ -162,23 +169,32 @@ api.registerTool({
 
     // hudobný podmaz — audio graf s druhým vstupom [I0]
     const mv = Math.max(0, Math.min(200, Number(values.musicVolume ?? 100))) / 100;
-    const loop = `aloop=loop=-1:size=2000000000,volume=${mv.toFixed(4)}`;
+    // 2.6.0 — loop je VOĽBA: „loop" = smyčka do konca videa (ako doteraz),
+    // „once" = hudba sa prehrá raz a skončí, aj keď je video dlhšie.
+    const loopOn = values.musicLoop !== "once";
+    const loop = `${loopOn ? "aloop=loop=-1:size=2000000000," : ""}volume=${mv.toFixed(4)}`;
     const mode = values.musicMode === "replace" ? "replace" : "mix";
 
+    // 2.6.0 — na hudbu sa aplikujú LEN prechody (fade in/out). Hlasitosť
+    // hudby rieši výhradne posuvník „Hlasitosť hudby" a hlavný posuvník
+    // „Hlasitosť pôvodného zvuku" patrí pôvodnej stope — žiadne dvojité
+    // pôsobenie dvoch posuvníkov na to isté.
+    const musicFx = [];
+    if (fi > 0) musicFx.push(`afade=t=in:st=0:d=${fi}`);
+    if (fo > 0 && ctx.duration > fo) musicFx.push(`afade=t=out:st=${(ctx.duration - fo).toFixed(3)}:d=${fo}`);
+    const musicTail = (ctx.duration > 0 ? [`atrim=0:${ctx.duration.toFixed(3)}`] : []).concat(musicFx);
+    const tailStr = musicTail.length ? "," + musicTail.join(",") : "";
+
     if (mode === "replace") {
-      // pôvodný zvuk sa zahodí — reťazec (hlasitosť/fade…) sa aplikuje na hudbu
-      const tail = ctx.duration > 0 ? `atrim=0:${ctx.duration.toFixed(3)}` : "";
-      const extra = chain.length ? "," + chain.join(",") : "";
-      const g = `[I0]${loop}${tail ? "," + tail : ""}${extra}[A_OUT]`;
+      // pôvodný zvuk sa zahodí
+      const g = `[I0]${loop}${tailStr}[A_OUT]`;
       labels.push(t("lbl_music_replace", "hudba namiesto zvuku"));
       return { label: `🔊 ${labels.join(", ")}`, agraph: g, aInputs: [music] };
     }
 
     if (!hasAudio) {
       // zdroj nemá zvuk — mix by zlyhal ([0:a:0] neexistuje); hudba hrá samotná
-      const tail = ctx.duration > 0 ? `atrim=0:${ctx.duration.toFixed(3)}` : "";
-      const extra = chain.length ? "," + chain.join(",") : "";
-      const g = `[I0]${loop}${tail ? "," + tail : ""}${extra}[A_OUT]`;
+      const g = `[I0]${loop}${tailStr}[A_OUT]`;
       labels.push(t("lbl_music_only", "hudba (zdroj bez zvuku)"));
       return { label: `🔊 ${labels.join(", ")}`, agraph: g, aInputs: [music] };
     }
