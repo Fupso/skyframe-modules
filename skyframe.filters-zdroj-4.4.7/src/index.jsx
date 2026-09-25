@@ -890,6 +890,18 @@ function GradeSlider({ label, value, min, max, unit, onLive, onCommit }) {
   );
 }
 
+/** I/O úsek strihu — primárne z ctx, záložne cez api.getEditorInOut()
+ *  (snapshot kanál). Dva kanály, lebo ctx závisí od re-renderu panela. */
+function readInOut(ctx) {
+  const c = ctx?.inOut;
+  if (c && c.a != null && c.b != null) return c;
+  try {
+    const s = api.getEditorInOut ? api.getEditorInOut() : null;
+    if (s && s.a != null && s.b != null) return s;
+  } catch { /* starý core */ }
+  return null;
+}
+
 function FiltersField({ value, onChange, ctx }) {
   const s = useStore();
   const v = { ...DEFAULT_GRADE, ...(value ?? {}) };
@@ -1109,7 +1121,7 @@ function FiltersField({ value, onChange, ctx }) {
     // Plná maska hotová — ale 4.4.5: ak sa strih (I/O) posunul MIMO okno,
     // ktoré maska pokrýva, treba ju prepočítať pre nový úsek.
     if (v.maskFor === media.path && v.maskPath && !v.maskQuick) {
-      const io = ctx?.inOut;
+      const io = readInOut(ctx);
       const covers = !(io && io.a != null && io.b != null)
         || !Number(v.maskLen)
         || (Number(io.a) >= Number(v.maskStart) - 0.01 && Number(io.b) <= Number(v.maskStart) + Number(v.maskLen) + 0.01);
@@ -1137,14 +1149,16 @@ function FiltersField({ value, onChange, ctx }) {
         store.setState({ maskPhase: "quick", maskProgress: 0 });
         const q = await runJob({ startSec: q0, seconds: 14 });
         if (dead) return;
-        if (q.status === "done" && q.result) {
-          setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
-        }
+        // 4.4.7 — storno/chyba rýchlej masky: NESPOUSTAŤ plnú masku. Doteraz
+        // sa po zrušení hneď spustila plná (stovky snímkov), takže storno
+        // vyzeralo nefunkčné — úloha akoby „bežala ďalej".
+        if (q.status !== "done") return;
+        setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
         // 2) plná maska na pozadí — 4.4.5: len úsek strihu (I/O) s rezervou
         // 15 s na obe strany (strih sa dá ešte jemne posunúť bez prepočtu).
         // Bez I/O značiek celé video ako doteraz. Pri 11 s strihu ~41 s
         // masky namiesto celého 5-min videa — rádovo rýchlejšie.
-        const io = ctx?.inOut;
+        const io = readInOut(ctx);
         let fArgs = {};
         let fStart = 0, fLen = 0;
         if (io && io.a != null && io.b != null && Number(io.b) > Number(io.a)) {

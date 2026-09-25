@@ -797,6 +797,16 @@ function GradeSlider({ label, value, min, max, unit, onLive, onCommit }) {
     }
   ));
 }
+function readInOut(ctx) {
+  const c = ctx?.inOut;
+  if (c && c.a != null && c.b != null) return c;
+  try {
+    const s = api.getEditorInOut ? api.getEditorInOut() : null;
+    if (s && s.a != null && s.b != null) return s;
+  } catch {
+  }
+  return null;
+}
 function FiltersField({ value, onChange, ctx }) {
   const s = useStore();
   const v = { ...DEFAULT_GRADE, ...value ?? {} };
@@ -993,7 +1003,7 @@ function FiltersField({ value, onChange, ctx }) {
   useEffect2(() => {
     if (!v.aiMask || !media || media.kind !== "video") return;
     if (v.maskFor === media.path && v.maskPath && !v.maskQuick) {
-      const io = ctx?.inOut;
+      const io = readInOut(ctx);
       const covers = !(io && io.a != null && io.b != null) || !Number(v.maskLen) || Number(io.a) >= Number(v.maskStart) - 0.01 && Number(io.b) <= Number(v.maskStart) + Number(v.maskLen) + 0.01;
       if (covers) return;
     }
@@ -1018,10 +1028,9 @@ function FiltersField({ value, onChange, ctx }) {
         store.setState({ maskPhase: "quick", maskProgress: 0 });
         const q = await runJob({ startSec: q0, seconds: 14 });
         if (dead) return;
-        if (q.status === "done" && q.result) {
-          setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
-        }
-        const io = ctx?.inOut;
+        if (q.status !== "done") return;
+        setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
+        const io = readInOut(ctx);
         let fArgs = {};
         let fStart = 0, fLen = 0;
         if (io && io.a != null && io.b != null && Number(io.b) > Number(io.a)) {
