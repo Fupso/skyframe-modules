@@ -283,11 +283,12 @@ function skyGraphLuma(chain) {
 }
 
 /** Graf „AI obloha" — maska zo súboru [I0] (core ju dodá ako vstup). */
-function skyGraphAi(chain, maskStart = 0) {
-  // rýchla maska pokrýva len okno [maskStart, +len] — posunieme ju v čase;
-  // mimo okna framesync zopakuje okrajovú masku (len náhľad, export čaká plnú)
-  const src = maskStart > 0.001 ? `[I0]setpts=PTS+${maskStart.toFixed(3)}/TB[mv];[mv]` : `[I0]`;
-  return `[IN]split=2[base][t];[t]${chain}[tinted];${src}[tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay=eof_action=pass[OUT]`;
+function skyGraphAi(chain) {
+  // 4.4.2 — BEZ časového posunu: posun rýchlej masky (+maskStart) pri
+  // seeknutom náhľade rozbil synchronizáciu grafov → celý obraz sfarbený.
+  // Rýchla maska (okno od pozície) sedí na náhľad priamo; plná maska má
+  // časovú os zdroja a core ju seekne spolu s videom (prefix „seek:").
+  return `[IN]split=2[base][t];[t]${chain}[tinted];[I0][tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay=eof_action=pass[OUT]`;
 }
 
 function presetName(p) {
@@ -1666,8 +1667,11 @@ api.registerTool({
       // foto aj video — maska videa je cachovaný súbor na zdrojovom fps (krok 45)
       return {
         label: label + (v.maskQuick ? " ⏳" : ""),
-        graph: skyGraphAi(chain, Number(v.maskStart) || 0),
-        inputs: [v.maskPath],
+        graph: skyGraphAi(chain),
+        // plná maska: „seek:" — core ju pri seeknutom náhľade/exporte seekne
+        // rovnako ako video (časová os zdroja). Rýchla maska je len okno od
+        // pozície → nesekuje sa, sedí na náhľad priamo.
+        inputs: [v.maskQuick ? v.maskPath : `seek:${v.maskPath}`],
         incomplete: !!v.maskQuick, // export blokuje, kým nedorazí plná maska
       };
     }
