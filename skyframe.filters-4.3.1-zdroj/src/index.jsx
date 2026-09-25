@@ -935,6 +935,7 @@ function FiltersField({ value, onChange, ctx }) {
       try {
         const content = buildAdjustCube(nv.vibrance, nv.hsl);
         const path = await api.invoke("save_lut_file", { name: `hsl-${hashString(content)}`, content });
+        console.log("[filtre] HSL/vibrancia commit OK:", path.split(/[\\/]/).pop());
         setV({ ...patch, hslLutPath: path });
       } catch (e) {
         console.error("[filtre] generovanie HSL LUT:", e);
@@ -1407,16 +1408,20 @@ function FiltersField({ value, onChange, ctx }) {
                 })}
               </div>
               {(() => {
-                const cur = (v.hsl && v.hsl[hslColor]) || [0, 0, 0];
+                // Základ pre zmenu = čakajúci (necommitnutý) stav ?? posledný
+                // commitnutý — inak sa pri prepnutí farby pred 400 ms flushom
+                // predchádzajúca zmena stratila (slidery „nič nerobili")
+                const baseHsl = () => (pendingAdjustRef.current && pendingAdjustRef.current.hsl) || vRef.current.hsl || v.hsl || {};
+                const cur = (baseHsl()[hslColor]) || [0, 0, 0];
                 const setCh = (idx) => (nv) => {
                   const next = [...cur];
                   next[idx] = nv;
-                  void commitAdjust({ hsl: { ...(v.hsl || {}), [hslColor]: next } });
+                  void commitAdjust({ hsl: { ...baseHsl(), [hslColor]: next } });
                 };
                 const liveCh = (idx) => (nv) => {
                   const next = [...cur];
                   next[idx] = nv;
-                  sendLive(undefined, undefined, undefined, currentLut3d({ hsl: { ...(v.hsl || {}), [hslColor]: next } }));
+                  sendLive(undefined, undefined, undefined, currentLut3d({ hsl: { ...baseHsl(), [hslColor]: next } }));
                 };
                 return (
                   <>
@@ -1426,7 +1431,7 @@ function FiltersField({ value, onChange, ctx }) {
                     {(Math.abs(cur[0]) > 0.5 || Math.abs(cur[1]) > 0.5 || Math.abs(cur[2]) > 0.5) && (
                       <button
                         className="px-2 py-1 text-[11px] rounded bg-zinc-700 hover:bg-zinc-600"
-                        onClick={() => void commitAdjust({ hsl: { ...(v.hsl || {}), [hslColor]: [0, 0, 0] } })}
+                        onClick={() => void commitAdjust({ hsl: { ...baseHsl(), [hslColor]: [0, 0, 0] } })}
                       >
                         ↺ {t("hsl_reset", "Reset farby")}
                       </button>
