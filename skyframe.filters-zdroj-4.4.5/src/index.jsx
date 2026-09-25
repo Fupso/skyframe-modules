@@ -95,7 +95,7 @@ const DEFAULT_GRADE = {
   maskPath: "",         // cesta k AI maske pre aktuálne médium
   maskFor: "",          // pre ktoré médium je maska
   maskStart: 0,         // začiatok okna rýchlej masky v časovej osi (s)
-  maskLen: 0,           // dĺžka okna rýchlej masky (s); 0 = celé video
+  maskLen: 0,           // dĺžka okna masky (s); 0 = maska celého videa
   maskQuick: false,     // true = len rýchla maska (náhľad), plná sa počíta
   curves: null,         // [[x,y],...] | null (master krivka)
   wheels: { s: [0, 0], m: [0, 0], h: [0, 0] },  // tieň/stredy/svetlá [dx,dy]
@@ -1106,7 +1106,15 @@ function FiltersField({ value, onChange, ctx }) {
   const maskJobRef = useRef(null);
   useEffect(() => {
     if (!v.aiMask || !media || media.kind !== "video") return;
-    if (v.maskFor === media.path && v.maskPath && !v.maskQuick) return; // plná hotová
+    // Plná maska hotová — ale 4.4.5: ak sa strih (I/O) posunul MIMO okno,
+    // ktoré maska pokrýva, treba ju prepočítať pre nový úsek.
+    if (v.maskFor === media.path && v.maskPath && !v.maskQuick) {
+      const io = ctx?.inOut;
+      const covers = !(io && io.a != null && io.b != null)
+        || !Number(v.maskLen)
+        || (Number(io.a) >= Number(v.maskStart) - 0.01 && Number(io.b) <= Number(v.maskStart) + Number(v.maskLen) + 0.01);
+      if (covers) return;
+    }
     if (maskJobRef.current === media.path) return; // už beží
     maskJobRef.current = media.path;
     let dead = false;
@@ -1132,12 +1140,23 @@ function FiltersField({ value, onChange, ctx }) {
         if (q.status === "done" && q.result) {
           setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
         }
-        // 2) plná maska na pozadí
+        // 2) plná maska na pozadí — 4.4.5: len úsek strihu (I/O) s rezervou
+        // 15 s na obe strany (strih sa dá ešte jemne posunúť bez prepočtu).
+        // Bez I/O značiek celé video ako doteraz. Pri 11 s strihu ~41 s
+        // masky namiesto celého 5-min videa — rádovo rýchlejšie.
+        const io = ctx?.inOut;
+        let fArgs = {};
+        let fStart = 0, fLen = 0;
+        if (io && io.a != null && io.b != null && Number(io.b) > Number(io.a)) {
+          fStart = Math.max(0, Number(io.a) - 15);
+          fLen = (Number(io.b) + 15) - fStart;
+          fArgs = { startSec: Math.round(fStart * 1000) / 1000, seconds: Math.round(fLen * 100) / 100 };
+        }
         store.setState({ maskPhase: "full", maskProgress: 0 });
-        const f = await runJob({});
+        const f = await runJob(fArgs);
         if (dead) return;
         if (f.status === "done" && f.result) {
-          setV({ maskPath: f.result, maskFor: mpath, maskStart: 0, maskLen: 0, maskQuick: false });
+          setV({ maskPath: f.result, maskFor: mpath, maskStart: fStart, maskLen: Math.round(fLen * 100) / 100, maskQuick: false });
         } else if (f.status === "error") {
           console.error("[filtre] plná maska:", f.message);
         }
@@ -1153,7 +1172,7 @@ function FiltersField({ value, onChange, ctx }) {
       if (maskJobRef.current === media.path) maskJobRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [v.aiMask, media?.path]);
+  }, [v.aiMask, media?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
 
   const pick = (p) => {
     // 4.4.0 — filter sa APLIKUJE DO existujúcich nastavení: preset mení len
@@ -1668,12 +1687,14 @@ api.registerTool({
       return {
         label: label + (v.maskQuick ? " ⏳" : ""),
         graph: skyGraphAi(chain),
-        // plná maska: „seek:" — core ju seekne rovnako ako video (časová
-        // os zdroja). Rýchla maska = okno od pozície: „seekwin:<zaciatočná>:" —
-        // core ju seekne o (kurzor - začiatok okna), aby sedela na snímku
-        // aj keď sa kurzor medzi výpočtom pohol (4.4.4 — pás nespracovanej
-        // oblohy pri horizonte).
-        inputs: [v.maskQuick ? `seekwin:${(Number(v.maskStart) || 0).toFixed(3)}:${v.maskPath}` : `seek:${v.maskPath}`],
+        // Maska celého videa: „seek:" — core ju seekne rovnako ako video
+        // (časová os zdroja). Maska OKNA (rýchla, aj plná nad strihom):
+        // „seekwin:<začiatok>:<dĺžka>:<cesta>" — core ju seekne o
+        // (kurzor - začiatok okna), aby sedela na snímku (4.4.4), a <dĺžka>
+        // hovorí, dokedy maska platí — náhľad ďalej nerenderuje (4.4.5).
+        inputs: [Number(v.maskLen) > 0
+          ? `seekwin:${(Number(v.maskStart) || 0).toFixed(3)}:${(Number(v.maskLen) || 0).toFixed(2)}:${v.maskPath}`
+          : `seek:${v.maskPath}`],
         incomplete: !!v.maskQuick, // export blokuje, kým nedorazí plná maska
       };
     }
