@@ -1,4 +1,4 @@
-// skyframe.audiotools v2.6.0 — Zvuk (deklaratívny nástroj Editora)
+// skyframe.audiotools v2.6.1 — Zvuk (deklaratívny nástroj Editora)
 // Žiadna vlastná stránka: polia vykresľuje core v pravom paneli Editora,
 // úpravy sa skladajú do zásobníka a aplikujú v JEDNOM exporte spolu
 // s ostatnými nástrojmi (filtre, časozber…). Hodnoty sa auto-ukladajú
@@ -48,8 +48,6 @@ api.registerTool({
     { id: "sec_sil", type: "separator", labelKey: "sec_silence" },
     { id: "removeSilence", type: "checkbox", labelKey: "remove_silence", default: false },
     { id: "sec_fx", type: "separator", labelKey: "sec_fx" },
-    { id: "bass", type: "slider", labelKey: "fx_bass", min: -20, max: 20, step: 1, unit: " dB", default: 0 },
-    { id: "treble", type: "slider", labelKey: "fx_treble", min: -20, max: 20, step: 1, unit: " dB", default: 0 },
     { id: "echo", type: "checkbox", labelKey: "fx_echo", default: false },
     { id: "reverb", type: "checkbox", labelKey: "fx_reverb", default: false },
     { id: "chorus", type: "checkbox", labelKey: "fx_chorus", default: false },
@@ -136,18 +134,10 @@ api.registerTool({
       labels.push(`fade out ${fo} s`);
     }
 
-    const bass = Number(values.bass ?? 0);
-    if (Math.abs(bass) > 0.01) {
-      chain.push(`bass=g=${bass.toFixed(1)}`);
-      labels.push(`bass ${bass > 0 ? "+" : ""}${bass} dB`);
-    }
-
-    const treble = Number(values.treble ?? 0);
-    if (Math.abs(treble) > 0.01) {
-      chain.push(`treble=g=${treble.toFixed(1)}`);
-      labels.push(`treble ${treble > 0 ? "+" : ""}${treble} dB`);
-    }
-
+    // 2.6.1 — bass/treble z modulu PREČ: ekvalizér (Bas/Stred/Výšky +
+    // kompresor + odšum) je natvrdo v core paneli Zvuk editora, dvaja by
+    // robili to isté dvakrát. Modul necháva len to, čo core nemá:
+    // echo/ozvena/chorus, AI čistenie, podmaz, normalizáciu, fades…
     if (values.echo) {
       chain.push("aecho=0.7:0.7:50:0.35");
       labels.push(t("lbl_echo", "echo"));

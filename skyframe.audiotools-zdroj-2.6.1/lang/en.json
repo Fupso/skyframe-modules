@@ -21,8 +21,6 @@
  "lbl_music_replace": "music replaces audio",
  "lbl_music_only": "music only (source has no audio)",
  "sec_fx": "Effects",
- "fx_bass": "Bass",
- "fx_treble": "Treble",
  "fx_echo": "Echo",
  "fx_reverb": "Reverb (hall)",
  "fx_chorus": "Chorus",

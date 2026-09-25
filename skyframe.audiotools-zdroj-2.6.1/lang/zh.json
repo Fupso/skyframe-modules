@@ -21,8 +21,6 @@
  "lbl_music_replace": "音乐替换原声",
  "lbl_music_only": "仅音乐（源无声）",
  "sec_fx": "效果",
- "fx_bass": "低音",
- "fx_treble": "高音",
  "fx_echo": "回声",
  "fx_reverb": "混响（大厅）",
  "fx_chorus": "合唱",
