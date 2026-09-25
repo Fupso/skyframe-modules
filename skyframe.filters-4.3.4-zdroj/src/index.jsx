@@ -1125,6 +1125,9 @@ function FiltersField({ value, onChange, ctx }) {
     // inak by o 400 ms prepísal práve vybraný preset starými hodnotami
     pendingAdjustRef.current = null;
     if (adjustTimerRef.current) { clearTimeout(adjustTimerRef.current); adjustTimerRef.current = null; }
+    // zhasni live filter — inak by Editor videl starý live stav a preset
+    // by sa „neaplikoval", kým používateľ nepohne sliderom (4.3.4)
+    api.setEditorLiveFilter?.(null);
     if (v.presetId === p.id) {
       setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "", blur: 0, sharpen: 0, vignette: 0, grain: 0 });
     } else {
@@ -1250,8 +1253,31 @@ function FiltersField({ value, onChange, ctx }) {
     );
   };
 
+  // 4.3.3/4 — kolečko myši nad panelom: niektoré prvky (range inputy vo
+  // WebView2) kolečko pohltili a panel sa nescrolloval. Nepasívny listener
+  // presmeruje scroll na najbližšieho scrollovateľného predka (core panel)
+  // a preventDefault zamedzí dvojitému scrollu tam, kde to fungovalo.
+  const rootRef = useRef(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const handler = (e) => {
+      let el = root.parentElement;
+      while (el) {
+        if (el.scrollHeight > el.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(el).overflowY)) {
+          e.preventDefault();
+          el.scrollTop += e.deltaY;
+          return;
+        }
+        el = el.parentElement;
+      }
+    };
+    root.addEventListener("wheel", handler, { passive: false });
+    return () => root.removeEventListener("wheel", handler);
+  }, []);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div ref={rootRef} style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Intenzita */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
