@@ -1155,49 +1155,21 @@ function FiltersField({ value, onChange, ctx }) {
   }, [v.aiMask, media?.path]);
 
   const pick = (p) => {
-    // preset prepíše hodnoty — zahoď čakajúci oneskorený commit zo sliderov,
-    // inak by o 400 ms prepísal práve vybraný preset starými hodnotami
-    pendingAdjustRef.current = null;
-    if (adjustTimerRef.current) { clearTimeout(adjustTimerRef.current); adjustTimerRef.current = null; }
+    // 4.4.0 — filter sa APLIKUJE DO existujúcich nastavení: preset mení len
+    // svoj štýl, všetky ručné úpravy (krivky, kolieska, teplota, vibrancia,
+    // HSL, LUT, efekty) zostávajú zachované. Čakajúci commit zo sliderov
+    // nechávame bežať — obsahuje používateľove hodnoty, ktoré platia ďalej.
     if (v.presetId === p.id) {
-      api.setEditorLiveFilter?.(null);
-      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "", blur: 0, sharpen: 0, vignette: 0, grain: 0 });
-    } else {
-      const np = {
-        style: p.style,
-        presetId: p.id,
-        presetName: p.name || null,
-        curves: p.curves ? p.curves.map((pt) => [...pt]) : null,
-        wheels: p.wheels ? { s: [...(p.wheels.s || [0, 0])], m: [...(p.wheels.m || [0, 0])], h: [...(p.wheels.h || [0, 0])] } : { ...NEUTRAL_WHEELS },
-        temp: p.temp || 0,
-        tint: p.tint || 0,
-        vibrance: p.vibrance || 0,
-        hsl: p.hsl ? JSON.parse(JSON.stringify(p.hsl)) : null,
-        lutPath: p.lutPath || "",
-        lutName: p.lutName || "",
-        blur: p.blur || 0,
-        sharpen: p.sharpen || 0,
-        vignette: p.vignette || 0,
-        grain: p.grain || 0,
-        hslLutPath: "",
-      };
-      // okamžitý GPU náhľad presetu (4.3.7) — rovnaká live vrstva ako slidery
+      // opätovný klik = vypnúť filter (len štýl), úpravy ostanú
+      const np = { ...v, style: null, presetId: null, presetName: null };
+      setV({ style: null, presetId: null, presetName: null });
       sendLiveFor(np);
-      // vibrancia/HSL z presetu → regeneruj 3D LUT súbor (rovnaké hodnoty = rovnaký súbor)
-      if (adjustActive(np) && api.invoke) {
-        adjustQueueRef.current = adjustQueueRef.current.then(async () => {
-          try {
-            const content = buildAdjustCube(np.vibrance, np.hsl);
-            const path = await api.invoke("save_lut_file", { name: `hsl-${hashString(content)}`, content });
-            setV({ ...np, hslLutPath: path });
-          } catch {
-            setV(np);
-          }
-        });
-      } else {
-        setV(np);
-      }
+      return;
     }
+    const np = { ...v, style: p.style, presetId: p.id, presetName: p.name || null };
+    setV({ style: p.style, presetId: p.id, presetName: p.name || null });
+    // okamžitý GPU náhľad — rovnaká live vrstva ako slidery
+    sendLiveFor(np);
   };
 
   // ➕ Filter z fotky
@@ -1220,9 +1192,11 @@ function FiltersField({ value, onChange, ctx }) {
       const thumb = makeThumb(st.baseThumb || img, style); // ak nie je base, aspoň samotná fotka
       const presets = [...st.presets, { id, name, style, photoPath }];
       store.setState({ presets, thumbs: { ...st.thumbs, [id]: thumb }, openCustom: true });
-      // okamžite aplikuj nový filter — používateľ čaká, že sa po výbere
-      // fotky filter hneď použije (predtým sa len pridal do zoznamu)
-      setV({ style, presetId: id, presetName: name, curves: null, wheels: { ...NEUTRAL_WHEELS } });
+      // aplikuj hneď — ale ZLÚČENE so stavom (len štýl sa zmení, ručné
+      // úpravy ostanú; 4.4.0)
+      const np = { ...vRef.current, style, presetId: id, presetName: name };
+      setV({ style, presetId: id, presetName: name });
+      sendLiveFor(np);
       try {
         await savePresets(presets);
       } catch (e) {
