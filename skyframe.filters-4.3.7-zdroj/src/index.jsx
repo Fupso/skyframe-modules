@@ -908,6 +908,25 @@ function FiltersField({ value, onChange, ctx }) {
     };
     return (fx.blur > 0.5 || fx.sharpen > 0.5 || fx.vignette > 0.5 || fx.grain > 0.5) ? fx : null;
   };
+  // live špecifikácia z KOMPLETNÝCH hodnôt (výber presetu) — okamžitý GPU
+  // náhľad nového filtra bez čakania na render; v Editore je to overlay nad
+  // stálym prehrávačom, takže žiadne čierne skakanie (4.3.7)
+  const sendLiveFor = (nv) => {
+    if (!api.setEditorLiveFilter) return;
+    const spec = computeLiveSpec(nv.style, nv.intensity, nv.curves, nv.wheels, { temp: nv.temp, tint: nv.tint });
+    const cube = (s.liveCube && s.liveCubeFor === nv.lutPath) ? s.liveCube : null;
+    const adjOn = Math.abs(nv.vibrance || 0) > 0.5 || hslAny(nv.hsl);
+    let lut = null;
+    if (adjOn) lut = buildAdjustLutData(nv.vibrance || 0, nv.hsl, cube);
+    else if (cube) lut = cube;
+    const fxv = (nv.blur > 0.5 || nv.sharpen > 0.5 || nv.vignette > 0.5 || nv.grain > 0.5)
+      ? { blur: nv.blur || 0, sharpen: nv.sharpen || 0, vignette: nv.vignette || 0, grain: nv.grain || 0 } : null;
+    let out = spec;
+    if (lut) out = { ...out, lut3d: lut };
+    if (fxv) out = { ...out, fx: fxv };
+    api.setEditorLiveFilter(out);
+  };
+
   const sendLive = (curves, wheels, adj, lutOverride, fxOverride) => {
     if (!api.setEditorLiveFilter) return;
     const spec = computeLiveSpec(
@@ -1147,6 +1166,8 @@ function FiltersField({ value, onChange, ctx }) {
         grain: p.grain || 0,
         hslLutPath: "",
       };
+      // okamžitý GPU náhľad presetu (4.3.7) — rovnaká live vrstva ako slidery
+      sendLiveFor(np);
       // vibrancia/HSL z presetu → regeneruj 3D LUT súbor (rovnaké hodnoty = rovnaký súbor)
       if (adjustActive(np) && api.invoke) {
         adjustQueueRef.current = adjustQueueRef.current.then(async () => {

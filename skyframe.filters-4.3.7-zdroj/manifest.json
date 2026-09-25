@@ -1,7 +1,7 @@
 {
   "id": "skyframe.filters",
   "name": "Filtre",
-  "version": "4.3.6",
+  "version": "4.3.7",
   "author": "SkyFrame Community",
   "description": "Filtre a farebné ladenie v Editore — vstavané a vlastné štýly, krivky, farebné kolieska, teplota/tónovanie, vibrancia, HSL podľa farieb, import LUT (.cube), len-obloha s AI maskou.",
   "icon": "🎨",
