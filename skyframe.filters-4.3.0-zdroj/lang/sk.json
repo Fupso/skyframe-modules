@@ -73,5 +73,11 @@
   "lbl_temp": "teplota",
   "lbl_hsl": "HSL",
   "saved_ok": "Uložené",
-  "save_error": "Uloženie zlyhalo"
+  "save_error": "Uloženie zlyhalo",
+  "fx_section": "Efekty",
+  "fx_blur": "Rozostrenie",
+  "fx_sharpen": "Doostrenie",
+  "fx_vignette": "Vinětácia",
+  "fx_grain": "Zrno",
+  "lbl_fx": "efekty"
 }

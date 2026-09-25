@@ -73,5 +73,11 @@
   "lbl_temp": "Temperatur",
   "lbl_hsl": "HSL",
   "saved_ok": "Gespeichert",
-  "save_error": "Speichern fehlgeschlagen"
+  "save_error": "Speichern fehlgeschlagen",
+  "fx_section": "Effekte",
+  "fx_blur": "Weichzeichnen",
+  "fx_sharpen": "Schärfen",
+  "fx_vignette": "Vignette",
+  "fx_grain": "Körnung",
+  "lbl_fx": "Effekte"
 }

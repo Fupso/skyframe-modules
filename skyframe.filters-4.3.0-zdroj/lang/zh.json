@@ -73,5 +73,11 @@
   "lbl_temp": "色温",
   "lbl_hsl": "HSL",
   "saved_ok": "已保存",
-  "save_error": "保存失败"
+  "save_error": "保存失败",
+  "fx_section": "效果",
+  "fx_blur": "模糊",
+  "fx_sharpen": "锐化",
+  "fx_vignette": "暗角",
+  "fx_grain": "颗粒",
+  "lbl_fx": "效果"
 }

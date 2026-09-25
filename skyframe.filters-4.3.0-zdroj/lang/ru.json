@@ -73,5 +73,11 @@
   "lbl_temp": "температура",
   "lbl_hsl": "HSL",
   "saved_ok": "Сохранено",
-  "save_error": "Ошибка сохранения"
+  "save_error": "Ошибка сохранения",
+  "fx_section": "Эффекты",
+  "fx_blur": "Размытие",
+  "fx_sharpen": "Резкость",
+  "fx_vignette": "Виньетка",
+  "fx_grain": "Зерно",
+  "lbl_fx": "эффекты"
 }

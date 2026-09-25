@@ -101,6 +101,10 @@ const DEFAULT_GRADE = {
   temp: 0,            // teplota -100..100 (teplá/studená)
   tint: 0,            // tónovanie -100..100 (zelená/purpurová)
   vibrance: 0,        // vibrancia -100..100 (zapečená do hslLutPath)
+  blur: 0,            // rozostrenie 0..100 (4.3.0 — GPU live + gblur export)
+  sharpen: 0,         // doostrenie 0..100 (unsharp export)
+  vignette: 0,        // vinětácia 0..100
+  grain: 0,           // zrno 0..100 (noise export)
   hsl: null,          // {r:[h,s,l], y,g,c,b,m} | null — HSL podľa farieb
   hslLutPath: "",     // vygenerovaný 3D LUT pre vibranciu+HSL (app_dir/luts)
   lutPath: "",        // importovaný .cube (kópia v app_dir/luts)
@@ -331,6 +335,12 @@ function hslToRgb(h, sat, l) {
     return p;
   };
   return [cl(f(h + 1 / 3)), cl(f(h)), cl(f(h - 1 / 3))];
+}
+
+/** Sú aktívne priestorové efekty (blur/sharpen/vignette/grain)? (4.3.0) */
+function fxActive(v) {
+  if (!v) return false;
+  return (v.blur || 0) > 0.5 || (v.sharpen || 0) > 0.5 || (v.vignette || 0) > 0.5 || (v.grain || 0) > 0.5;
 }
 
 /** Je vibrancia/HSL aktívna (netriviálna)? */
@@ -886,13 +896,27 @@ function FiltersField({ value, onChange, ctx }) {
     return cube;
   };
 
-  const sendLive = (curves, wheels, adj, lutOverride) => {
+  // aktuálne priestorové efekty pre live náhľad (4.3.0)
+  const currentFx = (over) => {
+    const fx = {
+      blur: over && "blur" in over ? over.blur : (v.blur || 0),
+      sharpen: over && "sharpen" in over ? over.sharpen : (v.sharpen || 0),
+      vignette: over && "vignette" in over ? over.vignette : (v.vignette || 0),
+      grain: over && "grain" in over ? over.grain : (v.grain || 0),
+    };
+    return (fx.blur > 0.5 || fx.sharpen > 0.5 || fx.vignette > 0.5 || fx.grain > 0.5) ? fx : null;
+  };
+  const sendLive = (curves, wheels, adj, lutOverride, fxOverride) => {
     if (!api.setEditorLiveFilter) return;
     const spec = computeLiveSpec(
       v.style, v.intensity, curves ?? v.curves, wheels ?? v.wheels,
       adj ?? { temp: v.temp, tint: v.tint });
     const lut = lutOverride !== undefined ? lutOverride : currentLut3d();
-    api.setEditorLiveFilter(lut ? { ...spec, lut3d: lut } : spec);
+    const fx = fxOverride !== undefined ? fxOverride : currentFx();
+    let out = spec;
+    if (lut) out = { ...out, lut3d: lut };
+    if (fx) out = { ...out, fx };
+    api.setEditorLiveFilter(out);
   };
 
   // Vibrancia/HSL: commity sa ZLÚČIA a oneskoria o 400 ms po poslednom
@@ -1099,7 +1123,7 @@ function FiltersField({ value, onChange, ctx }) {
     pendingAdjustRef.current = null;
     if (adjustTimerRef.current) { clearTimeout(adjustTimerRef.current); adjustTimerRef.current = null; }
     if (v.presetId === p.id) {
-      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "" });
+      setV({ style: null, presetId: null, presetName: null, curves: null, wheels: { ...NEUTRAL_WHEELS }, temp: 0, tint: 0, vibrance: 0, hsl: null, hslLutPath: "", lutPath: "", lutName: "", blur: 0, sharpen: 0, vignette: 0, grain: 0 });
     } else {
       const np = {
         style: p.style,
@@ -1113,6 +1137,10 @@ function FiltersField({ value, onChange, ctx }) {
         hsl: p.hsl ? JSON.parse(JSON.stringify(p.hsl)) : null,
         lutPath: p.lutPath || "",
         lutName: p.lutName || "",
+        blur: p.blur || 0,
+        sharpen: p.sharpen || 0,
+        vignette: p.vignette || 0,
+        grain: p.grain || 0,
         hslLutPath: "",
       };
       // vibrancia/HSL z presetu → regeneruj 3D LUT súbor (rovnaké hodnoty = rovnaký súbor)
@@ -1408,6 +1436,31 @@ function FiltersField({ value, onChange, ctx }) {
               })()}
             </div>
 
+            {/* Efekty (4.3.0) — blur/sharpen/vignette/grain, GPU live + ffmpeg export */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6 }}>{t("fx_section", "Efekty")}</span>
+              <GradeSlider
+                label={t("fx_blur", "Rozostrenie")} value={v.blur || 0} min={0} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, undefined, undefined, currentFx({ blur: nv }))}
+                onCommit={(nv) => void commitAdjust({ blur: nv })}
+              />
+              <GradeSlider
+                label={t("fx_sharpen", "Doostrenie")} value={v.sharpen || 0} min={0} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, undefined, undefined, currentFx({ sharpen: nv }))}
+                onCommit={(nv) => void commitAdjust({ sharpen: nv })}
+              />
+              <GradeSlider
+                label={t("fx_vignette", "Vinětácia")} value={v.vignette || 0} min={0} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, undefined, undefined, currentFx({ vignette: nv }))}
+                onCommit={(nv) => void commitAdjust({ vignette: nv })}
+              />
+              <GradeSlider
+                label={t("fx_grain", "Zrno")} value={v.grain || 0} min={0} max={100}
+                onLive={(nv) => sendLive(undefined, undefined, undefined, undefined, currentFx({ grain: nv }))}
+                onCommit={(nv) => void commitAdjust({ grain: nv })}
+              />
+            </div>
+
             {/* LUT (.cube) import (4.2.0) */}
             <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
               <span style={{ fontSize: 11, textTransform: "uppercase", opacity: 0.6 }}>LUT</span>
@@ -1435,7 +1488,7 @@ function FiltersField({ value, onChange, ctx }) {
             <button
               className="w-full px-3 py-1.5 text-xs rounded bg-zinc-700 hover:bg-zinc-600"
               onClick={() => {
-                if (!v.curves && !wheelsActive(v.wheels) && !v.style && !(v.temp || v.tint || adjustActive(v) || v.lutPath)) return;
+                if (!v.curves && !wheelsActive(v.wheels) && !v.style && !(v.temp || v.tint || adjustActive(v) || v.lutPath || fxActive(v))) return;
                 const st = store.getState();
                 const id = `custom_${Date.now()}`;
                 const name = `${t("custom_grade_prefix", "Úprava")} ${st.presets.length + 1}`;
@@ -1452,6 +1505,10 @@ function FiltersField({ value, onChange, ctx }) {
                   hsl: v.hsl ? JSON.parse(JSON.stringify(v.hsl)) : undefined,
                   lutPath: v.lutPath || undefined,
                   lutName: v.lutName || undefined,
+                  blur: v.blur || undefined,
+                  sharpen: v.sharpen || undefined,
+                  vignette: v.vignette || undefined,
+                  grain: v.grain || undefined,
                 };
                 let thumb = null;
                 try { if (st.baseThumb) thumb = makeThumb(st.baseThumb, preset.style, preset.curves || null, preset.wheels || null); } catch {}
@@ -1562,17 +1619,24 @@ api.registerTool({
     const wheels = v.wheels ?? null;
     const adj = { temp: v.temp || 0, tint: v.tint || 0 };
     const lutActive = adjustActive(v) && v.hslLutPath; // vygenerovaný LUT (4.2.0)
-    const has = style || curves || wheelsActive(wheels) || adj.temp !== 0 || adj.tint !== 0 || lutActive || v.lutPath;
+    const fx = fxActive(v); // priestorové efekty (4.3.0)
+    const has = style || curves || wheelsActive(wheels) || adj.temp !== 0 || adj.tint !== 0 || lutActive || v.lutPath || fx;
     if (!has) return null;
     let chain = buildChain(style, intensity, curves, wheels, adj);
     // 3D LUTy idú ZA kanálovou úpravou: najprv vibrancia/HSL, potom importovaný look
     if (lutActive) chain = (chain ? chain + "," : "") + `lut3d='${escFilterPath(v.hslLutPath)}'`;
     if (v.lutPath) chain = (chain ? chain + "," : "") + `lut3d='${escFilterPath(v.lutPath)}'`;
+    // Efekty idú na koniec reťaze (rovnaké poradie ako GPU live shader):
+    // blur → sharpen → vignette → grain
+    if (v.blur > 0.5) chain += `,gblur=sigma=${(0.4 + v.blur * 0.18).toFixed(2)}`;
+    if (v.sharpen > 0.5) chain += `,unsharp=5:5:${(v.sharpen / 50).toFixed(2)}:5:5:0.0`;
+    if (v.vignette > 0.5) chain += `,vignette=a=${(v.vignette / 100 * Math.PI / 4).toFixed(4)}`;
+    if (v.grain > 0.5) chain += `,noise=alls=${Math.round(v.grain * 0.5)}:allf=t`;
     if (!chain) return null;
     const name = v.presetId
       ? presetName({ id: v.presetId, nameKey: String(v.presetId).startsWith("builtin_") ? `style_${String(v.presetId).slice(8)}` : undefined, name: v.presetName })
       : t("grade_only", "Farebná úprava");
-    const extras = `${curves ? " · krivky" : ""}${wheelsActive(wheels) ? " · kolieska" : ""}${adj.temp !== 0 || adj.tint !== 0 ? ` · ${t("lbl_temp", "teplota")}` : ""}${lutActive ? ` · ${t("lbl_hsl", "HSL")}` : ""}${v.lutPath ? " · LUT" : ""}`;
+    const extras = `${curves ? " · krivky" : ""}${wheelsActive(wheels) ? " · kolieska" : ""}${adj.temp !== 0 || adj.tint !== 0 ? ` · ${t("lbl_temp", "teplota")}` : ""}${lutActive ? ` · ${t("lbl_hsl", "HSL")}` : ""}${v.lutPath ? " · LUT" : ""}${fx ? ` · ${t("lbl_fx", "efekty")}` : ""}`;
     const label = `🎨 ${name}${style ? ` ${intensity}%` : ""}${v.skyOnly ? (v.aiMask ? " · AI obloha" : " · obloha") : ""}${extras}`;
     if (!v.skyOnly) {
       return { label, vf: chain };

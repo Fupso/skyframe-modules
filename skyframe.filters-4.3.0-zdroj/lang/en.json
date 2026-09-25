@@ -73,5 +73,11 @@
   "lbl_temp": "temperature",
   "lbl_hsl": "HSL",
   "saved_ok": "Saved",
-  "save_error": "Saving failed"
+  "save_error": "Saving failed",
+  "fx_section": "Effects",
+  "fx_blur": "Blur",
+  "fx_sharpen": "Sharpen",
+  "fx_vignette": "Vignette",
+  "fx_grain": "Grain",
+  "lbl_fx": "effects"
 }
