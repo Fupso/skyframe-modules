@@ -202,21 +202,47 @@ async function commit(onChange, value, segments, timeScale = 1) {
     // škálované — subtitles filter ich kreslí na časovú os PO časozbere
     const ts = timeScale > 0 && isFinite(timeScale) ? timeScale : 1;
     const scaled = ts === 1 ? segments : segments.map((g) => ({ start: g.start * ts, end: g.end * ts, text: g.text }));
+    const next = { ...value, segments };
+    delete next.pendingJob; // 2.9.4 — prepis je použitý, pending značku zahoď
     if (lastAnimated) {
       // animovaný režim: karaoke ASS (štýl je zabudovaný v súbore)
       const ass = buildAnimatedAss(scaled, value);
       const assPath = await api.invoke("write_temp_subs", { content: ass, ext: "ass", previous: value?.assPath ?? value?.srtPath ?? null });
       lastWrittenPath = assPath;
       lastScale = ts;
-      onChange({ ...value, segments, srtPath: null, assPath });
+      onChange({ ...next, srtPath: null, assPath });
     } else {
       const srtPath = await api.invoke("write_temp_srt", { segments: mergeWordsToPhrases(scaled), previous: value?.srtPath ?? value?.assPath ?? null });
       lastWrittenPath = srtPath;
       lastScale = ts;
-      onChange({ ...value, segments, srtPath, assPath: null });
+      onChange({ ...next, srtPath, assPath: null });
     }
   } catch (e) {
     store.setState({ error: String(e) });
+  }
+}
+
+// 2.9.4 — zahoď pending značku (úloha dobehla / zmizla / zlyhala)
+function clearPending(onChange, value) {
+  if (!value?.pendingJob) return;
+  const next = { ...value };
+  delete next.pendingJob;
+  onChange(next);
+}
+
+// 2.9.4 — spoločné spracovanie výsledku prepisu (čerstvý aj obnovený job)
+async function finishTranscription(res, onChange, value, ts) {
+  if (res.status === "done" && res.result) {
+    const data = JSON.parse(res.result);
+    const segments = (data.segments ?? []).map((g) => ({ start: g.start, end: g.end, text: g.text }));
+    store.setState({ busy: false });
+    await commit(onChange, value, segments, ts);
+  } else if (res.status === "cancelled") {
+    store.setState({ busy: false });
+    clearPending(onChange, value);
+  } else {
+    store.setState({ busy: false, error: res.message || "?" });
+    clearPending(onChange, value);
   }
 }
 
@@ -243,21 +269,16 @@ async function transcribe(ctx, onChange, value, lang) {
       // animovaný režim: každé slovo s vlastným časom (-ml 1)
       wordMode: lastAnimated,
     });
+    // 2.9.4 — zapamätaj si rozbehnutú úlohu v hodnote nástroja (prežije
+    // zničenie iframu pri odchode na inú obrazovku aj reštart session)
+    onChange({ ...value, pendingJob: { id: jobId, ts } });
     const res = await watchJob(jobId, (j) =>
       store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" })
     );
-    if (res.status === "done" && res.result) {
-      const data = JSON.parse(res.result);
-      const segments = (data.segments ?? []).map((g) => ({ start: g.start, end: g.end, text: g.text }));
-      store.setState({ busy: false });
-      await commit(onChange, value, segments, ts);
-    } else if (res.status === "cancelled") {
-      store.setState({ busy: false });
-    } else {
-      store.setState({ busy: false, error: res.message || "?" });
-    }
+    await finishTranscription(res, onChange, value, ts);
   } catch (e) {
     store.setState({ busy: false, error: String(e) });
+    clearPending(onChange, value);
   }
 }
 
@@ -385,6 +406,41 @@ function SubtitlesField({ value, onChange, values, ctx }) {
     const iv = setInterval(refreshStatus, 6000);
     return () => clearInterval(iv);
   }, []);
+
+  // 2.9.4 — návrat na obrazovku počas/po prepise: iframe sa pri odchode
+  // zničil, ale úloha v core bežala ďalej. Pripojíme sa späť: beží →
+  // sledujeme progres, hotová → výsledok rovno použijeme, neexistuje →
+  // značku zahodíme (napr. po reštarte appky).
+  const pendingId = value?.pendingJob?.id ?? null;
+  useEffect(() => {
+    if (!pendingId || s.busy) return;
+    let dead = false;
+    (async () => {
+      store.setState({ busy: true, progress: -1, busyLabel: t("resume_wait", "Pripájam sa na rozbehnutý prepis…"), error: "" });
+      try {
+        const jobs = await api.invoke("list_jobs", {});
+        const job = (Array.isArray(jobs) ? jobs : []).find((j) => j.id === pendingId);
+        if (dead) return;
+        if (!job) {
+          store.setState({ busy: false });
+          clearPending(onChange, value);
+          return;
+        }
+        const ts = value?.pendingJob?.ts > 0 ? value.pendingJob.ts : timeScale;
+        const res = job.status === "running"
+          ? await watchJob(pendingId, (j) => store.setState({ progress: j.progress ?? -1, busyLabel: j.message || "" }))
+          : job;
+        if (dead) return;
+        await finishTranscription(res, onChange, value, ts);
+      } catch (e) {
+        if (dead) return;
+        store.setState({ busy: false, error: String(e) });
+        clearPending(onChange, value);
+      }
+    })();
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingId]);
 
   // temp .srt neprežije reštart appky — obnovenú session preženieme cez
   // write_temp_srt znova, inak by export zlyhal na neexistujúcom súbore

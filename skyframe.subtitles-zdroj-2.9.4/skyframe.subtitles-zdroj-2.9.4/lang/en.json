@@ -77,5 +77,6 @@
   "animated": "Animated word-by-word",
   "anim_words": "Words per group",
   "anim_color": "Active word color",
-  "anim_upper": "ALL CAPS"
+  "anim_upper": "ALL CAPS",
+  "resume_wait": "Reconnecting to the running transcription…"
 }

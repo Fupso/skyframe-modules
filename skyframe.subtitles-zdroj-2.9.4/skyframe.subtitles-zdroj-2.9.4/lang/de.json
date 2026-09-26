@@ -77,5 +77,6 @@
   "animated": "Animiert Wort für Wort",
   "anim_words": "Wörter pro Gruppe",
   "anim_color": "Farbe des aktiven Wortes",
-  "anim_upper": "ALLES GROSS"
+  "anim_upper": "ALLES GROSS",
+  "resume_wait": "Verbinde mit laufender Transkription…"
 }

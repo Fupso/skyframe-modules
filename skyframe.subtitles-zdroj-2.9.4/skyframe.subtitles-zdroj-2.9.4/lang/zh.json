@@ -77,5 +77,6 @@
   "animated": "逐字动画字幕",
   "anim_words": "每组词数",
   "anim_color": "当前词颜色",
-  "anim_upper": "全部大写"
+  "anim_upper": "全部大写",
+  "resume_wait": "正在重新连接到正在运行的转录…"
 }
