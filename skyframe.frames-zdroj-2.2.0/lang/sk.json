@@ -8,7 +8,7 @@
   "capturing": "⏳ Ukladám…",
   "saved": "✅ Uložené: {p}",
   "failed": "❌ {e}",
-  "hint": "Nastav pozíciu úchytom na časovej osi — video sa presunie na ňu. Uloží sa presne tá snímka, ktorú vidíš (aj s filtrami a strihom).",
+  "hint": "Snímka sa uloží od kurzora na časovej osi — prejdi prehrávačom na miesto a klikni. Uloží sa presne to, čo vidíš (aj s filtrami a strihom), do RodStudio/Snimky.",
   "tool_no_media": "Najprv otvor súbor v Editore.",
   "browse": "🎞 Zobraziť snímky sekundy",
   "browsing": "⏳ Extrahujem…"

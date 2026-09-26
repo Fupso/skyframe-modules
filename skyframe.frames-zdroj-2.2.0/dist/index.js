@@ -1,20 +1,16 @@
-// ../framesbuild/react-shim.js
-var R = window.React;
-var useState = R.useState;
-var useEffect = R.useEffect;
-var useRef = R.useRef;
-var useMemo = R.useMemo;
-var useCallback = R.useCallback;
-var useReducer = R.useReducer;
-var useContext = R.useContext;
-var createContext = R.createContext;
-var Fragment = R.Fragment;
-var useSyncExternalStore = R.useSyncExternalStore;
-var useLayoutEffect = R.useLayoutEffect;
-var forwardRef = R.forwardRef;
-var react_shim_default = R;
+// react-shim.js
+var React = window.React;
+var react_shim_default = React;
+var useState = React.useState;
+var useEffect = React.useEffect;
+var useMemo = React.useMemo;
+var useRef = React.useRef;
+var useCallback = React.useCallback;
+var useSyncExternalStore = React.useSyncExternalStore;
+var createElement = React.createElement;
+var Fragment = React.Fragment;
 
-// src/index.jsx
+// ../mods/skyframe.frames-zdroj-2.1.0/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
 var tt = (k, f, vars) => {
@@ -28,6 +24,13 @@ function CaptureButton({ values, ctx }) {
   const [browseBusy, setBrowseBusy] = useState2(false);
   const [msg, setMsg] = useState2("");
   const [err, setErr] = useState2(false);
+  function currentPos() {
+    const live = api.getPlayerPosition ? api.getPlayerPosition() : null;
+    if (typeof live === "number" && isFinite(live)) return live;
+    const c = Number(ctx?.positionSec);
+    if (isFinite(c) && c > 0) return c;
+    return Number(values?.time) || 0;
+  }
   async function browse() {
     if (!ctx?.mediaPath || browseBusy) return;
     setBrowseBusy(true);
@@ -37,9 +40,9 @@ function CaptureButton({ values, ctx }) {
       const res = await api.invoke("extract_editor_second", {
         input: ctx.mediaPath,
         vf: ctx.pipelineVf ?? "",
-        timeSec: Number(values?.time) || 0
+        timeSec: currentPos()
       });
-      api.showFrames(res.frames ?? [], res.time ?? (Number(values?.time) || 0));
+      api.showFrames(res.frames ?? [], res.time ?? currentPos());
     } catch (e) {
       setErr(true);
       setMsg(tt("failed", "\u274C {e}", { e: String(e) }));
@@ -56,7 +59,7 @@ function CaptureButton({ values, ctx }) {
       const p = await api.invoke("export_editor_frame", {
         input: ctx.mediaPath,
         vf: ctx.pipelineVf ?? "",
-        timeSec: Number(values?.time) || 0,
+        timeSec: currentPos(),
         format: values?.format ?? "jpg",
         outputName: null
       });
@@ -68,7 +71,7 @@ function CaptureButton({ values, ctx }) {
       setBusy(false);
     }
   }
-  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 10, color: "#a1a1aa" } }, t("hint", "Nastav poz\xEDciu \xFAchytom na \u010Dasovej osi \u2014 video sa presunie na \u0148u. Ulo\u017E\xED sa presne t\xE1 sn\xEDmka, ktor\xFA vid\xED\u0161 (aj s filtrami a strihom).")), /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, /* @__PURE__ */ react_shim_default.createElement("div", { style: { fontSize: 10, color: "#a1a1aa" } }, t("hint", "Sn\xEDmka sa ulo\u017E\xED od kurzora na \u010Dasovej osi \u2014 prejdi prehr\xE1va\u010Dom na miesto a klikni. Ulo\u017E\xED sa presne to, \u010Do vid\xED\u0161 (aj s filtrami a strihom), do RodStudio/Snimky.")), /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => {

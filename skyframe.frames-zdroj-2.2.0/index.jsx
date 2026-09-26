@@ -1,4 +1,4 @@
-// skyframe.frames v2.0.0 — Extraktor snímok ako nástroj Editora (krok 63)
+// skyframe.frames v2.2.0 — Extraktor snímok ako nástroj Editora (krok 63)
 // Namiesto samostatnej stránky: časové pole s úchytom na časovej osi
 // (živý scrub v náhľade) + tlačidlo uloží presne tú snímku, ktorú vidíš
 // — cez core command export_editor_frame s aktuálnym pipeline vf (WYSIWYG).
@@ -23,6 +23,17 @@ function CaptureButton({ values, ctx }) {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState(false);
 
+  // 2.2.0 — pozícia sa berie od KURZORA prehrávača v momente kliku
+  // (getPlayerPosition číta živý stav; ctx.positionSec je len snapshot
+  // z posledného renderu). Fallback: časové pole, ak API chýba (starý core).
+  function currentPos() {
+    const live = api.getPlayerPosition ? api.getPlayerPosition() : null;
+    if (typeof live === "number" && isFinite(live)) return live;
+    const c = Number(ctx?.positionSec);
+    if (isFinite(c) && c > 0) return c;
+    return Number(values?.time) || 0;
+  }
+
   async function browse() {
     if (!ctx?.mediaPath || browseBusy) return;
     setBrowseBusy(true); setMsg(""); setErr(false);
@@ -30,9 +41,9 @@ function CaptureButton({ values, ctx }) {
       const res = await api.invoke("extract_editor_second", {
         input: ctx.mediaPath,
         vf: ctx.pipelineVf ?? "",
-        timeSec: Number(values?.time) || 0,
+        timeSec: currentPos(),
       });
-      api.showFrames(res.frames ?? [], res.time ?? (Number(values?.time) || 0));
+      api.showFrames(res.frames ?? [], res.time ?? currentPos());
     } catch (e) {
       setErr(true);
       setMsg(tt("failed", "❌ {e}", { e: String(e) }));
@@ -48,7 +59,7 @@ function CaptureButton({ values, ctx }) {
       const p = await api.invoke("export_editor_frame", {
         input: ctx.mediaPath,
         vf: ctx.pipelineVf ?? "",
-        timeSec: Number(values?.time) || 0,
+        timeSec: currentPos(),
         format: values?.format ?? "jpg",
         outputName: null,
       });
@@ -63,7 +74,7 @@ function CaptureButton({ values, ctx }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 10, color: "#a1a1aa" }}>{t("hint", "Nastav pozíciu úchytom na časovej osi — video sa presunie na ňu. Uloží sa presne tá snímka, ktorú vidíš (aj s filtrami a strihom).")}</div>
+      <div style={{ fontSize: 10, color: "#a1a1aa" }}>{t("hint", "Snímka sa uloží od kurzora na časovej osi — prejdi prehrávačom na miesto a klikni. Uloží sa presne to, čo vidíš (aj s filtrami a strihom), do RodStudio/Snimky.")}</div>
       <button
         onClick={() => { void capture(); }}
         disabled={!ctx?.mediaPath || busy}

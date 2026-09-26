@@ -8,7 +8,7 @@
   "capturing": "⏳ Saving…",
   "saved": "✅ Saved: {p}",
   "failed": "❌ {e}",
-  "hint": "Set the position with the timeline handle — the video scrubs to it. The saved frame is exactly what you see (filters and trim included).",
+  "hint": "The frame is saved from the playhead position — move the player to the spot and click. You get exactly what you see (including filters and trim), saved to RodStudio/Snimky.",
   "tool_no_media": "Open a file in the Editor first.",
   "browse": "🎞 Browse frames of this second",
   "browsing": "⏳ Extracting…"
