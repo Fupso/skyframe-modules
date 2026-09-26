@@ -490,9 +490,13 @@ function SubtitlesBottomPanel({ values, onChangeField, ctx }) {
       const source = values?.lang && values.lang !== "auto" ? values.lang : null;
       // prekladáme vždy z ORIGINÁLU — nie z už preloženej verzie
       const origSegs = activeLang === "orig" ? segments : (Array.isArray(variants.orig) && variants.orig.length ? variants.orig : segments);
-      const texts = origSegs.map((g) => g.text);
+      // 2.9.3 — slovné segmenty (word-mode) pred prekladom ZLEP do viet:
+      // 2880 slov = 192 dávok (hodina) vs ~200 viet = ~14 dávok (minúty);
+      // veta navyše dáva prekladaču kontext → lepší preklad
+      const phraseSegs = mergeWordsToPhrases(origSegs);
+      const texts = phraseSegs.map((g) => g.text);
       const translated = await api.invoke("translate_segments", { texts, target: translateTarget, source });
-      const newSegs = origSegs.map((g, i) => ({ ...g, text: translated[i] ?? g.text }));
+      const newSegs = phraseSegs.map((g, i) => ({ ...g, text: translated[i] ?? g.text }));
       const v = { ...variants, [activeLang]: segments, [translateTarget]: newSegs };
       await commit(onChange, { ...value, variants: v, activeLang: translateTarget }, newSegs, timeScale);
       store.setState({ trBusy: false, trMsg: tt("tr_done", "✅ Preložené ({n} titulkov)", { n: newSegs.length }) });
