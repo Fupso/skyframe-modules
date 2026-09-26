@@ -905,11 +905,20 @@ function readInOut(ctx) {
 function FiltersField({ value, onChange, ctx }) {
   const s = useStore();
   const v = { ...DEFAULT_GRADE, ...(value ?? {}) };
-  const setV = (patch) => onChange({ ...v, ...patch });
   const [hslColor, setHslColor] = useState("r"); // vybraná farba HSL panelu (4.2.0)
   // čerstvá hodnota pre serializované commity (async gap by inak prepisoval novšie staršími)
   const vRef = useRef(v);
   vRef.current = v;
+  // 4.4.8 — setV MUSÍ ísť cez vRef: asynchrónne commity (dokončenie AI
+  // masky fotky/videa, LUT import) bežia minúty po renderi a so starým
+  // snapshotom `v` z closure prepísali VŠETKY medzičasom spravené úpravy
+  // (kolieska/teplota/tint sa „zahodili" po dopočítaní masky). Okamžitý
+  // zápis do vRef zaistí, že viac commitov v jednom ticku sa reťazí.
+  const setV = (patch) => {
+    const nv = { ...vRef.current, ...patch };
+    vRef.current = nv;
+    onChange(nv);
+  };
   const adjustQueueRef = useRef(Promise.resolve());
   const media = ctx?.mediaPath ? { path: ctx.mediaPath, kind: ctx.kind } : null;
 
