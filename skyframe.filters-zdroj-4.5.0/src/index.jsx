@@ -1127,9 +1127,12 @@ function FiltersField({ value, onChange, ctx }) {
   const maskJobRef = useRef(null);
   useEffect(() => {
     if (!v.aiMask || !media || media.kind !== "video") return;
+    // 4.5.0 — hustota masky je voliteľná; maska je platná len pre hustotu,
+    // pri ktorej bola spočítaná (maskFpsDone), inak sa prepočíta.
+    const density = Number(v.maskFps) || 3;
     // Plná maska hotová — ale 4.4.5: ak sa strih (I/O) posunul MIMO okno,
     // ktoré maska pokrýva, treba ju prepočítať pre nový úsek.
-    if (v.maskFor === media.path && v.maskPath && !v.maskQuick) {
+    if (v.maskFor === media.path && v.maskPath && !v.maskQuick && (Number(v.maskFpsDone) || 3) === density) {
       const io = readInOut(ctx);
       const covers = !(io && io.a != null && io.b != null)
         || !Number(v.maskLen)
@@ -1162,7 +1165,7 @@ function FiltersField({ value, onChange, ctx }) {
         // sa po zrušení hneď spustila plná (stovky snímkov), takže storno
         // vyzeralo nefunkčné — úloha akoby „bežala ďalej".
         if (q.status !== "done") return;
-        setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true });
+        setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true, maskFpsDone: density });
         // 2) plná maska na pozadí — 4.4.5: len úsek strihu (I/O) s rezervou
         // 15 s na obe strany (strih sa dá ešte jemne posunúť bez prepočtu).
         // Bez I/O značiek celé video ako doteraz. Pri 11 s strihu ~41 s
@@ -1339,6 +1342,21 @@ function FiltersField({ value, onChange, ctx }) {
             />
             🤖 {t("ai_mask", "AI maska (presnejšia)")}
           </label>
+          {v.aiMask && media?.kind === "video" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginTop: 6, cursor: "pointer" }}>
+              🎞 {t("mask_density", "Hustota masky:")}
+              <select
+                value={Number(v.maskFps) || 3}
+                onChange={(e) => setV({ maskFps: Number(e.target.value) })}
+                style={{ fontSize: 12, padding: "2px 6px", borderRadius: 6, background: "#18181b", color: "#e4e4e7", border: "1px solid #3f3f46" }}
+              >
+                <option value={3}>{t("mask_density_3", "Štandard (3/s)")}</option>
+                <option value={6}>{t("mask_density_6", "Jemná (6/s)")}</option>
+                <option value={10}>{t("mask_density_10", "Veľmi jemná (10/s)")}</option>
+                <option value={999}>{t("mask_density_max", "Každá snímka (najpomalšie)")}</option>
+              </select>
+            </label>
+          )}
           {v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath && !v.maskQuick ? (
             <p style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
               ✓ {t("ai_video_ready", "AI maska videa je pripravená (cache).")}
@@ -1506,7 +1524,7 @@ function FiltersField({ value, onChange, ctx }) {
                 onCommit={(nv) => void commitAdjust({ blur: nv })}
               />
               <GradeSlider
-                label={t("fx_sharpen", "Doostrenie")} value={v.sharpen || 0} min={0} max={100}
+                label={t("fx_sharpen", "Vyostrenie")} value={v.sharpen || 0} min={0} max={100}
                 onLive={(nv) => sendLive(undefined, undefined, undefined, undefined, currentFx({ sharpen: nv }))}
                 onCommit={(nv) => void commitAdjust({ sharpen: nv })}
               />
