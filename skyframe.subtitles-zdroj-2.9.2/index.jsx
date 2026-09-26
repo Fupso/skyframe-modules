@@ -170,6 +170,32 @@ function buildAnimatedAss(segments, values) {
   ].join("\r\n");
 }
 
+// Whisper word-mode (-ml 1, animované titulky) vráti jedno slovo = jeden
+// segment. Pre obyčajné SRT ich treba zlepiť späť na frázy — inak sa v
+// ne-animovanom režime titulky zobrazujú po jednom slove (2.9.2).
+function mergeWordsToPhrases(segs) {
+  const wordish = segs.length > 3
+    && segs.filter((g) => g.text.trim().split(/\s+/).length <= 2).length / segs.length > 0.8;
+  if (!wordish) return segs;
+  const out = [];
+  let cur = null;
+  const flush = () => { if (cur) { out.push(cur); cur = null; } };
+  for (const g of segs) {
+    if (!cur) { cur = { ...g }; continue; }
+    const gap = g.start - cur.end;
+    const words = cur.text.trim().split(/\s+/).length;
+    const sentenceEnd = /[.!?…]$/.test(cur.text.trim());
+    if (gap > 0.8 || words >= 7 || sentenceEnd || g.end - cur.start > 4) {
+      flush();
+      cur = { ...g };
+    } else {
+      cur = { start: cur.start, end: g.end, text: `${cur.text.trim()} ${g.text.trim()}` };
+    }
+  }
+  flush();
+  return out;
+}
+
 async function commit(onChange, value, segments, timeScale = 1) {
   try {
     // segmenty držíme v čase ZDROJA (editor ich tak ukazuje), do SRT idú
@@ -184,7 +210,7 @@ async function commit(onChange, value, segments, timeScale = 1) {
       lastScale = ts;
       onChange({ ...value, segments, srtPath: null, assPath });
     } else {
-      const srtPath = await api.invoke("write_temp_srt", { segments: scaled, previous: value?.srtPath ?? value?.assPath ?? null });
+      const srtPath = await api.invoke("write_temp_srt", { segments: mergeWordsToPhrases(scaled), previous: value?.srtPath ?? value?.assPath ?? null });
       lastWrittenPath = srtPath;
       lastScale = ts;
       onChange({ ...value, segments, srtPath, assPath: null });
