@@ -1146,7 +1146,7 @@ function FiltersField({ value, onChange, ctx }) {
     (async () => {
       const mpath = media.path;
       const runJob = async (args) => {
-        const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: 3, moduleId: api.moduleId, ...args });
+        const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: density, moduleId: api.moduleId, ...args });
         return await new Promise((resolve) => {
           api.listenJob(jobId, (job) => {
             store.setState({ maskProgress: job.progress ?? -1 });
