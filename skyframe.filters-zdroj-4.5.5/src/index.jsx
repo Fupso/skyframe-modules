@@ -1126,6 +1126,7 @@ function FiltersField({ value, onChange, ctx }) {
   // pár sekúnd), potom PLNÁ maska na pozadí (export čaká na ňu). Oba joby sa
   // cachujú — opätovné otvorenie média je okamžité.
   const maskJobRef = useRef(null);
+  const maskJobIdsRef = useRef([]); // 4.5.5 - id beziacich maskovych uloh (quick/full) pre storno
   useEffect(() => {
     if (!v.aiMask || !media || media.kind !== "video") return;
     // 4.5.0 — hustota masky je voliteľná; maska je platná len pre hustotu,
@@ -1151,6 +1152,7 @@ function FiltersField({ value, onChange, ctx }) {
       const mpath = media.path;
       const runJob = async (args) => {
         const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: density, moduleId: api.moduleId, ...args });
+        maskJobIdsRef.current.push(jobId);
         return await new Promise((resolve) => {
           let un = null;
           api.listenJob(jobId, (job) => {
@@ -1229,11 +1231,13 @@ function FiltersField({ value, onChange, ctx }) {
       }
     })();
     return () => {
-      // 4.5.3 — listenere NEODHLASUJ: bežiaca plná maska sa má dopočítať a
-      // aplikovať aj po reštarte effectu (odhlásia sa samy po resolve).
-      // maskJobRef čistí až finally reťazca — cleanup by ho zrušil priskoro
-      // a reštart by spustil duplicitnú plnú úlohu.
       dead = true;
+      // 4.5.5 — ZOMBIE ULOHY: beziace maskove ulohy v core pri restarte /
+      // vypnuti masky ZRUS. Predtym ulohy dobiehali bez listenera — po par
+      // prepoctoch bezalo niekolko plnych masiek naraz, dusili GPU a nova
+      // uloha cakala na 0 %. Hotove casti zostavaju v cache.
+      const ids = maskJobIdsRef.current.splice(0);
+      ids.forEach((id) => { try { const pr = api.cancelJob?.(id); if (pr && pr.catch) pr.catch(() => {}); } catch { /* ignore */ } });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.aiMask, v.maskFps, media?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
