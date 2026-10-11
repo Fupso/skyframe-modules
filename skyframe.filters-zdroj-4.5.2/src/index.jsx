@@ -962,11 +962,6 @@ function FiltersField({ value, onChange, ctx }) {
     let out = spec;
     if (lut) out = { ...out, lut3d: lut };
     if (fxv) out = { ...out, fx: fxv };
-    // 4.6.0 — maskovaný živý náhľad: pri AI maske pošli core aj masku
-    // (cesta + seekwin okno), aby GPU overlay gradoval LEN oblohu
-    const mi = (nv.skyOnly && nv.aiMask && nv.maskPath && nv.maskFor === media?.path)
-      ? { path: nv.maskPath, start: Number(nv.maskStart) || 0, len: Number(nv.maskLen) || 0 } : null;
-    if (mi) out = { ...out, mask: mi };
     api.setEditorLiveFilter(out);
   };
 
@@ -980,10 +975,6 @@ function FiltersField({ value, onChange, ctx }) {
     let out = spec;
     if (lut) out = { ...out, lut3d: lut };
     if (fx) out = { ...out, fx };
-    // 4.6.0 — maskovaný živý náhľad (rovnaké pravidlo ako sendLiveFor)
-    const mi = (v.skyOnly && v.aiMask && v.maskPath && v.maskFor === media?.path)
-      ? { path: v.maskPath, start: Number(v.maskStart) || 0, len: Number(v.maskLen) || 0 } : null;
-    if (mi) out = { ...out, mask: mi };
     api.setEditorLiveFilter(out);
   };
 
