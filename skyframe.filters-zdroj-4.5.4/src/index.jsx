@@ -70,7 +70,8 @@ const initialState = {
   aiStatus: null,       // {licensed, runtimeInstalled, modelInstalled} | null
   maskLoading: false,
   maskProgress: -1,     // progres výpočtu AI masky videa (-1 = nič)
-  maskPhase: null,      // "quick" | "full" | null — čo sa práve počíta
+  maskPhase: null,      // "quick" | "full" | "error" | null — čo sa práve počíta
+  maskError: null,      // 4.5.4 — skutočný dôvod zlyhania plnej masky (UI)
   presets: [],          // používateľské štýly z configu
   saveFlash: false,     // krátke „✓ Uložené" na tlačidle
   saveError: null,      // posledná chyba ukladania presetu (viditeľná v UI)
@@ -1154,7 +1155,11 @@ function FiltersField({ value, onChange, ctx }) {
           let un = null;
           api.listenJob(jobId, (job) => {
             if (!dead) store.setState({ maskProgress: job.progress ?? -1 });
-            if (job.status !== "running") { resolve(job); if (un) un(); }
+            // 4.5.4 — resolve LEN na koncovom stave: stav „pending" (úloha
+            // čaká vo fronte, kým dobehne predchádzajúca) spôsobil, že sa
+            // reťazec okamžite ukončil a plná maska „zamrzla na 0 %".
+            const st = job.status;
+            if (st === "done" || st === "error" || st === "cancelled" || st === "canceled") { resolve(job); if (un) un(); }
           }).then((u) => { un = u; });
         });
       };
@@ -1168,10 +1173,14 @@ function FiltersField({ value, onChange, ctx }) {
           if (ok) return;
           setV({ maskPath: "", maskFor: null, maskQuick: false });
         }
-        // 1) rýchla maska: 14 s okno od aktuálnej pozície prehrávača
+        // 1) rýchla maska: 14 s okno. 4.5.4 — pri krátkych videách (≤ 60 s)
+        // náhľad renderuje CELÉ video od 0, takže okno musí začínať na 0,
+        // inak je maska v náhľade posunutá (nesedí od začiatku). Bonus: q0 je
+        // stabilné → opätovné zapnutie masky použije cache namiesto prepočtu.
         const pos = Math.max(0, Number(ctx?.positionSec) || 0);
-        const q0 = Math.max(0, pos - 2);
-        store.setState({ maskPhase: "quick", maskProgress: 0 });
+        const vd = Number(ctx?.duration) || 0;
+        const q0 = (vd > 0 && vd <= 60) ? 0 : Math.max(0, pos - 2);
+        store.setState({ maskPhase: "quick", maskProgress: 0, maskError: null });
         const q = await runJob({ startSec: q0, seconds: 14 });
         if (dead) return;
         // 4.4.7 — storno/chyba rýchlej masky: NESPOUSTAŤ plnú masku. Doteraz
@@ -1207,10 +1216,13 @@ function FiltersField({ value, onChange, ctx }) {
         } else if (f.status === "error") {
           failed = true;
           console.error("[filtre] plná maska:", f.message);
-          if (!dead) store.setState({ maskPhase: "error" });
+          // 4.5.4 — skutočný dôvod zlyhania ukáž priamo v UI (nie len konzola)
+          if (!dead) store.setState({ maskPhase: "error", maskError: String(f.message || "").slice(0, 300) });
         }
       } catch (e) {
         console.error("[filtre] ai maska videa:", e);
+        failed = true;
+        if (!dead) store.setState({ maskPhase: "error", maskError: String(e).slice(0, 300) });
       } finally {
         if (maskJobRef.current === jobKey) maskJobRef.current = null;
         if (!dead && !failed) store.setState({ maskPhase: null, maskProgress: -1 });
@@ -1402,6 +1414,7 @@ function FiltersField({ value, onChange, ctx }) {
               {s.maskPhase === "error" && (
                 <p style={{ fontSize: 11, color: "#f87171" }}>
                   ⚠ {t("mask_full_error", "Plná maska zlyhala — skúste ju prepočítať (vypnutím a zapnutím AI masky).")}
+                  {s.maskError ? <><br /><span style={{ fontSize: 10, opacity: 0.85 }}>{s.maskError}</span></> : null}
                 </p>
               )}
               {v.maskQuick && v.maskPath && (
