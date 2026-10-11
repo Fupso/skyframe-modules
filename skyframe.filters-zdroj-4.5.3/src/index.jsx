@@ -1132,29 +1132,42 @@ function FiltersField({ value, onChange, ctx }) {
     const density = Number(v.maskFps) || 3;
     // Plná maska hotová — ale 4.4.5: ak sa strih (I/O) posunul MIMO okno,
     // ktoré maska pokrýva, treba ju prepočítať pre nový úsek.
+    let needCompute = true;
     if (v.maskFor === media.path && v.maskPath && !v.maskQuick && (Number(v.maskFpsDone) || 3) === density) {
       const io = readInOut(ctx);
       const covers = !(io && io.a != null && io.b != null)
         || !Number(v.maskLen)
         || (Number(io.a) >= Number(v.maskStart) - 0.01 && Number(io.b) <= Number(v.maskStart) + Number(v.maskLen) + 0.01);
-      if (covers) return;
+      if (covers) needCompute = false;
     }
-    if (maskJobRef.current === media.path) return; // už beží
-    maskJobRef.current = media.path;
+    // 4.5.3 — kľúč úlohy je médium + hustota (zmena hustoty = nová úloha)
+    const jobKey = media.path + "|" + density;
+    if (maskJobRef.current === jobKey) return; // už beží
+    maskJobRef.current = jobKey;
     let dead = false;
-    const unsubs = [];
+    let failed = false;
     (async () => {
       const mpath = media.path;
       const runJob = async (args) => {
         const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: density, moduleId: api.moduleId, ...args });
         return await new Promise((resolve) => {
+          let un = null;
           api.listenJob(jobId, (job) => {
-            store.setState({ maskProgress: job.progress ?? -1 });
-            if (job.status !== "running") resolve(job);
-          }).then((u) => unsubs.push(u));
+            if (!dead) store.setState({ maskProgress: job.progress ?? -1 });
+            if (job.status !== "running") { resolve(job); if (un) un(); }
+          }).then((u) => { un = u; });
         });
       };
       try {
+        // 4.5.3 — maska obnovená zo session: over, že súbor masky naozaj
+        // existuje (cache sa mohla medzičasom vymazať). Inak náhľad zlyhal na
+        // chýbajúcom súbore a držal starú 14 s ukážku.
+        if (!needCompute) {
+          const ok = await api.invoke("get_video_info", { path: v.maskPath }).then(() => true).catch(() => false);
+          if (dead) return;
+          if (ok) return;
+          setV({ maskPath: "", maskFor: null, maskQuick: false });
+        }
         // 1) rýchla maska: 14 s okno od aktuálnej pozície prehrávača
         const pos = Math.max(0, Number(ctx?.positionSec) || 0);
         const q0 = Math.max(0, pos - 2);
@@ -1180,22 +1193,35 @@ function FiltersField({ value, onChange, ctx }) {
         }
         store.setState({ maskPhase: "full", maskProgress: 0 });
         const f = await runJob(fArgs);
-        if (dead) return;
+        // 4.5.3 — výsledok plnej masky aplikuj AJ KEĎ effect medzitým skončil
+        // (reštart pri zmene strihu a pod.): úloha v core dobehla a maska je na
+        // disku. Predtým cleanup odhlásil listener → modul sa o hotovej maske
+        // nikdy nedozvedel a v kroku ostala naveky 14 s rýchla maska. Aplikuj
+        // len ak je maska stále zapnutá v rovnakej hustote; cudzie médiá chráni
+        // kontrola maskFor === ctx.mediaPath v buildStep.
         if (f.status === "done" && f.result) {
-          setV({ maskPath: f.result, maskFor: mpath, maskStart: fStart, maskLen: Math.round(fLen * 100) / 100, maskQuick: false });
+          const cur = vRef.current;
+          if (cur.aiMask && (Number(cur.maskFps) || 3) === density) {
+            setV({ maskPath: f.result, maskFor: mpath, maskStart: fStart, maskLen: Math.round(fLen * 100) / 100, maskQuick: false });
+          }
         } else if (f.status === "error") {
+          failed = true;
           console.error("[filtre] plná maska:", f.message);
+          if (!dead) store.setState({ maskPhase: "error" });
         }
       } catch (e) {
         console.error("[filtre] ai maska videa:", e);
       } finally {
-        if (!dead) store.setState({ maskPhase: null, maskProgress: -1 });
+        if (maskJobRef.current === jobKey) maskJobRef.current = null;
+        if (!dead && !failed) store.setState({ maskPhase: null, maskProgress: -1 });
       }
     })();
     return () => {
+      // 4.5.3 — listenere NEODHLASUJ: bežiaca plná maska sa má dopočítať a
+      // aplikovať aj po reštarte effectu (odhlásia sa samy po resolve).
+      // maskJobRef čistí až finally reťazca — cleanup by ho zrušil priskoro
+      // a reštart by spustil duplicitnú plnú úlohu.
       dead = true;
-      unsubs.forEach((u) => u && u());
-      if (maskJobRef.current === media.path) maskJobRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.aiMask, v.maskFps, media?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
@@ -1371,6 +1397,11 @@ function FiltersField({ value, onChange, ctx }) {
               {s.maskPhase === "full" && (
                 <p style={{ fontSize: 11, opacity: 0.8 }}>
                   🤖 {t("mask_full", "Plná maska na pozadí…")} {s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""}
+                </p>
+              )}
+              {s.maskPhase === "error" && (
+                <p style={{ fontSize: 11, color: "#f87171" }}>
+                  ⚠ {t("mask_full_error", "Plná maska zlyhala — skúste ju prepočítať (vypnutím a zapnutím AI masky).")}
                 </p>
               )}
               {v.maskQuick && v.maskPath && (

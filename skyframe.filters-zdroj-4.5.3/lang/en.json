@@ -84,5 +84,6 @@
   "fx_sharpen": "Sharpen",
   "fx_vignette": "Vignette",
   "fx_grain": "Grain",
-  "lbl_fx": "effects"
+  "lbl_fx": "effects",
+  "mask_full_error": "Full mask failed — recompute it (toggle the AI mask off and on)."
 }

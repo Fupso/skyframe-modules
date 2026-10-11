@@ -84,5 +84,6 @@
   "fx_sharpen": "锐化",
   "fx_vignette": "暗角",
   "fx_grain": "颗粒",
-  "lbl_fx": "效果"
+  "lbl_fx": "效果",
+  "mask_full_error": "完整遮罩生成失败——请重新计算（关闭再开启 AI 遮罩）。"
 }

@@ -84,5 +84,6 @@
   "fx_sharpen": "Doostrenie",
   "fx_vignette": "Vinětácia",
   "fx_grain": "Zrno",
-  "lbl_fx": "efekty"
+  "lbl_fx": "efekty",
+  "mask_full_error": "Plná maska zlyhala — skúste ju prepočítať (vypnutím a zapnutím AI masky)."
 }

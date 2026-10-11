@@ -84,5 +84,6 @@
   "fx_sharpen": "Schärfen",
   "fx_vignette": "Vignette",
   "fx_grain": "Körnung",
-  "lbl_fx": "Effekte"
+  "lbl_fx": "Effekte",
+  "mask_full_error": "Vollmaske fehlgeschlagen — neu berechnen (AI-Maske aus- und wieder einschalten)."
 }
