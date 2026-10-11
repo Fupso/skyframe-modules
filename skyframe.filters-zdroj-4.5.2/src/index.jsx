@@ -1198,7 +1198,7 @@ function FiltersField({ value, onChange, ctx }) {
       if (maskJobRef.current === media.path) maskJobRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [v.aiMask, media?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
+  }, [v.aiMask, v.maskFps, media?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
 
   const pick = (p) => {
     // 4.4.0 — filter sa APLIKUJE DO existujúcich nastavení: preset mení len
