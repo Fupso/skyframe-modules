@@ -1082,6 +1082,18 @@ function FiltersField({ value, onChange, ctx }) {
     let failed = false;
     (async () => {
       const mpath = mediaNow.path;
+      try {
+        const jobs = await api.invoke("list_jobs");
+        (jobs || []).filter((j) => j.label === "ai_sky_maskvideo" && j.status === "running").forEach((j) => {
+          try {
+            const pr = api.cancelJob?.(j.id);
+            if (pr && pr.catch) pr.catch(() => {
+            });
+          } catch (e) {
+          }
+        });
+      } catch (e) {
+      }
       const runJob = async (args) => {
         const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: density, moduleId: api.moduleId, ...args });
         maskJobIdsRef.current.push(jobId);
@@ -1169,6 +1181,16 @@ function FiltersField({ value, onChange, ctx }) {
       }
     })();
     return () => {
+      dead = true;
+      const ids = maskJobIdsRef.current.splice(0);
+      ids.forEach((id) => {
+        try {
+          const pr = api.cancelJob?.(id);
+          if (pr && pr.catch) pr.catch(() => {
+          });
+        } catch {
+        }
+      });
     };
   }, [v.aiMask, v.maskFps, mediaNow?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
   const pick = (p) => {
@@ -1312,7 +1334,7 @@ function FiltersField({ value, onChange, ctx }) {
     /* @__PURE__ */ react_shim_default.createElement("option", { value: 6 }, t("mask_density_6", "Jemn\xE1 (6/s)")),
     /* @__PURE__ */ react_shim_default.createElement("option", { value: 10 }, t("mask_density_10", "Ve\u013Emi jemn\xE1 (10/s)")),
     /* @__PURE__ */ react_shim_default.createElement("option", { value: 999 }, t("mask_density_max", "Ka\u017Ed\xE1 sn\xEDmka (najpomal\u0161ie)"))
-  )), v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath && !v.maskQuick ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : v.aiMask && media?.kind === "video" ? /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskPhase === "quick" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u26A1 ", t("mask_quick", "R\xFDchla maska pre n\xE1h\u013Ead\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""), s.maskPhase === "full" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u{1F916} ", t("mask_full", "Pln\xE1 maska na pozad\xED\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""), s.maskPhase === "error" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, color: "#f87171" } }, "\u26A0 ", t("mask_full_error", "Pln\xE1 maska zlyhala \u2014 sk\xFAste ju prepo\u010D\xEDta\u0165 (vypnut\xEDm a zapnut\xEDm AI masky)."), s.maskError ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("br", null), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.85 } }, s.maskError)) : null), v.maskQuick && v.maskPath && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("mask_quick_note", "N\xE1h\u013Ead be\u017E\xED na r\xFDchlej maske \u2014 pln\xE1 sa dopo\u010D\xEDtava. Export po\u010Dk\xE1 na pln\xFA masku.")), /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("ai_video_hint", "Maska sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xE1. Prechody medzi sn\xEDmkami s\xFA vyhladen\xE9."))) : null, v.aiMask && s.maskLoading && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
+  )), v.aiMask && media?.kind === "video" && v.maskFor === media.path && v.maskPath && !v.maskQuick ? /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u2713 ", t("ai_video_ready", "AI maska videa je pripraven\xE1 (cache).")) : v.aiMask && media?.kind === "video" ? /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginTop: 6 } }, s.maskPhase === "quick" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u26A1 ", t("mask_quick", "R\xFDchla maska pre n\xE1h\u013Ead\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""), s.maskPhase === "full" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.8 } }, "\u{1F916} ", t("mask_full", "Pln\xE1 maska na pozad\xED\u2026"), " ", s.maskProgress >= 0 ? `${Math.round(s.maskProgress)} %` : ""), s.maskPhase === "error" && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, color: "#f87171" } }, "\u26A0 ", t("mask_full_error", "Pln\xE1 maska zlyhala \u2014 sk\xFAste ju prepo\u010D\xEDta\u0165 (vypnut\xEDm a zapnut\xEDm AI masky)."), s.maskError ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("br", null), /* @__PURE__ */ react_shim_default.createElement("span", { style: { fontSize: 10, opacity: 0.85 } }, s.maskError)) : null), v.maskQuick && v.maskPath && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, t("mask_quick_note", "N\xE1h\u013Ead be\u017E\xED na r\xFDchlej maske \u2014 pln\xE1 sa dopo\u010D\xEDtava. Export po\u010Dk\xE1 na pln\xFA masku.")), /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 10, opacity: 0.55, marginTop: 4 } }, (Number(v.maskFps) || 3) >= 999 ? t("ai_video_hint_max", "AI prebehne ka\u017Ed\xFA sn\xEDmku, v\xFDsledok sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xFD.") : t("ai_video_hint", "AI prebehne ka\u017Ed\xFA {0}. sn\xEDmku, v\xFDsledok sa cachuje \u2014 druh\xFDkr\xE1t je okam\u017Eit\xFD.").replace("{0}", String(Number(v.maskFps) || 3)))) : null, v.aiMask && s.maskLoading && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u23F3 ", t("mask_loading", "Po\u010D\xEDtam AI masku\u2026")), !ai?.licensed && /* @__PURE__ */ react_shim_default.createElement("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 6 } }, "\u{1F512} ", t("ai_locked", "AI maska vy\u017Eaduje AI licenciu \u2014 aktivuj ju v AI centre."))), /* @__PURE__ */ react_shim_default.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: () => store.setState({ openGrade: !s.openGrade }),

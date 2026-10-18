@@ -1222,6 +1222,17 @@ function FiltersField({ value, onChange, ctx }) {
     let failed = false;
     (async () => {
       const mpath = mediaNow.path;
+      // 3.42.1 core — po RELOADE stránky (dev HMR, reštart UI) ostanú v core
+      // bežať osirené maskové joby z predchádzajúcej inštancie modulu (React
+      // cleanup pri reloadu nebeží → cancel sa nezavolá). Pred štartom nového
+      // výpočtu zruš VŠETKY bežiace maskové joby — inak by bežali dve naraz,
+      // dusili GPU a nová maska čakala na 0 %.
+      try {
+        const jobs = await api.invoke("list_jobs");
+        (jobs || [])
+          .filter((j) => j.label === "ai_sky_maskvideo" && j.status === "running")
+          .forEach((j) => { try { const pr = api.cancelJob?.(j.id); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { } });
+      } catch (e) { }
       const runJob = async (args) => {
         const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: density, moduleId: api.moduleId, ...args });
         maskJobIdsRef.current.push(jobId);
@@ -1335,13 +1346,17 @@ function FiltersField({ value, onChange, ctx }) {
         if (!dead && !failed) store.setState({ maskPhase: null, maskProgress: -1 });
       }
     })();
-    // 3.42.1 core — cleanup efektu NESMIE zrušiť bežiaci job: pri re-run
-    // efektu (toggle aiMask, zmena In/Out/hustoty) sa job zrušil, ochrana
-    // `maskJobRef` však blokovala reštart, kým async nedobehol — a potom ho
-    // už nič nespustilo. Výsledok: plná maska sa nikdy nedokončila, maskPath
-    // ostal prázdny a náhľad farbil CELE video. Job necháme bežať do konca —
-    // dokončí sa, zapíše cache a continuation (dead=false) nastaví stav.
-    return () => { };
+    // 3.42.1 core — bežiace maskové joby pri re-run efektu ZRUŠÍME (najmä pri
+    // zmene hustoty/média, keď nový beh použije iný jobKey — dva ťažké AI
+    // joby naraz drú GPU, po dobehnutí video seká a maska „zmizne"). Doterajší
+    // dôvod, prečo sa rušiť nesmelo — zrušený job nikdy nedorésolvoval a guard
+    // `maskJobRef` blokoval reštart — odpadá: bridge replay + list_jobs poll
+    // (vyššie) zaručujú, že sa reťazec uzavrie (finally guard vyčistí).
+    return () => {
+      dead = true;
+      const ids = maskJobIdsRef.current.splice(0);
+      ids.forEach((id) => { try { const pr = api.cancelJob?.(id); if (pr && pr.catch) pr.catch(() => {}); } catch { /* ignore */ } });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.aiMask, v.maskFps, mediaNow?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
 
@@ -1530,7 +1545,9 @@ function FiltersField({ value, onChange, ctx }) {
                 </p>
               )}
               <p style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>
-                {t("ai_video_hint", "Maska sa cachuje — druhýkrát je okamžitá. Prechody medzi snímkami sú vyhladené.")}
+                {(Number(v.maskFps) || 3) >= 999
+                  ? t("ai_video_hint_max", "AI prebehne každú snímku, výsledok sa cachuje — druhýkrát je okamžitý.")
+                  : t("ai_video_hint", "AI prebehne každú {0}. snímku, výsledok sa cachuje — druhýkrát je okamžitý.").replace("{0}", String(Number(v.maskFps) || 3))}
               </p>
             </div>
           ) : null}
