@@ -254,10 +254,41 @@ function isNeutralStyle(style) {
   return off < 0.005 && style.css.brightness === 100 && style.css.contrast === 100 && style.css.saturate === 100;
 }
 
+// ── Colorspace náhľad=export (3.42.1 core) ─────────────────────────────────
+// YUV↔RGB konverzie v exportnom grafe musia použiť rovnakú maticu ako
+// prehliadač pri dekóde zdroja — inak export farbí inak než živý náhľad.
+// Maticu zistíme z tagu zdroja (get_video_info colorSpace); pri neznačenom
+// zdroji heuristic ako prehliadač (≥720p → bt709).
+const csCache = {};
+let currentCsMatrix = "bt709";
+function resolveCsMatrix(path) {
+  if (!path) return Promise.resolve("bt709");
+  if (csCache[path]) return Promise.resolve(String(csCache[path]).split("|")[0]);
+  return api.invoke("get_video_info", { path }).then((info) => {
+    const h = (info && info.height) || 0;
+    const cs = (info && info.colorSpace) || "";
+    const m = cs === "bt470bg" || cs === "smpte170m" ? "bt601" : cs === "bt709" || cs === "rgb" ? "bt709" : h >= 720 ? "bt709" : "bt601";
+    csCache[path] = m;
+    return m;
+  }).catch(() => {
+    csCache[path] = "bt709";
+    return "bt709";
+  });
+}
+function csWrapIn(m) {
+  return `scale=in_color_matrix=${m}:flags=full_chroma_int+accurate_rnd+full_chroma_inp,format=gbrp`;
+}
+function csWrapOut(m) {
+  return `scale=out_color_matrix=${m}:flags=full_chroma_int+accurate_rnd+full_chroma_inp,format=yuv420p`;
+}
+
 /** Poskladá ffmpeg reťazec: celý grading ako JEDNA per-kanálová curves
- *  (33 bodov) + eq=saturation. Vďaka tomu je výstup identický s live
- *  náhľadom (rovnaká funkcia, žiadny colorbalance s pixel-luma váhami). */
-function buildChain(style, intensity, curves, wheels, adj) {
+ *  (33 bodov) + saturácia. 3.42.1: saturácia cez colorchannelmixer = presná
+ *  matematika shadera náhľadu (GLSL mix BT.709) namiesto eq=saturation
+ *  (YUV chroma gain, BT.601 interne — inak sa sýtosť v exporte líši od
+ *  náhľadu). Celý grade beží v explicitne označenom RGB (csWrapIn/Out), aby
+ *  auto-konverzie (swscale default BT.601) nerozbili farby. */
+function buildChain(style, intensity, curves, wheels, adj, csMatrix, extraParts) {
   const { luts, saturate } = buildChannelLuts(style, intensity, curves, wheels, adj);
   const parts = [];
   const allIdentity = luts.every(isIdentityLut);
@@ -275,13 +306,26 @@ function buildChain(style, intensity, curves, wheels, adj) {
     });
     parts.push(`curves=r='${chans[0]}':g='${chans[1]}':b='${chans[2]}'`);
   }
-  if (Math.abs(saturate - 1) > 0.005) parts.push(`eq=saturation=${saturate.toFixed(3)}`);
-  return parts.join(",");
+  if (Math.abs(saturate - 1) > 0.005) {
+    // GLSL mix(vec3(l), c, S) = l*(1-S) + c*S s BT.709 luma — 3×3 matica:
+    // out_r = (S+(1-S)·0.2126)·r + ((1-S)·0.7152)·g + ((1-S)·0.0722)·b atď.
+    const S = saturate;
+    const A = S + (1 - S) * 0.2126, B = (1 - S) * 0.7152, C = (1 - S) * 0.0722;
+    const D = (1 - S) * 0.2126, E = S + (1 - S) * 0.7152, F = (1 - S) * 0.0722;
+    const G = (1 - S) * 0.2126, H = (1 - S) * 0.7152, I = S + (1 - S) * 0.0722;
+    parts.push(`colorchannelmixer=rr=${A.toFixed(5)}:rg=${B.toFixed(5)}:rb=${C.toFixed(5)}:gr=${D.toFixed(5)}:gg=${E.toFixed(5)}:gb=${F.toFixed(5)}:br=${G.toFixed(5)}:bg=${H.toFixed(5)}:bb=${I.toFixed(5)}`);
+  }
+  if (extraParts) for (const p of extraParts) parts.push(p);
+  const m = csMatrix || "bt709";
+  return parts.length ? `${csWrapIn(m)},${parts.join(",")},${csWrapOut(m)}` : "";
 }
 
 /** Graf „len obloha" — luma maska. Placeholdery [IN]/[OUT] dosadí core. */
 function skyGraphLuma(chain) {
-  return `[IN]split=3[base][t][mm];[t]${chain}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[OUT]`;
+  // 3.42.1 — normalizácia rozsahu hneď za [IN] (in_range=auto: pc zdroj sa
+  // ťahá do tv, tv zdroj ostáva — inak overlay zmieša rozsahy a export sa
+  // farebne rozjde s náhľadom).
+  return `[IN]scale=in_range=auto:out_range=tv[in_n];[in_n]split=3[base][t][mm];[t]${chain}[tinted];[mm]format=gray,curves=all='0/0 0.55/0 0.75/1 1/1'[mask];[tinted][mask]alphamerge[ta];[base][ta]overlay[OUT]`;
 }
 
 /** Graf „AI obloha" — maska zo súboru [I0] (core ju dodá ako vstup). */
@@ -290,7 +334,7 @@ function skyGraphAi(chain) {
   // seeknutom náhľade rozbil synchronizáciu grafov → celý obraz sfarbený.
   // Rýchla maska (okno od pozície) sedí na náhľad priamo; plná maska má
   // časovú os zdroja a core ju seekne spolu s videom (prefix „seek:").
-  return `[IN]split=2[base][t];[t]${chain}[tinted];[I0][tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay=eof_action=pass[OUT]`;
+  return `[IN]scale=in_range=auto:out_range=tv[in_n];[in_n]split=2[base][t];[t]${chain}[tinted];[I0][tinted]scale2ref[mask][ti];[ti][mask]alphamerge[ta];[base][ta]overlay=eof_action=pass[OUT]`;
 }
 
 function presetName(p) {
@@ -1126,16 +1170,44 @@ function FiltersField({ value, onChange, ctx }) {
   // pár sekúnd), potom PLNÁ maska na pozadí (export čaká na ňu). Oba joby sa
   // cachujú — opätovné otvorenie média je okamžité.
   const maskJobRef = useRef(null);
-  const maskJobIdsRef = useRef([]); // 4.5.5 - id beziacich maskovych uloh (quick/full) pre storno
+  const maskJobIdsRef = useRef([]); // 4.5.5 - id beziacich maskovych uloh (quick/full)
+  // 3.42.1 core — médium pre masku riešime ŽIVO zo snapshotu core
+  // (getEditorMedia + onEditorMedia): ctx z viewProps môže byť zastarané po
+  // prepnutí videa (modul vtedy počítal masku pre predchádzajúce video a
+  // maskFor sa nezhodoval s aktuálnym médium → maska sa nikdy neaplikovala,
+  // UI viselo na 0 %).
+  const [mediaNow, setMediaNow] = useState(() => (api.getEditorMedia ? api.getEditorMedia() : null));
   useEffect(() => {
-    if (!v.aiMask || !media || media.kind !== "video") return;
+    if (!api.onEditorMedia) return;
+    try { return api.onEditorMedia((m) => setMediaNow(m)); } catch (e) { }
+  }, []);
+  // Po rozlúštení colorspace matice (async) treba prebudovať krok — inak by
+  // prvý build použil predvolenú bt709 aj pre bt601 zdroje.
+  const csNudgedRef = useRef("");
+  useEffect(() => {
+    const p2 = mediaNow && mediaNow.path;
+    if (!p2) return;
+    let dead2 = false;
+    resolveCsMatrix(p2).then((m) => {
+      if (dead2) return;
+      currentCsMatrix = m;
+      const key = p2 + "|" + m;
+      if (csNudgedRef.current !== key) {
+        csNudgedRef.current = key;
+        try { onChange({ ...vRef.current }); } catch (e) { }
+      }
+    });
+    return () => { dead2 = true; };
+  }, [mediaNow?.path]);
+  useEffect(() => {
+    if (!v.aiMask || !mediaNow || mediaNow.kind !== "video") return;
     // 4.5.0 — hustota masky je voliteľná; maska je platná len pre hustotu,
     // pri ktorej bola spočítaná (maskFpsDone), inak sa prepočíta.
     const density = Number(v.maskFps) || 3;
     // Plná maska hotová — ale 4.4.5: ak sa strih (I/O) posunul MIMO okno,
     // ktoré maska pokrýva, treba ju prepočítať pre nový úsek.
     let needCompute = true;
-    if (v.maskFor === media.path && v.maskPath && !v.maskQuick && (Number(v.maskFpsDone) || 3) === density) {
+    if (v.maskFor === mediaNow.path && v.maskPath && !v.maskQuick && (Number(v.maskFpsDone) || 3) === density) {
       const io = readInOut(ctx);
       const covers = !(io && io.a != null && io.b != null)
         || !Number(v.maskLen)
@@ -1143,26 +1215,46 @@ function FiltersField({ value, onChange, ctx }) {
       if (covers) needCompute = false;
     }
     // 4.5.3 — kľúč úlohy je médium + hustota (zmena hustoty = nová úloha)
-    const jobKey = media.path + "|" + density;
+    const jobKey = mediaNow.path + "|" + density;
     if (maskJobRef.current === jobKey) return; // už beží
     maskJobRef.current = jobKey;
     let dead = false;
     let failed = false;
     (async () => {
-      const mpath = media.path;
+      const mpath = mediaNow.path;
       const runJob = async (args) => {
         const jobId = await api.invoke("ai_sky_maskvideo_file", { input: mpath, maskFps: density, moduleId: api.moduleId, ...args });
         maskJobIdsRef.current.push(jobId);
         return await new Promise((resolve) => {
           let un = null;
+          let settled = false;
+          const done = (job) => {
+            if (settled) return;
+            settled = true;
+            resolve(job);
+            if (un) un();
+          };
           api.listenJob(jobId, (job) => {
             if (!dead) store.setState({ maskProgress: job.progress ?? -1 });
             // 4.5.4 — resolve LEN na koncovom stave: stav „pending" (úloha
             // čaká vo fronte, kým dobehne predchádzajúca) spôsobil, že sa
             // reťazec okamžite ukončil a plná maska „zamrzla na 0 %".
             const st = job.status;
-            if (st === "done" || st === "error" || st === "cancelled" || st === "canceled") { resolve(job); if (un) un(); }
+            if (st === "done" || st === "error" || st === "cancelled" || st === "canceled") done(job);
           }).then((u) => { un = u; });
+          // 3.42.1 core — istota aj bez eventu: job event občas modulu nedôjde
+          // (cache-hit skončí skôr než subscribe; push sa stratí). Vlastný
+          // poll cez list_jobs (vždy povolené) po 0,4/2/6 s.
+          const poll = async (delayMs) => {
+            await new Promise((r) => setTimeout(r, delayMs));
+            if (settled) return;
+            try {
+              const jobs = await api.invoke("list_jobs");
+              const j = (jobs || []).find((x) => x.id === jobId);
+              if (j && j.status && j.status !== "running") done(j);
+            } catch (e) { }
+          };
+          poll(400); poll(2000); poll(6000);
         });
       };
       try {
@@ -1188,7 +1280,20 @@ function FiltersField({ value, onChange, ctx }) {
         // 4.4.7 — storno/chyba rýchlej masky: NESPOUSTAŤ plnú masku. Doteraz
         // sa po zrušení hneď spustila plná (stovky snímkov), takže storno
         // vyzeralo nefunkčné — úloha akoby „bežala ďalej".
-        if (q.status !== "done") return;
+        // 3.42.1 core — zlyhanie quick masky ukáž v UI (dotiaľ ticho skončilo
+        // a UI ostalo visieť na 0 % bez masky).
+        if (q.status !== "done") {
+          failed = true;
+          if (!dead) store.setState({ maskPhase: "error", maskError: (q.status === "cancelled" ? "Generovanie masky zrušené" : "Rýchla maska zlyhala: " + String(q.message || q.status)).slice(0, 300) });
+          return;
+        }
+        // 3.42.1 core — quick maska NIKDY neprepíše existujúcu PLNÚ masku pre
+        // to isté médium a hustotu (inak sa krok po exporte prepol späť na
+        // quick a náhľad sa rozišiel s exportom).
+        {
+          const cur = vRef.current;
+          if (cur.maskPath && !cur.maskQuick && cur.maskFor === mpath && (Number(cur.maskFpsDone) || 3) === density) return;
+        }
         setV({ maskPath: q.result, maskFor: mpath, maskStart: q0, maskLen: 14, maskQuick: true, maskFpsDone: density });
         // 2) plná maska na pozadí — 4.4.5: len úsek strihu (I/O) s rezervou
         // 15 s na obe strany (strih sa dá ešte jemne posunúť bez prepočtu).
@@ -1230,17 +1335,15 @@ function FiltersField({ value, onChange, ctx }) {
         if (!dead && !failed) store.setState({ maskPhase: null, maskProgress: -1 });
       }
     })();
-    return () => {
-      dead = true;
-      // 4.5.5 — ZOMBIE ULOHY: beziace maskove ulohy v core pri restarte /
-      // vypnuti masky ZRUS. Predtym ulohy dobiehali bez listenera — po par
-      // prepoctoch bezalo niekolko plnych masiek naraz, dusili GPU a nova
-      // uloha cakala na 0 %. Hotove casti zostavaju v cache.
-      const ids = maskJobIdsRef.current.splice(0);
-      ids.forEach((id) => { try { const pr = api.cancelJob?.(id); if (pr && pr.catch) pr.catch(() => {}); } catch { /* ignore */ } });
-    };
+    // 3.42.1 core — cleanup efektu NESMIE zrušiť bežiaci job: pri re-run
+    // efektu (toggle aiMask, zmena In/Out/hustoty) sa job zrušil, ochrana
+    // `maskJobRef` však blokovala reštart, kým async nedobehol — a potom ho
+    // už nič nespustilo. Výsledok: plná maska sa nikdy nedokončila, maskPath
+    // ostal prázdny a náhľad farbil CELE video. Job necháme bežať do konca —
+    // dokončí sa, zapíše cache a continuation (dead=false) nastaví stav.
+    return () => { };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [v.aiMask, v.maskFps, media?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
+  }, [v.aiMask, v.maskFps, mediaNow?.path, ctx?.inOut?.a, ctx?.inOut?.b]);
 
   const pick = (p) => {
     // 4.4.0 — filter sa APLIKUJE DO existujúcich nastavení: preset mení len
@@ -1749,16 +1852,20 @@ api.registerTool({
     const fx = fxActive(v); // priestorové efekty (4.3.0)
     const has = style || curves || wheelsActive(wheels) || adj.temp !== 0 || adj.tint !== 0 || lutActive || v.lutPath || fx;
     if (!has) return null;
-    let chain = buildChain(style, intensity, curves, wheels, adj);
+    // 3.42.1 core — LUT/fx musia ísť DNU do colorspace wrapu (pred
+    // csWrapOut), inak by bežali na yuv s default BT.601 konverziou.
+    const extraParts = [];
     // 3D LUTy idú ZA kanálovou úpravou: najprv vibrancia/HSL, potom importovaný look
-    if (lutActive) chain = (chain ? chain + "," : "") + `lut3d='${escFilterPath(v.hslLutPath)}'`;
-    if (v.lutPath) chain = (chain ? chain + "," : "") + `lut3d='${escFilterPath(v.lutPath)}'`;
+    if (lutActive) extraParts.push(`lut3d='${escFilterPath(v.hslLutPath)}'`);
+    if (v.lutPath) extraParts.push(`lut3d='${escFilterPath(v.lutPath)}'`);
     // Efekty idú na koniec reťaze (rovnaké poradie ako GPU live shader):
     // blur → sharpen → vignette → grain
-    if (v.blur > 0.5) chain += `,gblur=sigma=${(0.4 + v.blur * 0.18).toFixed(2)}`;
-    if (v.sharpen > 0.5) chain += `,unsharp=5:5:${(v.sharpen / 50).toFixed(2)}:5:5:0.0`;
-    if (v.vignette > 0.5) chain += `,vignette=a=${(v.vignette / 100 * Math.PI / 4).toFixed(4)}`;
-    if (v.grain > 0.5) chain += `,noise=alls=${Math.round(v.grain * 0.5)}:allf=t`;
+    if (v.blur > 0.5) extraParts.push(`gblur=sigma=${(0.4 + v.blur * 0.18).toFixed(2)}`);
+    if (v.sharpen > 0.5) extraParts.push(`unsharp=5:5:${(v.sharpen / 50).toFixed(2)}:5:5:0.0`);
+    if (v.vignette > 0.5) extraParts.push(`vignette=a=${(v.vignette / 100 * Math.PI / 4).toFixed(4)}`);
+    if (v.grain > 0.5) extraParts.push(`noise=alls=${Math.round(v.grain * 0.5)}:allf=t`);
+    // matica zdroja zo snapshotu core (currentCsMatrix nastavuje efekt vo field)
+    const chain = buildChain(style, intensity, curves, wheels, adj, currentCsMatrix, extraParts);
     if (!chain) return null;
     const name = v.presetId
       ? presetName({ id: v.presetId, nameKey: String(v.presetId).startsWith("builtin_") ? `style_${String(v.presetId).slice(8)}` : undefined, name: v.presetName })
