@@ -43,5 +43,19 @@
   "preset_kontrastny": "Kontrast",
   "preset_teply": "Warm",
   "len_whole": "Ganz",
-  "whole_video": "Ganz-Modus — Video wird nicht gekürzt"
+  "whole_video": "Ganz-Modus — Video wird nicht gekürzt",
+  "mode": "Schnittmodus",
+  "mode_strop": "Decke",
+  "mode_high": "Highlights",
+  "mode_whole": "Ganz",
+  "mode_strop_note": "Kamera an der Decke: schneidet Manipulation (Ablegen/Anheben) heraus, behält stabile Abschnitte.",
+  "mode_high_note": "Beste Momente nach Bewegung und Ton.",
+  "mode_whole_note": "Video wird nicht gekürzt — nur Verbinden und Anpassungen.",
+  "margin": "Schnittrand",
+  "margin_note": "Zusätzliche Sekunden an beiden Enden eines stabilen Abschnitts.",
+  "stage_analyze": "Analysiere Aufnahme…",
+  "stage_cut": "Schneide Abschnitte…",
+  "segments": "Abschnitte",
+  "no_segments": "kein stabiler Abschnitt — ganzer Clip wird verwendet",
+  "strop_hint": "Aus jedem Clip werden stabile Abschnitte (ohne Kamerahandling) ausgewählt und verbunden."
 }

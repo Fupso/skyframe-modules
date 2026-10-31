@@ -43,5 +43,19 @@
   "preset_kontrastny": "Contrast",
   "preset_teply": "Warm",
   "len_whole": "Whole",
-  "whole_video": "Whole mode — video is not shortened"
+  "whole_video": "Whole mode — video is not shortened",
+  "mode": "Cut mode",
+  "mode_strop": "Ceiling",
+  "mode_high": "Highlights",
+  "mode_whole": "Whole",
+  "mode_strop_note": "Ceiling-mounted camera: cuts out manipulation (placing/lifting), keeps stable segments.",
+  "mode_high_note": "Best moments by motion and audio.",
+  "mode_whole_note": "No shortening — just joining and adjustments.",
+  "margin": "Cut margin",
+  "margin_note": "Extra seconds trimmed at each end of a stable segment.",
+  "stage_analyze": "Analyzing footage…",
+  "stage_cut": "Cutting segments…",
+  "segments": "segments",
+  "no_segments": "no stable segment — using whole clip",
+  "strop_hint": "Stable segments are picked from each clip (without camera handling) and joined."
 }

@@ -17,46 +17,12 @@ var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExtern
 var VIDEO_FILTERS = [{ name: "Video", extensions: ["mp4", "mov", "mkv", "avi"] }];
 var AUDIO_FILTERS = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac"] }];
 var PRESETS = [
-  {
-    id: "cisty",
-    icon: "\u2728",
-    r: [[0, 0], [0.25, 0.26], [0.5, 0.51], [0.75, 0.76], [1, 1]],
-    sat: 1.06
-  },
-  {
-    id: "zivy",
-    icon: "\u{1F308}",
-    r: [[0, 0], [0.25, 0.235], [0.5, 0.5], [0.75, 0.765], [1, 1]],
-    sat: 1.28
-  },
-  {
-    id: "filmovy",
-    icon: "\u{1F3AC}",
-    r: [[0, 0], [0.5, 0.47], [1, 1]],
-    g: [[0, 0], [0.5, 0.5], [1, 1]],
-    b: [[0, 0.05], [0.5, 0.5], [1, 0.94]],
-    sat: 0.96
-  },
-  {
-    id: "matny",
-    icon: "\u{1F32B}\uFE0F",
-    r: [[0, 0.06], [0.5, 0.53], [1, 0.97]],
-    sat: 0.9
-  },
-  {
-    id: "kontrastny",
-    icon: "\u26A1",
-    r: [[0, 0], [0.25, 0.19], [0.5, 0.5], [0.75, 0.81], [1, 1]],
-    sat: 1.08
-  },
-  {
-    id: "teply",
-    icon: "\u{1F305}",
-    r: [[0, 0], [0.5, 0.53], [1, 1]],
-    g: [[0, 5e-3], [0.5, 0.5], [1, 0.99]],
-    b: [[0, 0], [0.5, 0.46], [1, 0.93]],
-    sat: 1.05
-  }
+  { id: "cisty", icon: "\u2728", r: [[0, 0], [0.25, 0.26], [0.5, 0.51], [0.75, 0.76], [1, 1]], sat: 1.06 },
+  { id: "zivy", icon: "\u{1F308}", r: [[0, 0], [0.25, 0.235], [0.5, 0.5], [0.75, 0.765], [1, 1]], sat: 1.28 },
+  { id: "filmovy", icon: "\u{1F3AC}", r: [[0, 0], [0.5, 0.47], [1, 1]], g: [[0, 0], [0.5, 0.5], [1, 1]], b: [[0, 0.05], [0.5, 0.5], [1, 0.94]], sat: 0.96 },
+  { id: "matny", icon: "\u{1F32B}\uFE0F", r: [[0, 0.06], [0.5, 0.53], [1, 0.97]], sat: 0.9 },
+  { id: "kontrastny", icon: "\u26A1", r: [[0, 0], [0.25, 0.19], [0.5, 0.5], [0.75, 0.81], [1, 1]], sat: 1.08 },
+  { id: "teply", icon: "\u{1F305}", r: [[0, 0], [0.5, 0.53], [1, 1]], g: [[0, 5e-3], [0.5, 0.5], [1, 0.99]], b: [[0, 0], [0.5, 0.46], [1, 0.93]], sat: 1.05 }
 ];
 function clamp01(v) {
   return Math.min(1, Math.max(0, v));
@@ -72,30 +38,25 @@ function buildPresetVf(presetId, intensity) {
 }
 var initialState = {
   clips: [],
-  // string[]
+  mode: "strop",
+  // strop | high | whole
   targetSecs: 30,
-  // 15/30/60/90
+  // len režim high
+  margin: 1.5,
+  // rezerva na hraniciach strihu (režim strop), sekundy
   aspect: "9:16",
-  // "orig" | "9:16" | "1:1"
   music: null,
-  // path | null
   loopMusic: true,
   platform: "tiktok",
-  // tiktok | instagram | shorts | youtube
   presetId: "filmovy",
   intensity: 0.7,
   aiPick: null,
-  // { presetId, intensity, stats } — odporúčanie AI
   working: null,
-  // medziprodukt po spojení
   result: null,
-  // finálny zostrih (path)
   resultInfo: null,
-  // { duration, width, height }
   jobs: [],
   running: false,
   stage: "",
-  // text aktuálnej fázy
   error: "",
   log: [],
   cfgLoaded: false
@@ -138,13 +99,77 @@ function watchJob(jobId) {
 }
 function pushJob(label) {
   const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  store.setState((s) => ({
-    jobs: [...s.jobs, { id, label, status: "running", progress: 0, message: "", result: null }]
-  }));
+  store.setState((s) => ({ jobs: [...s.jobs, { id, label, status: "running", progress: 0, message: "", result: null }] }));
   return id;
 }
 function swapJobId(oldId, newId) {
   store.setState((s) => ({ jobs: s.jobs.map((j) => j.id === oldId ? { ...j, id: newId } : j) }));
+}
+async function ceilingSegments(path, marginSec) {
+  const info = await api.invoke("get_video_info", { path });
+  const dur = info?.duration || 0;
+  if (dur < 6) return [[0, dur]];
+  const count = Math.max(50, Math.min(800, Math.ceil(dur * 1.5)));
+  const strip = await api.invoke("video_thumbs_strip", { path, count });
+  const dir = strip.dir, n = strip.count;
+  const dt = dur / n;
+  const W = 48;
+  const cv = document.createElement("canvas");
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  const cov = new Array(n).fill(0);
+  const uni = new Array(n).fill(0);
+  let prev = null;
+  for (let i = 1; i <= n; i++) {
+    const fp = `${dir}/t${String(i).padStart(4, "0")}.jpg`;
+    let gray = null;
+    try {
+      const bytes = await api.readFileBytes(fp);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      URL.revokeObjectURL(url);
+      const h = Math.max(1, Math.round(img.naturalHeight / img.naturalWidth * W));
+      cv.width = W;
+      cv.height = h;
+      ctx.drawImage(img, 0, 0, W, h);
+      const d = ctx.getImageData(0, 0, W, h).data;
+      const m = W * h;
+      gray = new Float32Array(m);
+      let sL = 0, sL2 = 0;
+      for (let j = 0, p = 0; j < d.length; j += 4, p++) {
+        const L = 0.2126 * d[j] + 0.7152 * d[j + 1] + 0.0722 * d[j + 2];
+        gray[p] = L;
+        sL += L;
+        sL2 += L * L;
+      }
+      uni[i - 1] = Math.sqrt(Math.max(0, sL2 / m - sL / m * (sL / m)));
+      if (prev && prev.length === m) {
+        let ch = 0;
+        for (let p = 0; p < m; p++) if (Math.abs(gray[p] - prev[p]) > 25) ch++;
+        cov[i - 1] = ch / m;
+      }
+    } catch {
+    }
+    prev = gray;
+    if (i % 25 === 0) store.setState({ stage: `${t("stage_analyze", "Analyzujem z\xE1ber\u2026")} ${Math.round(i / n * 100)} %` });
+  }
+  const manip = cov.map((c, i) => c > 0.55 || uni[i] > 0 && uni[i] < 12);
+  for (let i = 1; i < n - 1; i++) {
+    if (!manip[i] && manip[i - 1] && manip[i + 1]) manip[i] = true;
+  }
+  const segs = [];
+  let s0 = -1;
+  for (let i = 0; i <= n; i++) {
+    const isM = i < n ? manip[i] : true;
+    if (!isM && s0 < 0) s0 = i;
+    if (isM && s0 >= 0) {
+      const a = s0 * dt + marginSec, b = i * dt - marginSec;
+      if (b - a >= 4) segs.push([+a.toFixed(2), +b.toFixed(2)]);
+      s0 = -1;
+    }
+  }
+  return segs.length ? segs : null;
 }
 async function runPipeline() {
   const s = store.getState();
@@ -153,60 +178,116 @@ async function runPipeline() {
   try {
     const paths = await api.invoke("get_app_paths");
     const tempDir = paths.temp_dir;
-    let work = s.clips[0];
-    if (s.clips.length > 1) {
-      store.setState({ stage: t("stage_merge", "Sp\xE1jam klipy\u2026") });
-      const jid = pushJob(t("stage_merge", "Sp\xE1jam klipy"));
-      const jobId = await api.invoke("merge_videos", {
-        files: s.clips,
-        outputName: "reels-src",
-        music: null,
-        moduleId: api.moduleId,
-        outputDir: tempDir,
-        loopMusic: false
-      });
-      swapJobId(jid, jobId);
-      log(`\u25B6 ${t("stage_merge", "Sp\xE1jam klipy")} (${s.clips.length})`);
-      const res = await watchJob(jobId);
-      if (res.status !== "done" || !res.result) throw new Error(res.message || t("merge_failed", "Spojenie zlyhalo"));
-      work = res.result;
-      store.setState({ working: work });
-      log(`\u2713 ${baseName(work)}`);
-    }
-    const info = await api.invoke("get_video_info", { path: work });
-    const dur = info?.duration || 0;
-    let cut = work;
-    if (s.targetSecs === 0) {
-      log(`\u2139 ${t("whole_video", "Re\u017Eim Cel\xE9 \u2014 video sa neskracuje")}`);
-    } else if (dur > s.targetSecs + 5) {
-      store.setState({ stage: t("stage_highlights", "H\u013Ead\xE1m najlep\u0161ie momenty\u2026") });
-      const jid = pushJob(t("stage_highlights", "Zostrih highlightov"));
-      try {
-        const jobId = await api.invoke("auto_highlights", {
-          input: work,
-          targetSecs: s.targetSecs,
-          moduleId: api.moduleId
+    let work = null;
+    if (s.mode === "strop") {
+      const cutFiles = [];
+      for (let ci = 0; ci < s.clips.length; ci++) {
+        const clip = s.clips[ci];
+        store.setState({ stage: `${t("stage_analyze", "Analyzujem z\xE1ber\u2026")} (${ci + 1}/${s.clips.length})` });
+        log(`\u25B6 ${t("stage_analyze", "Analyzujem z\xE1ber\u2026")} ${baseName(clip)}`);
+        const segs = await ceilingSegments(clip, s.margin);
+        if (!segs) {
+          log(`\u26A0 ${baseName(clip)}: ${t("no_segments", "\u017Eiadny stabiln\xFD \xFAsek \u2014 beriem cel\xFD klip")}`);
+          cutFiles.push(clip);
+          continue;
+        }
+        log(`\u2713 ${baseName(clip)}: ${segs.length} ${t("segments", "\xFAsekov")} (${segs.map(([a, b]) => `${a.toFixed(0)}\u2013${b.toFixed(0)} s`).join(", ")})`);
+        for (let si = 0; si < segs.length; si++) {
+          const [a, b] = segs[si];
+          store.setState({ stage: `${t("stage_cut", "Vystrihujem \xFAseky\u2026")} ${ci + 1}.${si + 1}` });
+          const jid = pushJob(`${t("stage_cut", "Strih")} ${ci + 1}.${si + 1}`);
+          const jobId = await api.invoke("trim_video", {
+            input: clip,
+            start: a,
+            end: b,
+            mode: "precise",
+            outputName: `reels-cut-${ci}-${si}`,
+            outputDir: tempDir,
+            moduleId: api.moduleId
+          });
+          swapJobId(jid, jobId);
+          const res = await watchJob(jobId);
+          if (res.status !== "done" || !res.result) throw new Error(res.message || "trim");
+          cutFiles.push(res.result);
+        }
+      }
+      if (cutFiles.length === 1) {
+        work = cutFiles[0];
+      } else {
+        store.setState({ stage: t("stage_merge", "Sp\xE1jam klipy\u2026") });
+        const jid = pushJob(t("stage_merge", "Sp\xE1jam klipy"));
+        const jobId = await api.invoke("merge_videos", {
+          files: cutFiles,
+          outputName: "reels-src",
+          music: null,
+          moduleId: api.moduleId,
+          outputDir: tempDir,
+          loopMusic: false
         });
         swapJobId(jid, jobId);
-        log(`\u25B6 ${t("stage_highlights", "Zostrih highlightov")} \u2192 ${s.targetSecs} s`);
+        log(`\u25B6 ${t("stage_merge", "Sp\xE1jam klipy")} (${cutFiles.length})`);
         const res = await watchJob(jobId);
-        if (res.status !== "done" || !res.result) throw new Error(res.message || "highlights");
-        cut = res.result;
-        log(`\u2713 ${baseName(cut)}`);
-      } catch (e) {
-        log(`\u26A0 ${t("highlights_skipped", "Zostrih presko\u010Den\xFD \u2014 pou\u017Eije sa cel\xE9 video")}`);
-        store.setState((st) => ({ jobs: st.jobs.filter((j) => j.id !== jid) }));
-        cut = work;
+        if (res.status !== "done" || !res.result) throw new Error(res.message || t("merge_failed", "Spojenie zlyhalo"));
+        work = res.result;
+        log(`\u2713 ${baseName(work)}`);
       }
+      store.setState({ working: work });
     } else {
-      log(`\u2139 ${t("short_video", "Video je krat\u0161ie ako cie\u013E \u2014 pou\u017Eije sa cel\xE9")}`);
+      work = s.clips[0];
+      if (s.clips.length > 1) {
+        store.setState({ stage: t("stage_merge", "Sp\xE1jam klipy\u2026") });
+        const jid = pushJob(t("stage_merge", "Sp\xE1jam klipy"));
+        const jobId = await api.invoke("merge_videos", {
+          files: s.clips,
+          outputName: "reels-src",
+          music: null,
+          moduleId: api.moduleId,
+          outputDir: tempDir,
+          loopMusic: false
+        });
+        swapJobId(jid, jobId);
+        log(`\u25B6 ${t("stage_merge", "Sp\xE1jam klipy")} (${s.clips.length})`);
+        const res = await watchJob(jobId);
+        if (res.status !== "done" || !res.result) throw new Error(res.message || t("merge_failed", "Spojenie zlyhalo"));
+        work = res.result;
+        store.setState({ working: work });
+        log(`\u2713 ${baseName(work)}`);
+      }
+      const info = await api.invoke("get_video_info", { path: work });
+      const dur = info?.duration || 0;
+      if (s.mode === "high") {
+        if (dur > s.targetSecs + 5) {
+          store.setState({ stage: t("stage_highlights", "H\u013Ead\xE1m najlep\u0161ie momenty\u2026") });
+          const jid = pushJob(t("stage_highlights", "Zostrih highlightov"));
+          try {
+            const jobId = await api.invoke("auto_highlights", {
+              input: work,
+              targetSecs: s.targetSecs,
+              moduleId: api.moduleId
+            });
+            swapJobId(jid, jobId);
+            log(`\u25B6 ${t("stage_highlights", "Zostrih highlightov")} \u2192 ${s.targetSecs} s`);
+            const res = await watchJob(jobId);
+            if (res.status !== "done" || !res.result) throw new Error(res.message || "highlights");
+            work = res.result;
+            log(`\u2713 ${baseName(work)}`);
+          } catch (e) {
+            log(`\u26A0 ${t("highlights_skipped", "Zostrih presko\u010Den\xFD \u2014 pou\u017Eije sa cel\xE9 video")}`);
+            store.setState((st) => ({ jobs: st.jobs.filter((j) => j.id !== jid) }));
+          }
+        } else {
+          log(`\u2139 ${t("short_video", "Video je krat\u0161ie ako cie\u013E \u2014 pou\u017Eije sa cel\xE9")}`);
+        }
+      } else {
+        log(`\u2139 ${t("whole_video", "Re\u017Eim Cel\xE9 \u2014 video sa neskracuje")}`);
+      }
     }
-    let framed = cut;
+    let framed = work;
     if (s.aspect !== "orig") {
       store.setState({ stage: t("stage_reframe", "Re\u017Eem na form\xE1t\u2026") });
       const jid = pushJob(`Auto Reframe ${s.aspect}`);
       const jobId = await api.invoke("auto_reframe", {
-        input: cut,
+        input: work,
         aspect: s.aspect,
         moduleId: api.moduleId,
         track: null
@@ -259,19 +340,23 @@ async function analyzeLook() {
     const info = await api.invoke("get_video_info", { path: src });
     const dur = info?.duration || 10;
     const times = [dur * 0.2, dur * 0.5, dur * 0.8];
-    const thumbs = [];
-    for (const ts of times) {
-      const p = await api.invoke("video_thumbnail", { path: src, atSeconds: ts, maxWidth: 160 });
-      if (p) thumbs.push(p);
-    }
     let sumL = 0, sumL2 = 0, sumS = 0, n = 0;
-    for (const p of thumbs) {
+    for (const ts of times) {
+      const raw = await api.invoke("video_thumbnail", { path: src, atSeconds: ts, maxWidth: 160 });
+      let url = null, revoke = false;
+      if (typeof raw === "string") url = api.fileSrc(raw);
+      else if (raw) {
+        url = URL.createObjectURL(new Blob([new Uint8Array(raw)], { type: "image/jpeg" }));
+        revoke = true;
+      }
+      if (!url) continue;
       const img = new Image();
-      img.src = api.fileSrc(p);
+      img.src = url;
       await new Promise((res, rej) => {
         img.onload = res;
         img.onerror = rej;
       });
+      if (revoke) URL.revokeObjectURL(url);
       const c = document.createElement("canvas");
       c.width = img.naturalWidth;
       c.height = img.naturalHeight;
@@ -353,10 +438,15 @@ function ClipRow({ path, onRemove }) {
   const [thumb, setThumb] = useState2(null);
   useEffect2(() => {
     let alive = true;
-    api.invoke("video_thumbnail", { path, atSeconds: 1, maxWidth: 240 }).then((p) => {
-      if (alive && p) setThumb(api.fileSrc(p));
-    }).catch(() => {
-    });
+    (async () => {
+      try {
+        const raw = await api.invoke("video_thumbnail", { path, atSeconds: 1, maxWidth: 240 });
+        if (!alive) return;
+        if (typeof raw === "string") setThumb(api.fileSrc(raw));
+        else if (raw) setThumb(URL.createObjectURL(new Blob([new Uint8Array(raw)], { type: "image/jpeg" })));
+      } catch {
+      }
+    })();
     return () => {
       alive = false;
     };
@@ -387,7 +477,16 @@ function SidePanel() {
     const f = await api.pickFiles(AUDIO_FILTERS, false);
     if (f) upd({ music: Array.isArray(f) ? f[0] : f });
   };
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("target_len", "Cie\u013Eov\xE1 d\u013A\u017Eka")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-5 gap-1" }, [["15", 15], ["30", 30], ["60", 60], ["90", 90], [t("len_whole", "Cel\xE9"), 0]].map(([l, v]) => /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("mode", "Re\u017Eim strihu")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-1" }, [["strop", t("mode_strop", "Strop")], ["high", t("mode_high", "Highlighty")], ["whole", t("mode_whole", "Cel\xE9")]].map(([v, l]) => /* @__PURE__ */ react_shim_default.createElement(
+    "button",
+    {
+      key: v,
+      disabled: s.running,
+      className: `py-1.5 rounded-lg text-sm border ${s.mode === v ? "border-accent text-accent" : "border-border text-text-dim"}`,
+      onClick: () => upd({ mode: v })
+    },
+    l
+  ))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-[11px] text-text-dim mt-1" }, s.mode === "strop" && t("mode_strop_note", "Kamera na strope: vystrihne manipul\xE1ciu (kladenie/dv\xEDhanie), nech\xE1 stabiln\xE9 \xFAseky."), s.mode === "high" && t("mode_high_note", "Najlep\u0161ie momenty pod\u013Ea pohybu a zvuku."), s.mode === "whole" && t("mode_whole_note", "Video sa neskracuje \u2014 len spojenie a \xFApravy."))), s.mode === "high" && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("target_len", "Cie\u013Eov\xE1 d\u013A\u017Eka")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-4 gap-1" }, [15, 30, 60, 90].map((v) => /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       key: v,
@@ -395,9 +494,20 @@ function SidePanel() {
       className: `py-1.5 rounded-lg text-sm border ${s.targetSecs === v ? "border-accent text-accent" : "border-border text-text-dim"}`,
       onClick: () => upd({ targetSecs: v })
     },
-    l,
-    v ? " s" : ""
-  )))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("aspect", "Form\xE1t")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-1" }, [["9:16", "9:16"], ["1:1", "1:1"], ["orig", t("aspect_orig", "Origin\xE1l")]].map(([v, l]) => /* @__PURE__ */ react_shim_default.createElement(
+    v,
+    " s"
+  )))), s.mode === "strop" && /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("margin", "Rezerva strihu")), /* @__PURE__ */ react_shim_default.createElement("label", { className: "block text-xs text-text-dim" }, s.margin.toFixed(1), " s", /* @__PURE__ */ react_shim_default.createElement(
+    "input",
+    {
+      type: "range",
+      min: 0,
+      max: 40,
+      value: Math.round(s.margin * 10),
+      disabled: s.running,
+      className: "w-full",
+      onChange: (e) => upd({ margin: Number(e.target.value) / 10 })
+    }
+  )), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-[11px] text-text-dim" }, t("margin_note", "O ko\u013Eko sek\xFAnd sa usekne naviac na ka\u017Edej strane stabiln\xE9ho \xFAseku."))), /* @__PURE__ */ react_shim_default.createElement("div", null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("aspect", "Form\xE1t")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-1" }, [["9:16", "9:16"], ["1:1", "1:1"], ["orig", t("aspect_orig", "Origin\xE1l")]].map(([v, l]) => /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       key: v,
@@ -451,7 +561,6 @@ function SidePanel() {
 }
 function Reels() {
   const s = useStore();
-  const wrapRef = useRef2(null);
   useEffect2(() => {
     if (s.cfgLoaded) return;
     (async () => {
@@ -459,7 +568,7 @@ function Reels() {
         const cfg = await api.invoke("get_module_config", { id: api.moduleId });
         if (cfg && typeof cfg === "object") {
           const pick = {};
-          for (const k of ["targetSecs", "aspect", "loopMusic", "platform", "presetId", "intensity"]) {
+          for (const k of ["mode", "targetSecs", "margin", "aspect", "loopMusic", "platform", "presetId", "intensity"]) {
             if (cfg[k] !== void 0) pick[k] = cfg[k];
           }
           store.setState({ ...pick, cfgLoaded: true });
@@ -473,20 +582,20 @@ function Reels() {
   }, [s.cfgLoaded]);
   useEffect2(() => {
     if (!s.cfgLoaded) return;
-    const cfg = { targetSecs: s.targetSecs, aspect: s.aspect, loopMusic: s.loopMusic, platform: s.platform, presetId: s.presetId, intensity: s.intensity };
+    const cfg = { mode: s.mode, targetSecs: s.targetSecs, margin: s.margin, aspect: s.aspect, loopMusic: s.loopMusic, platform: s.platform, presetId: s.presetId, intensity: s.intensity };
     const tm = setTimeout(() => {
       api.invoke("set_module_config", { id: api.moduleId, config: cfg }).catch(() => {
       });
     }, 400);
     return () => clearTimeout(tm);
-  }, [s.cfgLoaded, s.targetSecs, s.aspect, s.loopMusic, s.platform, s.presetId, s.intensity]);
+  }, [s.cfgLoaded, s.mode, s.targetSecs, s.margin, s.aspect, s.loopMusic, s.platform, s.presetId, s.intensity]);
   const addClips = async () => {
     const f = await api.pickFiles(VIDEO_FILTERS, true);
     if (!f) return;
     const list = Array.isArray(f) ? f : [f];
     store.setState((st) => ({ clips: [...st.clips, ...list.filter((p) => !st.clips.includes(p))] }));
   };
-  return /* @__PURE__ */ react_shim_default.createElement("div", { ref: wrapRef, className: "p-6 max-w-5xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ react_shim_default.createElement("h1", { className: "text-xl font-semibold" }, "\u{1F4F1} ", t("title", "Reels")), /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-5 py-2.5`, disabled: !s.clips.length || s.running, onClick: runPipeline }, s.running ? s.stage || "\u2026" : `\u{1F680} ${t("make_reel", "Vytvori\u0165 zostrih")}`)), s.error ? /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-3 text-sm text-red-400` }, "\u274C ", s.error) : null, /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, t("clips", "Klipy"), " (", s.clips.length, ")"), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-sm text-accent hover:underline disabled:opacity-40", onClick: addClips, disabled: s.running }, "\uFF0B ", t("add_clips", "Prida\u0165 vide\xE1"))), s.clips.length === 0 ? /* @__PURE__ */ react_shim_default.createElement(
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 max-w-5xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ react_shim_default.createElement("h1", { className: "text-xl font-semibold" }, "\u{1F4F1} ", t("title", "Reels")), /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-5 py-2.5`, disabled: !s.clips.length || s.running, onClick: runPipeline }, s.running ? s.stage || "\u2026" : `\u{1F680} ${t("make_reel", "Vytvori\u0165 zostrih")}`)), s.error ? /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-3 text-sm text-red-400` }, "\u274C ", s.error) : null, /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, t("clips", "Klipy"), " (", s.clips.length, ")"), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-sm text-accent hover:underline disabled:opacity-40", onClick: addClips, disabled: s.running }, "\uFF0B ", t("add_clips", "Prida\u0165 vide\xE1"))), s.clips.length === 0 ? /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       onClick: addClips,
@@ -494,10 +603,10 @@ function Reels() {
     },
     /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-3xl mb-2" }, "\u{1F4F9}"),
     /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-sm" }, t("drop_hint", "Vlo\u017E jedno dlh\xE9 video alebo viac krat\u0161\xEDch klipov"))
-  ) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, s.clips.map((p, i) => /* @__PURE__ */ react_shim_default.createElement(ClipRow, { key: p, path: p, onRemove: () => store.setState((st) => ({ clips: st.clips.filter((_, j) => j !== i) })) })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-[11px] text-text-dim" }, s.clips.length > 1 ? t("merge_note", "Klipy sa najprv spoja, potom sa vyber\xFA najlep\u0161ie momenty.") : t("one_note", "Z dlh\xE9ho videa sa vyber\xFA najlep\u0161ie momenty.")))), /* @__PURE__ */ react_shim_default.createElement(Jobs, null), /* @__PURE__ */ react_shim_default.createElement(ResultView, null), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line)))));
+  ) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, s.clips.map((p, i) => /* @__PURE__ */ react_shim_default.createElement(ClipRow, { key: p, path: p, onRemove: () => store.setState((st) => ({ clips: st.clips.filter((_, j) => j !== i) })) })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-[11px] text-text-dim" }, s.mode === "strop" ? t("strop_hint", "Z ka\u017Ed\xE9ho klipu sa vyber\xFA stabiln\xE9 \xFAseky (bez kladenia a dv\xEDhania kamery) a spoja sa.") : s.clips.length > 1 ? t("merge_note", "Klipy sa najprv spoja, potom sa vyber\xFA najlep\u0161ie momenty.") : t("one_note", "Z dlh\xE9ho videa sa vyber\xFA najlep\u0161ie momenty.")))), /* @__PURE__ */ react_shim_default.createElement(Jobs, null), /* @__PURE__ */ react_shim_default.createElement(ResultView, null), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line)))));
 }
 if (api.registerSidePanel) api.registerSidePanel(SidePanel);
-var src_default = Reels;
+var index_default = Reels;
 export {
-  src_default as default
+  index_default as default
 };

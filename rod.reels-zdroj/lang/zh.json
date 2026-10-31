@@ -43,5 +43,19 @@
   "preset_kontrastny": "高对比",
   "preset_teply": "暖色",
   "len_whole": "完整",
-  "whole_video": "完整模式 — 不缩短视频"
+  "whole_video": "完整模式 — 不缩短视频",
+  "mode": "剪辑模式",
+  "mode_strop": "天花板",
+  "mode_high": "精彩集锦",
+  "mode_whole": "完整",
+  "mode_strop_note": "天花板固定拍摄：自动剪掉放置/拿起手机的片段，保留稳定段落。",
+  "mode_high_note": "根据画面运动和声音挑选最佳片段。",
+  "mode_whole_note": "不缩短视频——仅拼接和调整。",
+  "margin": "剪辑余量",
+  "margin_note": "在稳定片段两端额外剪掉的秒数。",
+  "stage_analyze": "正在分析画面…",
+  "stage_cut": "正在剪切片段…",
+  "segments": "个片段",
+  "no_segments": "无稳定片段——使用整个剪辑",
+  "strop_hint": "从每个剪辑中选取稳定片段（不含拿放相机）并拼接。"
 }
