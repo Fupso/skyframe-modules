@@ -1,0 +1,16 @@
+{
+  "id": "rod.reels",
+  "name": "Reels",
+  "version": "1.0.1",
+  "author": "Rod Studio",
+  "description": "Automatický zostrih reels/shorts z dlhého záberu alebo viacerých klipov: spojenie, výber najlepších momentov, AI obrazový preset, 9:16/1:1 a export pre TikTok, Instagram a YouTube Shorts.",
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [],
+  "entry_point": "index.js",
+  "icon": "📱",
+  "enabled": true,
+  "min_core_version": "3.43.0"
+}
