@@ -54,6 +54,7 @@ var initialState = {
   working: null,
   result: null,
   resultInfo: null,
+  resultStamp: 0,
   jobs: [],
   running: false,
   stage: "",
@@ -82,6 +83,9 @@ function baseName(p) {
 }
 function log(msg) {
   store.setState((s) => ({ log: [...s.log.slice(-199), `[${(/* @__PURE__ */ new Date()).toLocaleTimeString()}] ${msg}`] }));
+}
+function resetResult() {
+  store.setState({ result: null, resultInfo: null, resultStamp: 0, working: null, jobs: [], error: "" });
 }
 function watchJob(jobId) {
   return new Promise((resolve) => {
@@ -319,7 +323,7 @@ async function runPipeline() {
       log(`\u2713 ${baseName(final)}`);
     }
     const finfo = await api.invoke("get_video_info", { path: final });
-    store.setState({ result: final, resultInfo: finfo || null, stage: "" });
+    store.setState({ result: final, resultInfo: finfo || null, resultStamp: Date.now(), stage: "" });
     if (api.setActiveMedia) api.setActiveMedia(final);
     log(`\u2705 ${t("done", "Hotovo")}: ${baseName(final)}`);
   } catch (e) {
@@ -468,7 +472,15 @@ function ResultView() {
   const s = useStore();
   if (!s.result) return null;
   const info = s.resultInfo;
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-3" }, t("result", "V\xFDsledok"), " ", info ? `\xB7 ${Math.round(info.duration || 0)} s \xB7 ${info.width}\xD7${info.height}` : ""), /* @__PURE__ */ react_shim_default.createElement("video", { src: api.fileSrc(s.result), controls: true, className: "max-h-[420px] mx-auto rounded-xl bg-black" }), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-2 mt-3 flex-wrap" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-4 py-2 text-sm`, onClick: openInEditor }, "\u2702\uFE0F ", t("open_editor", "Otvori\u0165 v Editore")), /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-4 py-2 text-sm`, onClick: exportNow, disabled: s.running }, "\u2B07\uFE0F ", t("export", "Exportova\u0165"))));
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-3" }, t("result", "V\xFDsledok"), " ", info ? `\xB7 ${Math.round(info.duration || 0)} s \xB7 ${info.width}\xD7${info.height}` : ""), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex justify-center" }, /* @__PURE__ */ react_shim_default.createElement(
+    "video",
+    {
+      key: s.resultStamp || s.result,
+      src: `${api.fileSrc(s.result)}${s.result.includes("?") ? "&" : "?"}r=${s.resultStamp || 0}`,
+      controls: true,
+      className: "max-w-full w-auto max-h-[420px] object-contain rounded-xl bg-black"
+    }
+  )), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-2 mt-3 flex-wrap" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-4 py-2 text-sm`, onClick: openInEditor }, "\u2702\uFE0F ", t("open_editor", "Otvori\u0165 v Editore")), /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-4 py-2 text-sm`, onClick: exportNow, disabled: s.running }, "\u2B07\uFE0F ", t("export", "Exportova\u0165"))));
 }
 function SidePanel() {
   const s = useStore();
@@ -593,7 +605,10 @@ function Reels() {
     const f = await api.pickFiles(VIDEO_FILTERS, true);
     if (!f) return;
     const list = Array.isArray(f) ? f : [f];
-    store.setState((st) => ({ clips: [...st.clips, ...list.filter((p) => !st.clips.includes(p))] }));
+    const fresh = list.filter((p) => !state.clips.includes(p));
+    if (!fresh.length) return;
+    resetResult();
+    store.setState((st) => ({ clips: [...st.clips, ...fresh] }));
   };
   return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-6 max-w-5xl mx-auto space-y-4" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ react_shim_default.createElement("h1", { className: "text-xl font-semibold" }, "\u{1F4F1} ", t("title", "Reels")), /* @__PURE__ */ react_shim_default.createElement("button", { className: `${BTN} px-5 py-2.5`, disabled: !s.clips.length || s.running, onClick: runPipeline }, s.running ? s.stage || "\u2026" : `\u{1F680} ${t("make_reel", "Vytvori\u0165 zostrih")}`)), s.error ? /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-3 text-sm text-red-400` }, "\u274C ", s.error) : null, /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center justify-between mb-3" }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider" }, t("clips", "Klipy"), " (", s.clips.length, ")"), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-sm text-accent hover:underline disabled:opacity-40", onClick: addClips, disabled: s.running }, "\uFF0B ", t("add_clips", "Prida\u0165 vide\xE1"))), s.clips.length === 0 ? /* @__PURE__ */ react_shim_default.createElement(
     "button",
@@ -603,7 +618,10 @@ function Reels() {
     },
     /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-3xl mb-2" }, "\u{1F4F9}"),
     /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-sm" }, t("drop_hint", "Vlo\u017E jedno dlh\xE9 video alebo viac krat\u0161\xEDch klipov"))
-  ) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, s.clips.map((p, i) => /* @__PURE__ */ react_shim_default.createElement(ClipRow, { key: p, path: p, onRemove: () => store.setState((st) => ({ clips: st.clips.filter((_, j) => j !== i) })) })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-[11px] text-text-dim" }, s.mode === "strop" ? t("strop_hint", "Z ka\u017Ed\xE9ho klipu sa vyber\xFA stabiln\xE9 \xFAseky (bez kladenia a dv\xEDhania kamery) a spoja sa.") : s.clips.length > 1 ? t("merge_note", "Klipy sa najprv spoja, potom sa vyber\xFA najlep\u0161ie momenty.") : t("one_note", "Z dlh\xE9ho videa sa vyber\xFA najlep\u0161ie momenty.")))), /* @__PURE__ */ react_shim_default.createElement(Jobs, null), /* @__PURE__ */ react_shim_default.createElement(ResultView, null), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line)))));
+  ) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "space-y-2" }, s.clips.map((p, i) => /* @__PURE__ */ react_shim_default.createElement(ClipRow, { key: p, path: p, onRemove: () => {
+    resetResult();
+    store.setState((st) => ({ clips: st.clips.filter((_, j) => j !== i) }));
+  } })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-[11px] text-text-dim" }, s.mode === "strop" ? t("strop_hint", "Z ka\u017Ed\xE9ho klipu sa vyber\xFA stabiln\xE9 \xFAseky (bez kladenia a dv\xEDhania kamery) a spoja sa.") : s.clips.length > 1 ? t("merge_note", "Klipy sa najprv spoja, potom sa vyber\xFA najlep\u0161ie momenty.") : t("one_note", "Z dlh\xE9ho videa sa vyber\xFA najlep\u0161ie momenty.")))), /* @__PURE__ */ react_shim_default.createElement(Jobs, null), /* @__PURE__ */ react_shim_default.createElement(ResultView, null), s.log.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: `${CARD} p-4` }, /* @__PURE__ */ react_shim_default.createElement("h3", { className: "text-xs font-semibold text-text-dim uppercase tracking-wider mb-2" }, t("log", "Log")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "max-h-40 overflow-y-auto text-[11px] font-mono text-text-dim space-y-0.5" }, s.log.map((line, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i }, line)))));
 }
 if (api.registerSidePanel) api.registerSidePanel(SidePanel);
 var index_default = Reels;

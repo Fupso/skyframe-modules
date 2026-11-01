@@ -65,6 +65,7 @@ const initialState = {
   working: null,
   result: null,
   resultInfo: null,
+  resultStamp: 0,
   jobs: [],
   running: false,
   stage: "",
@@ -89,6 +90,11 @@ function baseName(p) { return (p || "").split(/[\\/]/).pop() ?? p; }
 
 function log(msg) {
   store.setState((s) => ({ log: [...s.log.slice(-199), `[${new Date().toLocaleTimeString()}] ${msg}`] }));
+}
+
+// zmena klipov zneplatní predchádzajúci výsledok — nesmie ostať vysieť staré video
+function resetResult() {
+  store.setState({ result: null, resultInfo: null, resultStamp: 0, working: null, jobs: [], error: "" });
 }
 
 function watchJob(jobId) {
@@ -328,7 +334,7 @@ async function runPipeline() {
     }
 
     const finfo = await api.invoke("get_video_info", { path: final });
-    store.setState({ result: final, resultInfo: finfo || null, stage: "" });
+    store.setState({ result: final, resultInfo: finfo || null, resultStamp: Date.now(), stage: "" });
     if (api.setActiveMedia) api.setActiveMedia(final);
     log(`✅ ${t("done", "Hotovo")}: ${baseName(final)}`);
   } catch (e) {
@@ -501,7 +507,14 @@ function ResultView() {
       <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-3">
         {t("result", "Výsledok")} {info ? `· ${Math.round(info.duration || 0)} s · ${info.width}×${info.height}` : ""}
       </h3>
-      <video src={api.fileSrc(s.result)} controls className="max-h-[420px] mx-auto rounded-xl bg-black" />
+      <div className="flex justify-center">
+        <video
+          key={s.resultStamp || s.result}
+          src={`${api.fileSrc(s.result)}${s.result.includes("?") ? "&" : "?"}r=${s.resultStamp || 0}`}
+          controls
+          className="max-w-full w-auto max-h-[420px] object-contain rounded-xl bg-black"
+        />
+      </div>
       <div className="flex gap-2 mt-3 flex-wrap">
         <button className={`${BTN} px-4 py-2 text-sm`} onClick={openInEditor}>✂️ {t("open_editor", "Otvoriť v Editore")}</button>
         <button className={`${BTN} px-4 py-2 text-sm`} onClick={exportNow} disabled={s.running}>⬇️ {t("export", "Exportovať")}</button>
@@ -666,7 +679,10 @@ function Reels() {
     const f = await api.pickFiles(VIDEO_FILTERS, true);
     if (!f) return;
     const list = Array.isArray(f) ? f : [f];
-    store.setState((st) => ({ clips: [...st.clips, ...list.filter((p) => !st.clips.includes(p))] }));
+    const fresh = list.filter((p) => !state.clips.includes(p));
+    if (!fresh.length) return;
+    resetResult();
+    store.setState((st) => ({ clips: [...st.clips, ...fresh] }));
   };
 
   return (
@@ -698,7 +714,7 @@ function Reels() {
         ) : (
           <div className="space-y-2">
             {s.clips.map((p, i) => (
-              <ClipRow key={p} path={p} onRemove={() => store.setState((st) => ({ clips: st.clips.filter((_, j) => j !== i) }))} />
+              <ClipRow key={p} path={p} onRemove={() => { resetResult(); store.setState((st) => ({ clips: st.clips.filter((_, j) => j !== i) })); }} />
             ))}
             <div className="text-[11px] text-text-dim">
               {s.mode === "strop"
