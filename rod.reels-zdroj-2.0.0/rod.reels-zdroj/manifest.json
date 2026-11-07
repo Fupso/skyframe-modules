@@ -1,0 +1,16 @@
+{
+  "id": "rod.reels",
+  "name": "Reels",
+  "version": "2.0.0",
+  "author": "Rod Studio",
+  "description": "Manuálny zostrih dlhého videa: I/O úseky na časovej osi, prechody, hudba, profesionálne presety aj automatický preset, reálny náhľad a výstup.",
+  "permissions": [
+    "filesystem.read",
+    "ffmpeg.execute"
+  ],
+  "provides": [],
+  "entry_point": "index.js",
+  "icon": "📱",
+  "enabled": true,
+  "min_core_version": "3.43.0"
+}
