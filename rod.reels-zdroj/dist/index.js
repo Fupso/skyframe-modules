@@ -11,7 +11,7 @@ var Fragment = window.React.Fragment;
 // src/index.jsx
 var api = window.SkyFrame;
 var t = (k, f) => api.t(k, f);
-var { useState: useState2, useEffect: useEffect2, useRef: useRef2 } = react_shim_default;
+var { useState: useState2, useEffect: useEffect2, useRef: useRef2, useSyncExternalStore: useSyncExternalStore2 } = react_shim_default;
 var AUDIO_FILTERS = [{ name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "flac", "ogg"] }];
 var MIN_SEG = 0.3;
 var PRESETS = [
@@ -25,6 +25,23 @@ var PRESETS = [
 var TRANSITIONS = ["none", "black", "white"];
 function clamp01(v) {
   return Math.min(1, Math.max(0, v));
+}
+function buildPresetVf(presetId, intensity) {
+  const p = PRESETS.find((x) => x.id === presetId);
+  if (!p) return "";
+  const it = clamp01(intensity);
+  const chan = (pts) => pts.map(([x, y]) => `${x.toFixed(3)}/${(x + (y - x) * it).toFixed(3)}`).join(" ");
+  const parts = [`curves=r='${chan(p.r)}':g='${chan(p.g)}':b='${chan(p.b)}'`];
+  const eqBits = [];
+  const sat = 1 + (p.sat - 1) * it, con = 1 + (p.con - 1) * it;
+  if (Math.abs(sat - 1) > 4e-3) eqBits.push(`saturation=${sat.toFixed(3)}`);
+  if (Math.abs(con - 1) > 4e-3) eqBits.push(`contrast=${con.toFixed(3)}`);
+  if (eqBits.length) parts.push(`eq=${eqBits.join(":")}`);
+  const vig = p.vig * it;
+  if (vig > 0.02) parts.push(`vignette=a=${(Math.PI / 5 * vig).toFixed(4)}`);
+  const gr = Math.round((p.grain || 0) * it);
+  if (gr > 0) parts.push(`noise=alls=${gr}:allf=t`);
+  return parts.join(",");
 }
 function chanTable(pts, it) {
   const out = [];
@@ -56,23 +73,6 @@ function buildLiveFilter(presetId, intensity) {
     fx: { blur: 0, sharpen: 0, vignette: Math.round(p.vig * 100 * it), grain: Math.round((p.grain || 0) * 10 * it) }
   };
 }
-function buildPresetVf(presetId, intensity) {
-  const p = PRESETS.find((x) => x.id === presetId);
-  if (!p) return "";
-  const it = clamp01(intensity);
-  const chan = (pts) => pts.map(([x, y]) => `${x.toFixed(3)}/${(x + (y - x) * it).toFixed(3)}`).join(" ");
-  const parts = [`curves=r='${chan(p.r)}':g='${chan(p.g)}':b='${chan(p.b)}'`];
-  const eqBits = [];
-  const sat = 1 + (p.sat - 1) * it, con = 1 + (p.con - 1) * it;
-  if (Math.abs(sat - 1) > 4e-3) eqBits.push(`saturation=${sat.toFixed(3)}`);
-  if (Math.abs(con - 1) > 4e-3) eqBits.push(`contrast=${con.toFixed(3)}`);
-  if (eqBits.length) parts.push(`eq=${eqBits.join(":")}`);
-  const vig = p.vig * it;
-  if (vig > 0.02) parts.push(`vignette=a=${(Math.PI / 5 * vig).toFixed(4)}`);
-  const gr = Math.round((p.grain || 0) * it);
-  if (gr > 0) parts.push(`noise=alls=${gr}:allf=t`);
-  return parts.join(",");
-}
 function segGrade(fin, fout, len) {
   const parts = [];
   const mk = (id, dir) => {
@@ -99,330 +99,349 @@ function fmtTime(sec) {
 function baseName(p) {
   return (p || "").split(/[\\/]/).pop() ?? p;
 }
-function ReelsPanel() {
-  const [media, setMedia] = useState2(() => api.getEditorMedia());
-  const [info, setInfo] = useState2(null);
-  const [thumbs, setThumbs] = useState2(null);
-  const [segments, setSegments] = useState2([]);
-  const [cuts, setCuts] = useState2([]);
-  const [pendingIn, setPendingIn] = useState2(null);
-  const [sel, setSel] = useState2(-1);
-  const [presetId, setPresetId] = useState2("none");
-  const [intensity, setIntensity] = useState2(0.75);
-  const [music, setMusic] = useState2(null);
-  const [msg, setMsg] = useState2("");
-  const [autoBusy, setAutoBusy] = useState2(false);
-  const [applied, setApplied] = useState2("");
-  const cfgTimer = useRef2(null);
-  const dirtyRef = useRef2(false);
-  const loadedRef = useRef2(false);
-  const markDirty = () => {
-    dirtyRef.current = true;
-  };
-  const duration = info?.duration || 0;
-  const path = media?.path || null;
-  useEffect2(() => {
-    const off = api.onEditorMedia((m) => setMedia(m));
-    return off;
-  }, []);
-  useEffect2(() => {
-    let dead = false;
-    dirtyRef.current = false;
-    loadedRef.current = false;
-    setInfo(null);
-    setThumbs(null);
-    setMsg("");
-    if (!path || media.kind !== "video") {
-      setSegments([]);
-      setCuts([]);
-      setPendingIn(null);
-      return;
-    }
-    (async () => {
-      try {
-        const inf = await api.invoke("get_video_info", { path });
-        if (dead) return;
-        setInfo(inf);
-        try {
-          const cfg = await api.invoke("get_module_config", { id: api.moduleId });
-          const saved = cfg?.reels?.[path];
-          if (saved && !dead && !dirtyRef.current) {
-            setSegments(saved.segments || []);
-            setCuts(saved.cuts || []);
-            setPresetId(saved.presetId || "none");
-            setIntensity(saved.intensity ?? 0.75);
-            setMusic(saved.music || null);
-          }
-        } catch {
-        }
-        loadedRef.current = true;
-        try {
-          const th = await api.invoke("video_thumbs_strip", { path, count: 120 });
-          if (!dead) setThumbs(th);
-        } catch {
-        }
-      } catch (e) {
-        if (!dead) setMsg(String(e));
-      }
-    })();
-    return () => {
-      dead = true;
-    };
-  }, [path]);
-  useEffect2(() => {
-    if (!path || !loadedRef.current) return;
-    clearTimeout(cfgTimer.current);
-    cfgTimer.current = setTimeout(() => {
-      api.invoke("get_module_config", { id: api.moduleId }).then((cfg) => {
-        const reels = { ...cfg?.reels || {} };
-        reels[path] = { segments, cuts, presetId, intensity, music };
-        return api.invoke("set_module_config", { id: api.moduleId, config: { ...cfg || {}, reels } });
-      }).catch(() => {
-      });
-    }, 600);
-    return () => clearTimeout(cfgTimer.current);
-  }, [path, segments, cuts, presetId, intensity, music]);
-  useEffect2(() => {
-    const segs = segments.length ? segments.map((s, i) => ({
-      start: s.start,
-      end: s.end,
-      grade: segGrade(cuts[i - 1], cuts[i], s.end - s.start) || void 0
-    })) : null;
-    api.setEditorSegments(segs);
-    api.setEditorLiveFilter(buildLiveFilter(presetId, intensity));
-    const vf = buildPresetVf(presetId, intensity);
-    let agraph, aInputs;
-    const total2 = segments.length ? segments.reduce((a, s) => a + (s.end - s.start), 0) : duration;
-    if (music?.path && total2 > 0) {
-      const v = clamp01((music.volume ?? 30) / 100).toFixed(3);
-      if (music.mode === "replace" || info?.has_audio === false) {
-        agraph = `[I0]aloop=loop=-1:size=2000000000,atrim=0:${total2.toFixed(3)},asetpts=PTS-STARTPTS,volume=${v}[A_OUT]`;
-      } else {
-        agraph = `[A_IN]volume=1.0[oa];[I0]aloop=loop=-1:size=2000000000,volume=${v}[ma];[oa][ma]amix=inputs=2:duration=first:normalize=0[A_OUT]`;
-      }
-      aInputs = [music.path];
-    }
-    if (vf || agraph) {
-      api.setEditorStep({ label: "Reels", vf: vf || void 0, agraph, aInputs });
-    } else {
-      api.setEditorStep(null);
-    }
-    const parts = [];
-    if (segments.length) parts.push(`${segments.length} ${t("segs_unit", "\xFAseky")}`);
-    if (vf) parts.push(t("preset_" + presetId, presetId));
-    if (music?.path) parts.push("\u266A");
-    setApplied(parts.join(" \xB7 "));
-  }, [segments, cuts, presetId, intensity, music, duration, info]);
-  const markIn = () => {
-    const pos = api.getPlayerPosition();
-    if (pos == null) return;
-    markDirty();
-    setPendingIn(pos);
-    setMsg(`\u25B8 I = ${fmtTime(pos)} \u2014 ${t("now_out", "teraz prejdi na koniec \xFAseku a stla\u010D O")}`);
-  };
-  const markOut = () => {
-    const pos = api.getPlayerPosition();
-    if (pos == null) return;
-    if (pendingIn == null) {
-      setMsg(t("err_no_in", "Najprv ozna\u010D za\u010Diatok (I)."));
-      return;
-    }
-    let start = Math.min(pendingIn, pos), end = Math.max(pendingIn, pos);
-    if (end - start < MIN_SEG) {
-      setMsg(t("err_short", "\xDAsek je pr\xEDli\u0161 kr\xE1tky."));
-      return;
-    }
-    const overlap = segments.some((s) => start < s.end - 1e-3 && end > s.start + 1e-3);
-    if (overlap) {
-      setMsg(t("err_overlap", "\xDAsek sa prekr\xFDva s in\xFDm \xFAsekom."));
-      return;
-    }
-    markDirty();
-    const idx = segments.findIndex((s) => s.start > start);
-    const at = idx === -1 ? segments.length : idx;
-    const ns = [...segments];
-    ns.splice(at, 0, { start, end });
-    const nc = [...cuts];
-    nc.splice(at, 0, "none");
-    setSegments(ns);
-    setCuts(nc);
-    setPendingIn(null);
-    setSel(at);
-    setMsg(`\u2713 ${t("seg_added", "\xDAsek pridan\xFD")}: ${fmtTime(start)} \u2013 ${fmtTime(end)}`);
-  };
-  const cancelDraft = () => {
-    setPendingIn(null);
-    setMsg("");
-  };
-  const removeSeg = (i) => {
-    markDirty();
-    const ns = segments.filter((_, k) => k !== i);
-    const nc = [...cuts];
-    nc.splice(Math.min(i, nc.length - 1), 1);
-    if (nc.length !== Math.max(0, ns.length - 1)) nc.length = Math.max(0, ns.length - 1);
-    setSegments(ns);
-    setCuts(nc);
-    setSel(-1);
-  };
-  const updateSeg = (i, key, val) => {
-    const v = Math.max(0, Math.min(duration || val, val));
-    const ns = segments.map((s2, k) => k === i ? { ...s2, [key]: v } : s2);
-    const s = ns[i];
-    if (s.end - s.start < MIN_SEG) {
-      setMsg(t("err_short", "\xDAsek je pr\xEDli\u0161 kr\xE1tky."));
-      return;
-    }
-    markDirty();
-    setMsg("");
-    setSegments(ns);
-  };
-  const setCut = (i, id) => {
-    markDirty();
-    const nc = [...cuts];
-    nc[i] = id;
-    setCuts(nc);
-  };
-  const resetAll = () => {
-    markDirty();
-    setSegments([]);
-    setCuts([]);
-    setPendingIn(null);
-    setSel(-1);
-    setPresetId("none");
-    setIntensity(0.75);
-    setMusic(null);
-    setMsg("");
-  };
-  const pickMusic = async () => {
-    const p = await api.pickFiles(AUDIO_FILTERS, false);
-    const file = Array.isArray(p) ? p[0] : p;
-    if (file) {
-      markDirty();
-      setMusic({ path: file, volume: music?.volume ?? 30, mode: music?.mode || "mix" });
-    }
-  };
-  const analyzeAuto = async () => {
-    if (!path || autoBusy) return;
-    setAutoBusy(true);
-    setMsg(t("auto_analyzing", "Analyzujem z\xE1bery\u2026"));
+var initialEdit = () => ({
+  segments: [],
+  // [{start,end}]
+  cuts: [],
+  // cuts[i] = prechod medzi úsekom i a i+1
+  pendingIn: null,
+  sel: -1,
+  presetId: "none",
+  intensity: 0.75,
+  music: null,
+  // {path, volume, mode}
+  msg: "",
+  previewPath: null,
+  previewBusy: false,
+  autoBusy: false
+});
+var state = {
+  mediaPath: null,
+  info: null,
+  thumbs: null,
+  cfgLoaded: false,
+  ...initialEdit()
+};
+var listeners = /* @__PURE__ */ new Set();
+var store = {
+  getState: () => state,
+  set(patch) {
+    state = { ...state, ...typeof patch === "function" ? patch(state) : patch };
+    listeners.forEach((l) => l());
+  },
+  subscribe(l) {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  }
+};
+var useStore = () => useSyncExternalStore2(store.subscribe, store.getState);
+var loadingFor = null;
+async function loadMedia(path) {
+  if (!path || loadingFor === path) return;
+  loadingFor = path;
+  store.set({ mediaPath: path, info: null, thumbs: null, cfgLoaded: false, ...initialEdit() });
+  try {
+    const info = await api.invoke("get_video_info", { path });
+    if (state.mediaPath !== path) return;
+    store.set({ info });
     try {
-      const segs = segments.length ? segments : [{ start: 0, end: duration || 10 }];
-      const samples = [];
-      for (const seg of segs.slice(0, 4)) {
-        samples.push(seg.start + (seg.end - seg.start) * 0.3, (seg.start + seg.end) / 2, seg.start + (seg.end - seg.start) * 0.7);
-      }
-      let sumL = 0, sumL2 = 0, sumS = 0, sumW = 0, n = 0;
-      for (const ts of samples.slice(0, 6)) {
-        const raw = await api.invoke("video_thumbnail", { path, atSeconds: ts, maxWidth: 160, vf: null });
-        if (!raw) continue;
-        const url = URL.createObjectURL(new Blob([new Uint8Array(raw)], { type: "image/jpeg" }));
-        const img = new Image();
-        img.src = url;
-        await new Promise((res, rej) => {
-          img.onload = res;
-          img.onerror = rej;
+      const cfg = await api.invoke("get_module_config", { id: api.moduleId });
+      const saved = cfg?.reels?.[path];
+      if (saved && state.mediaPath === path && !state.segments.length && state.presetId === "none") {
+        store.set({
+          segments: saved.segments || [],
+          cuts: saved.cuts || [],
+          presetId: saved.presetId || "none",
+          intensity: saved.intensity ?? 0.75,
+          music: saved.music || null
         });
-        URL.revokeObjectURL(url);
-        const c = document.createElement("canvas");
-        c.width = img.naturalWidth;
-        c.height = img.naturalHeight;
-        const cx = c.getContext("2d", { willReadFrequently: true });
-        cx.drawImage(img, 0, 0);
-        const d = cx.getImageData(0, 0, c.width, c.height).data;
-        for (let i = 0; i < d.length; i += 16) {
-          const r = d[i], g = d[i + 1], b = d[i + 2];
-          const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-          const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-          sumL += L;
-          sumL2 += L * L;
-          sumW += r - b;
-          n++;
-          if (mx > 8) sumS += (mx - mn) / mx;
-        }
       }
-      if (!n) throw new Error("no frames");
-      const meanL = sumL / n, stdL = Math.sqrt(Math.max(0, sumL2 / n - meanL * meanL));
-      const meanS = sumS / n, warm = sumW / n;
-      let pid, it;
-      if (stdL < 40) {
-        pid = "reels";
-        it = 0.7 + (40 - stdL) / 60;
-      } else if (meanS < 0.24) {
-        pid = "reels";
-        it = 0.8;
-      } else if (meanL < 80) {
-        pid = "matte";
-        it = 0.7;
-      } else if (warm > 25) {
-        pid = "studio";
-        it = 0.65;
-      } else if (warm < -15) {
-        pid = "warm";
-        it = 0.6;
-      } else {
-        pid = "film";
-        it = 0.65;
-      }
-      markDirty();
-      setPresetId(pid);
-      setIntensity(+clamp01(it).toFixed(2));
-      setMsg(`\u2728 ${t("preset_" + pid, pid)} ${Math.round(clamp01(it) * 100)} %`);
-    } catch (e) {
-      setMsg(t("err_frames", "Sn\xEDmky videa sa nepodarilo na\u010D\xEDta\u0165."));
-    } finally {
-      setAutoBusy(false);
+    } catch {
     }
-  };
+    if (state.mediaPath === path) store.set({ cfgLoaded: true });
+    try {
+      const thumbs = await api.invoke("video_thumbs_strip", { path, count: 120 });
+      if (state.mediaPath === path) store.set({ thumbs });
+    } catch {
+    }
+  } catch (e) {
+    if (state.mediaPath === path) store.set({ msg: String(e) });
+  } finally {
+    if (loadingFor === path) loadingFor = null;
+  }
+}
+var saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const s = store.getState();
+    if (!s.mediaPath || !s.cfgLoaded) return;
+    api.invoke("get_module_config", { id: api.moduleId }).then((cfg) => {
+      const reels = { ...cfg?.reels || {} };
+      reels[s.mediaPath] = { segments: s.segments, cuts: s.cuts, presetId: s.presetId, intensity: s.intensity, music: s.music };
+      return api.invoke("set_module_config", { id: api.moduleId, config: { ...cfg || {}, reels } });
+    }).catch(() => {
+    });
+  }, 600);
+}
+function applyToEditor() {
+  const s = store.getState();
+  const segs = s.segments.length ? s.segments.map((g, i) => ({
+    start: g.start,
+    end: g.end,
+    grade: segGrade(s.cuts[i - 1], s.cuts[i], g.end - g.start) || void 0
+  })) : null;
+  api.setEditorSegments(segs);
+  api.setEditorLiveFilter(buildLiveFilter(s.presetId, s.intensity));
+  const vf = buildPresetVf(s.presetId, s.intensity);
+  let agraph, aInputs;
+  const total = s.segments.length ? s.segments.reduce((a, g) => a + (g.end - g.start), 0) : s.info?.duration || 0;
+  if (s.music?.path && total > 0) {
+    const v = clamp01((s.music.volume ?? 30) / 100).toFixed(3);
+    if (s.music.mode === "replace" || s.info?.has_audio === false) {
+      agraph = `[I0]aloop=loop=-1:size=2000000000,atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${v}[A_OUT]`;
+    } else {
+      agraph = `[A_IN]volume=1.0[oa];[I0]aloop=loop=-1:size=2000000000,volume=${v}[ma];[oa][ma]amix=inputs=2:duration=first:normalize=0[A_OUT]`;
+    }
+    aInputs = [s.music.path];
+  }
+  if (vf || agraph) {
+    api.setEditorStep({ label: "Reels", vf: vf || void 0, agraph, aInputs });
+  } else {
+    api.setEditorStep(null);
+  }
+}
+function update(patch) {
+  store.set(patch);
+  applyToEditor();
+  scheduleSave();
+}
+function markIn() {
+  const pos = api.getPlayerPosition();
+  if (pos == null) return;
+  store.set({ pendingIn: pos, msg: `\u25B8 I = ${fmtTime(pos)} \u2014 ${t("now_out", "teraz prejdi na koniec \xFAseku a stla\u010D O")}`, previewPath: null });
+}
+function markOut() {
+  const s = store.getState();
+  const pos = api.getPlayerPosition();
+  if (pos == null) return;
+  if (s.pendingIn == null) {
+    store.set({ msg: t("err_no_in", "Najprv ozna\u010D za\u010Diatok (I).") });
+    return;
+  }
+  const start = Math.min(s.pendingIn, pos), end = Math.max(s.pendingIn, pos);
+  if (end - start < MIN_SEG) {
+    store.set({ msg: t("err_short", "\xDAsek je pr\xEDli\u0161 kr\xE1tky.") });
+    return;
+  }
+  if (s.segments.some((g) => start < g.end - 1e-3 && end > g.start + 1e-3)) {
+    store.set({ msg: t("err_overlap", "\xDAsek sa prekr\xFDva s in\xFDm \xFAsekom.") });
+    return;
+  }
+  const at = (() => {
+    const i = s.segments.findIndex((g) => g.start > start);
+    return i === -1 ? s.segments.length : i;
+  })();
+  const ns = [...s.segments];
+  ns.splice(at, 0, { start, end });
+  const nc = [...s.cuts];
+  nc.splice(at, 0, "none");
+  update({ segments: ns, cuts: nc, pendingIn: null, sel: at, previewPath: null, msg: `\u2713 ${t("seg_added", "\xDAsek pridan\xFD")}: ${fmtTime(start)} \u2013 ${fmtTime(end)}` });
+}
+function removeSeg(i) {
+  const s = store.getState();
+  const ns = s.segments.filter((_, k) => k !== i);
+  const nc = [...s.cuts];
+  nc.splice(Math.min(i, nc.length - 1), 1);
+  nc.length = Math.max(0, ns.length - 1);
+  update({ segments: ns, cuts: nc, sel: -1, previewPath: null });
+}
+function updateSeg(i, key, val) {
+  const s = store.getState();
+  const dur = s.info?.duration || val;
+  const v = Math.max(0, Math.min(dur, val));
+  const ns = s.segments.map((g, k) => k === i ? { ...g, [key]: v } : g);
+  if (ns[i].end - ns[i].start < MIN_SEG) {
+    store.set({ msg: t("err_short", "\xDAsek je pr\xEDli\u0161 kr\xE1tky.") });
+    return;
+  }
+  update({ segments: ns, msg: "", previewPath: null });
+}
+function resetAll() {
+  update({ ...initialEdit() });
+  store.set({ msg: "" });
+}
+async function pickMusic() {
+  const p = await api.pickFiles(AUDIO_FILTERS, false);
+  const file = Array.isArray(p) ? p[0] : p;
+  if (file) {
+    const s = store.getState();
+    update({ music: { path: file, volume: s.music?.volume ?? 30, mode: s.music?.mode || "mix" } });
+  }
+}
+async function renderCutPreview() {
+  const s = store.getState();
+  if (!s.mediaPath || !s.segments.length || s.previewBusy) return;
+  store.set({ previewBusy: true, msg: t("rendering", "Vykres\u013Eujem n\xE1h\u013Ead\u2026") });
+  try {
+    const segs = s.segments.map((g, i) => ({
+      start: g.start,
+      end: g.end,
+      grade: segGrade(s.cuts[i - 1], s.cuts[i], g.end - g.start) || void 0
+    }));
+    const total = s.segments.reduce((a, g) => a + (g.end - g.start), 0);
+    const vf = buildPresetVf(s.presetId, s.intensity);
+    let aGraph = null, extraInputs = null;
+    if (s.music?.path) {
+      const v = clamp01((s.music.volume ?? 30) / 100).toFixed(3);
+      if (s.music.mode === "replace" || s.info?.has_audio === false) {
+        aGraph = `[1:a]aloop=loop=-1:size=2000000000,atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,volume=${v}[aout]`;
+      } else {
+        aGraph = `[0:a:0]volume=1.0[oa];[1:a]aloop=loop=-1:size=2000000000,volume=${v}[ma];[oa][ma]amix=inputs=2:duration=first:normalize=0[aout]`;
+      }
+      extraInputs = [s.music.path];
+    }
+    const out = await api.invoke("proxy_preview", {
+      input: s.mediaPath,
+      vf: vf || null,
+      filterComplex: null,
+      extraInputs,
+      seconds: Math.min(total, 86400),
+      maxWidth: 640,
+      af: null,
+      aGraph,
+      segments: segs,
+      withAudio: true
+    });
+    store.set({ previewPath: out, previewBusy: false, msg: `\u2713 ${t("preview_ready", "N\xE1h\u013Ead zostrihu pripraven\xFD")}` });
+  } catch (e) {
+    store.set({ previewBusy: false, msg: String(e) });
+  }
+}
+async function analyzeAuto() {
+  const s = store.getState();
+  if (!s.mediaPath || s.autoBusy) return;
+  store.set({ autoBusy: true, msg: t("auto_analyzing", "Analyzujem z\xE1bery\u2026") });
+  try {
+    const segs = s.segments.length ? s.segments : [{ start: 0, end: s.info?.duration || 10 }];
+    const samples = [];
+    for (const seg of segs.slice(0, 4)) {
+      samples.push(seg.start + (seg.end - seg.start) * 0.3, (seg.start + seg.end) / 2, seg.start + (seg.end - seg.start) * 0.7);
+    }
+    let sumL = 0, sumL2 = 0, sumS = 0, sumW = 0, n = 0;
+    for (const ts of samples.slice(0, 6)) {
+      const raw = await api.invoke("video_thumbnail", { path: s.mediaPath, atSeconds: ts, maxWidth: 160, vf: null });
+      if (!raw) continue;
+      const url = URL.createObjectURL(new Blob([new Uint8Array(raw)], { type: "image/jpeg" }));
+      const img = new Image();
+      img.src = url;
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+      });
+      URL.revokeObjectURL(url);
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const cx = c.getContext("2d", { willReadFrequently: true });
+      cx.drawImage(img, 0, 0);
+      const d = cx.getImageData(0, 0, c.width, c.height).data;
+      for (let i = 0; i < d.length; i += 16) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        sumL += L;
+        sumL2 += L * L;
+        sumW += r - b;
+        n++;
+        if (mx > 8) sumS += (mx - mn) / mx;
+      }
+    }
+    if (!n) throw new Error("no frames");
+    const meanL = sumL / n, stdL = Math.sqrt(Math.max(0, sumL2 / n - meanL * meanL));
+    const meanS = sumS / n, warm = sumW / n;
+    let pid, it;
+    if (stdL < 40) {
+      pid = "reels";
+      it = 0.7 + (40 - stdL) / 60;
+    } else if (meanS < 0.24) {
+      pid = "reels";
+      it = 0.8;
+    } else if (meanL < 80) {
+      pid = "matte";
+      it = 0.7;
+    } else if (warm > 25) {
+      pid = "studio";
+      it = 0.65;
+    } else if (warm < -15) {
+      pid = "warm";
+      it = 0.6;
+    } else {
+      pid = "film";
+      it = 0.65;
+    }
+    update({ presetId: pid, intensity: +clamp01(it).toFixed(2), msg: `\u2728 ${t("preset_" + pid, pid)} ${Math.round(clamp01(it) * 100)} %` });
+  } catch (e) {
+    store.set({ msg: t("err_frames", "Sn\xEDmky videa sa nepodarilo na\u010D\xEDta\u0165.") });
+  } finally {
+    store.set({ autoBusy: false });
+  }
+}
+function ReelsPanel() {
+  const s = useStore();
+  useEffect2(() => {
+    const check = () => {
+      const m = api.getEditorMedia();
+      const p = m?.kind === "video" ? m.path : null;
+      if (p && p !== store.getState().mediaPath) loadMedia(p);
+      if (!p && store.getState().mediaPath) store.set({ mediaPath: null, info: null, thumbs: null });
+    };
+    check();
+    const iv = setInterval(check, 1500);
+    return () => clearInterval(iv);
+  }, []);
   const btn = "px-2 py-1 rounded-md text-[11px] font-medium bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40";
   const btnA = "px-2 py-1 rounded-md text-[11px] font-medium bg-accent hover:bg-accent/90 text-white disabled:opacity-40";
   const inp = "w-16 px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px]";
-  if (!path || media?.kind !== "video") {
+  if (!s.mediaPath) {
     return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-3 text-[11px] text-text-dim" }, "\u{1F3AC} ", /* @__PURE__ */ react_shim_default.createElement("b", null, "Reels"), /* @__PURE__ */ react_shim_default.createElement("p", { className: "mt-2" }, t("no_media", "Najprv otvor video v Editore.")));
   }
-  const total = segments.reduce((a, s) => a + (s.end - s.start), 0);
-  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-3 flex flex-col gap-3 text-[11px]" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("span", null, "\u{1F3AC} ", /* @__PURE__ */ react_shim_default.createElement("b", null, "Reels")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 truncate text-text-dim", title: path }, baseName(path))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "relative h-12 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800 select-none" }, thumbs ? /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute inset-0 flex" }, Array.from({ length: Math.min(thumbs.count || 0, 24) }).map((_, i) => /* @__PURE__ */ react_shim_default.createElement(
+  const duration = s.info?.duration || Math.max(0, ...s.segments.map((g) => g.end)) || 1;
+  const total = s.segments.reduce((a, g) => a + (g.end - g.start), 0);
+  const thumbCount = s.thumbs?.count || 0;
+  const shown = Math.min(thumbCount || 0, 24);
+  return /* @__PURE__ */ react_shim_default.createElement("div", { className: "p-3 flex flex-col gap-3 text-[11px]" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("span", null, "\u{1F3AC} ", /* @__PURE__ */ react_shim_default.createElement("b", null, "Reels")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 truncate text-text-dim", title: s.mediaPath }, baseName(s.mediaPath))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "relative h-12 rounded-md overflow-hidden bg-zinc-900 border border-zinc-800 select-none" }, thumbCount > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute inset-0 flex" }, Array.from({ length: shown }).map((_, i) => /* @__PURE__ */ react_shim_default.createElement(
     "img",
     {
       key: i,
-      src: api.fileSrc(`${thumbs.dir}/t${String(Math.floor(i * (thumbs.count / Math.min(thumbs.count, 24))) + 1).padStart(4, "0")}.jpg`),
+      src: api.fileSrc(`${s.thumbs.dir}/t${String(Math.floor(i * thumbCount / shown) + 1).padStart(4, "0")}.jpg`),
       className: "h-full flex-1 object-cover min-w-0",
       draggable: false,
       alt: ""
     }
-  ))) : /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute inset-0 bg-zinc-900" }), duration > 0 && segments.map((s, i) => /* @__PURE__ */ react_shim_default.createElement(
+  ))), s.segments.map((g, i) => /* @__PURE__ */ react_shim_default.createElement(
     "div",
     {
       key: i,
-      onClick: () => setSel(i),
-      className: `absolute top-0 bottom-0 border-y-2 cursor-pointer ${sel === i ? "bg-accent/40 border-accent" : "bg-emerald-500/30 border-emerald-500"}`,
-      style: { left: `${s.start / duration * 100}%`, width: `${(s.end - s.start) / duration * 100}%` }
+      onClick: () => store.set({ sel: s.sel === i ? -1 : i }),
+      className: `absolute top-0 bottom-0 border-y-2 cursor-pointer ${s.sel === i ? "bg-accent/40 border-accent" : "bg-emerald-500/30 border-emerald-500"}`,
+      style: { left: `${g.start / duration * 100}%`, width: `${(g.end - g.start) / duration * 100}%` }
     }
-  )), pendingIn != null && duration > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute top-0 bottom-0 w-0.5 bg-yellow-400", style: { left: `${pendingIn / duration * 100}%` } })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markIn, title: t("io_in_hint", "Ozna\u010D\xED za\u010Diatok \xFAseku na poz\xEDcii prehr\xE1va\u010Da") }, "I \xB7 ", t("io_in", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markOut, disabled: pendingIn == null, title: t("io_out_hint", "Uzavrie \xFAsek na poz\xEDcii prehr\xE1va\u010Da") }, "O \xB7 ", t("io_out", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: cancelDraft, disabled: pendingIn == null }, "\u2715"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 self-center text-text-dim" }, segments.length > 0 ? `${t("marked", "Ozna\u010Den\xE9")}: ${segments.length}` : ""), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: resetAll, disabled: !segments.length && presetId === "none" && !music }, t("reset", "Reset"))), msg ? /* @__PURE__ */ react_shim_default.createElement("div", { className: msg.startsWith("\u2713") || msg.startsWith("\u25B8") ? "text-emerald-400" : "text-amber-400" }, msg) : null, segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim" }, t("segments", "\xDAseky"), " \xB7 ", fmtTime(total)), segments.map((s, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i, className: `rounded-md border px-2 py-1.5 ${sel === i ? "border-accent bg-accent/10" : "border-zinc-800"}` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5 cursor-pointer", onClick: () => setSel(sel === i ? -1 : i) }, /* @__PURE__ */ react_shim_default.createElement("b", null, i + 1, "."), /* @__PURE__ */ react_shim_default.createElement("span", null, fmtTime(s.start), " \u2013 ", fmtTime(s.end)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: (e) => {
+  )), s.pendingIn != null && /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute top-0 bottom-0 w-0.5 bg-yellow-400", style: { left: `${s.pendingIn / duration * 100}%` } })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-1.5 items-center" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markIn, title: t("io_in_hint", "Ozna\u010D\xED za\u010Diatok \xFAseku na poz\xEDcii prehr\xE1va\u010Da") }, "I \xB7 ", t("io_in", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markOut, disabled: s.pendingIn == null, title: t("io_out_hint", "Uzavrie \xFAsek na poz\xEDcii prehr\xE1va\u010Da") }, "O \xB7 ", t("io_out", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: () => store.set({ pendingIn: null, msg: "" }), disabled: s.pendingIn == null }, "\u2715"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 text-right text-text-dim" }, s.segments.length > 0 ? `${t("marked", "Ozna\u010Den\xE9")}: ${s.segments.length} \xB7 ${fmtTime(total)}` : "")), s.msg ? /* @__PURE__ */ react_shim_default.createElement("div", { className: s.msg.startsWith("\u2713") || s.msg.startsWith("\u25B8") || s.msg.startsWith("\u2728") ? "text-emerald-400" : "text-amber-400" }, s.msg) : null, s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: renderCutPreview, disabled: s.previewBusy }, s.previewBusy ? `\u23F3 ${t("rendering", "Vykres\u013Eujem n\xE1h\u013Ead\u2026")}` : `\u25B6 ${t("preview", "N\xE1h\u013Ead zostrihu")}`), s.previewPath && /* @__PURE__ */ react_shim_default.createElement("video", { key: s.previewPath, src: api.fileSrc(s.previewPath), controls: true, autoPlay: true, className: "w-full rounded-md bg-black max-h-48" })), s.segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1" }, s.segments.map((g, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i, className: `rounded-md border px-2 py-1.5 ${s.sel === i ? "border-accent bg-accent/10" : "border-zinc-800"}` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5 cursor-pointer", onClick: () => store.set({ sel: s.sel === i ? -1 : i }) }, /* @__PURE__ */ react_shim_default.createElement("b", null, i + 1, "."), /* @__PURE__ */ react_shim_default.createElement("span", null, fmtTime(g.start), " \u2013 ", fmtTime(g.end)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: (e) => {
     e.stopPropagation();
     removeSeg(i);
-  } }, "\u2715")), sel === i && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-1.5 flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("start", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "number", step: "0.1", min: "0", className: inp, value: s.start.toFixed(1), onChange: (e) => updateSeg(i, "start", parseFloat(e.target.value)) }), /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("end", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "number", step: "0.1", min: "0", className: inp, value: s.end.toFixed(1), onChange: (e) => updateSeg(i, "end", parseFloat(e.target.value)) })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("transition", "Prechod za \xFAsekom")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "flex-1 px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: cuts[i] || "none", onChange: (e) => setCut(i, e.target.value), disabled: i >= segments.length - 1 }, TRANSITIONS.map((id) => /* @__PURE__ */ react_shim_default.createElement("option", { key: id, value: id }, t("tr_" + id, id))))))))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("presets", "Look")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: analyzeAuto, disabled: autoBusy }, "\u2728 ", t("auto", "Automatick\xFD"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-1" }, ["none", ...PRESETS.map((p) => p.id)].map((id) => /* @__PURE__ */ react_shim_default.createElement(
+  } }, "\u2715")), s.sel === i && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-1.5 flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("start", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "number", step: "0.1", min: "0", className: inp, value: g.start.toFixed(1), onChange: (e) => updateSeg(i, "start", parseFloat(e.target.value)) }), /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("end", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "number", step: "0.1", min: "0", className: inp, value: g.end.toFixed(1), onChange: (e) => updateSeg(i, "end", parseFloat(e.target.value)) })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("transition", "Prechod za \xFAsekom")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "flex-1 px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: s.cuts[i] || "none", onChange: (e) => {
+    const nc = [...s.cuts];
+    nc[i] = e.target.value;
+    update({ cuts: nc });
+  }, disabled: i >= s.segments.length - 1 }, TRANSITIONS.map((id) => /* @__PURE__ */ react_shim_default.createElement("option", { key: id, value: id }, t("tr_" + id, id))))))))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("presets", "Look")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: analyzeAuto, disabled: s.autoBusy }, "\u2728 ", t("auto", "Automatick\xFD"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-1" }, ["none", ...PRESETS.map((p) => p.id)].map((id) => /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       key: id,
-      onClick: () => {
-        markDirty();
-        setPresetId(id);
-      },
-      className: `px-1 py-1.5 rounded-md border text-[10px] ${presetId === id ? "border-accent bg-accent/15 text-accent" : "border-zinc-800 bg-zinc-900 hover:border-zinc-600"}`
+      onClick: () => update({ presetId: id }),
+      className: `px-1 py-1.5 rounded-md border text-[10px] ${s.presetId === id ? "border-accent bg-accent/15 text-accent" : "border-zinc-800 bg-zinc-900 hover:border-zinc-600"}`
     },
     t("preset_" + id, id)
-  ))), presetId !== "none" && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("intensity", "Intenzita")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "10", max: "100", value: Math.round(intensity * 100), className: "flex-1", onChange: (e) => {
-    markDirty();
-    setIntensity(parseInt(e.target.value, 10) / 100);
-  } }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, Math.round(intensity * 100), " %"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("music", "Hudba")), music?.path ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 truncate", title: music.path }, "\u266A ", baseName(music.path)), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: () => {
-    markDirty();
-    setMusic(null);
-  } }, "\u2715")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("music_volume", "Hlasitos\u0165")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "0", max: "100", value: music.volume ?? 30, className: "flex-1", onChange: (e) => {
-    markDirty();
-    setMusic({ ...music, volume: parseInt(e.target.value, 10) });
-  } }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, music.volume ?? 30, " %")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "px-1.5 py-1 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: music.mode || "mix", onChange: (e) => {
-    markDirty();
-    setMusic({ ...music, mode: e.target.value });
-  } }, /* @__PURE__ */ react_shim_default.createElement("option", { value: "mix" }, t("music_mix", "Zmie\u0161a\u0165 s p\xF4vodn\xFDm zvukom")), /* @__PURE__ */ react_shim_default.createElement("option", { value: "replace" }, t("music_replace", "Nahradi\u0165 zvuk")))) : /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: pickMusic }, "\u266A ", t("music_pick", "Vybra\u0165 hudbu\u2026"))), applied && /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-emerald-400" }, "\u2713 ", t("applied", "Aplikovan\xE9 v Editore"), ": ", applied), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: () => api.exportEditor() }, t("export", "Exportova\u0165\u2026")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim text-[10px]" }, t("hint", "Zmeny sa aplikuj\xFA okam\u017Eite \u2014 n\xE1h\u013Ead Editora ukazuje re\xE1lny v\xFDsledok.")));
+  ))), s.presetId !== "none" && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("intensity", "Intenzita")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "10", max: "100", value: Math.round(s.intensity * 100), className: "flex-1", onChange: (e) => update({ intensity: parseInt(e.target.value, 10) / 100 }) }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, Math.round(s.intensity * 100), " %"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("music", "Hudba")), s.music?.path ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 truncate", title: s.music.path }, "\u266A ", baseName(s.music.path)), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: () => update({ music: null }) }, "\u2715")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("music_volume", "Hlasitos\u0165")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "0", max: "100", value: s.music.volume ?? 30, className: "flex-1", onChange: (e) => update({ music: { ...s.music, volume: parseInt(e.target.value, 10) } }) }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, s.music.volume ?? 30, " %")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "px-1.5 py-1 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: s.music.mode || "mix", onChange: (e) => update({ music: { ...s.music, mode: e.target.value } }) }, /* @__PURE__ */ react_shim_default.createElement("option", { value: "mix" }, t("music_mix", "Zmie\u0161a\u0165 s p\xF4vodn\xFDm zvukom")), /* @__PURE__ */ react_shim_default.createElement("option", { value: "replace" }, t("music_replace", "Nahradi\u0165 zvuk")))) : /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: pickMusic }, "\u266A ", t("music_pick", "Vybra\u0165 hudbu\u2026"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: () => api.exportEditor(), disabled: !s.segments.length && s.presetId === "none" && !s.music }, t("export", "Exportova\u0165\u2026")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: resetAll, disabled: !s.segments.length && s.presetId === "none" && !s.music }, t("reset", "Reset"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim text-[10px]" }, t("hint", "Zmeny sa aplikuj\xFA okam\u017Eite \u2014 n\xE1h\u013Ead Editora ukazuje re\xE1lny v\xFDsledok.")));
 }
 api.registerEditorPanel(ReelsPanel);

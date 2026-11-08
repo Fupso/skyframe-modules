@@ -38,5 +38,8 @@
   "err_frames": "Videobilder konnten nicht geladen werden.",
   "now_out": "jetzt zum Segmentende gehen und O drücken",
   "seg_added": "Segment hinzugefügt",
-  "marked": "Markiert"
+  "marked": "Markiert",
+  "preview": "Schnitt-Vorschau",
+  "preview_ready": "Schnitt-Vorschau bereit",
+  "rendering": "Vorschau wird gerendert…"
 }

@@ -38,5 +38,8 @@
   "err_frames": "Snímky videa sa nepodarilo načítať.",
   "now_out": "teraz prejdi na koniec úseku a stlač O",
   "seg_added": "Úsek pridaný",
-  "marked": "Označené"
+  "marked": "Označené",
+  "preview": "Náhľad zostrihu",
+  "preview_ready": "Náhľad zostrihu pripravený",
+  "rendering": "Vykresľujem náhľad…"
 }

@@ -38,5 +38,8 @@
   "err_frames": "Video frames could not be loaded.",
   "now_out": "now move to the segment end and press O",
   "seg_added": "Segment added",
-  "marked": "Marked"
+  "marked": "Marked",
+  "preview": "Cut preview",
+  "preview_ready": "Cut preview ready",
+  "rendering": "Rendering preview…"
 }

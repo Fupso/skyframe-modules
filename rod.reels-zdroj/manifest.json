@@ -1,7 +1,7 @@
 {
   "id": "rod.reels",
   "name": "Reels",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "author": "Rod Studio",
   "description": "Zostrih priamo v Editore: I/O úseky na pozícii prehrávača, prechody, profesionálne presety aj automatický look, hudba. Náhľad Editora = export.",
   "permissions": [
