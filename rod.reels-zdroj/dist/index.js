@@ -26,6 +26,36 @@ var TRANSITIONS = ["none", "black", "white"];
 function clamp01(v) {
   return Math.min(1, Math.max(0, v));
 }
+function chanTable(pts, it) {
+  const out = [];
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    let a = pts[0], b = pts[pts.length - 1];
+    for (let k = 0; k < pts.length - 1; k++) {
+      if (x >= pts[k][0] && x <= pts[k + 1][0]) {
+        a = pts[k];
+        b = pts[k + 1];
+        break;
+      }
+    }
+    const span = b[0] - a[0] || 1;
+    const y = a[1] + (b[1] - a[1]) * ((x - a[0]) / span);
+    out.push((x + (y - x) * it).toFixed(4));
+  }
+  return out.join(" ");
+}
+function buildLiveFilter(presetId, intensity) {
+  const p = PRESETS.find((x) => x.id === presetId);
+  if (!p) return null;
+  const it = clamp01(intensity);
+  return {
+    r: chanTable(p.r, it),
+    g: chanTable(p.g, it),
+    b: chanTable(p.b, it),
+    saturate: 1 + (p.sat - 1) * it,
+    fx: { blur: 0, sharpen: 0, vignette: Math.round(p.vig * 100 * it), grain: Math.round((p.grain || 0) * 10 * it) }
+  };
+}
 function buildPresetVf(presetId, intensity) {
   const p = PRESETS.find((x) => x.id === presetId);
   if (!p) return "";
@@ -84,6 +114,11 @@ function ReelsPanel() {
   const [autoBusy, setAutoBusy] = useState2(false);
   const [applied, setApplied] = useState2("");
   const cfgTimer = useRef2(null);
+  const dirtyRef = useRef2(false);
+  const loadedRef = useRef2(false);
+  const markDirty = () => {
+    dirtyRef.current = true;
+  };
   const duration = info?.duration || 0;
   const path = media?.path || null;
   useEffect2(() => {
@@ -92,6 +127,8 @@ function ReelsPanel() {
   }, []);
   useEffect2(() => {
     let dead = false;
+    dirtyRef.current = false;
+    loadedRef.current = false;
     setInfo(null);
     setThumbs(null);
     setMsg("");
@@ -109,21 +146,16 @@ function ReelsPanel() {
         try {
           const cfg = await api.invoke("get_module_config", { id: api.moduleId });
           const saved = cfg?.reels?.[path];
-          if (saved && !dead) {
+          if (saved && !dead && !dirtyRef.current) {
             setSegments(saved.segments || []);
             setCuts(saved.cuts || []);
             setPresetId(saved.presetId || "none");
             setIntensity(saved.intensity ?? 0.75);
             setMusic(saved.music || null);
-          } else if (!dead) {
-            setSegments([]);
-            setCuts([]);
-            setPresetId("none");
-            setIntensity(0.75);
-            setMusic(null);
           }
         } catch {
         }
+        loadedRef.current = true;
         try {
           const th = await api.invoke("video_thumbs_strip", { path, count: 120 });
           if (!dead) setThumbs(th);
@@ -138,7 +170,7 @@ function ReelsPanel() {
     };
   }, [path]);
   useEffect2(() => {
-    if (!path) return;
+    if (!path || !loadedRef.current) return;
     clearTimeout(cfgTimer.current);
     cfgTimer.current = setTimeout(() => {
       api.invoke("get_module_config", { id: api.moduleId }).then((cfg) => {
@@ -157,6 +189,7 @@ function ReelsPanel() {
       grade: segGrade(cuts[i - 1], cuts[i], s.end - s.start) || void 0
     })) : null;
     api.setEditorSegments(segs);
+    api.setEditorLiveFilter(buildLiveFilter(presetId, intensity));
     const vf = buildPresetVf(presetId, intensity);
     let agraph, aInputs;
     const total2 = segments.length ? segments.reduce((a, s) => a + (s.end - s.start), 0) : duration;
@@ -183,8 +216,9 @@ function ReelsPanel() {
   const markIn = () => {
     const pos = api.getPlayerPosition();
     if (pos == null) return;
+    markDirty();
     setPendingIn(pos);
-    setMsg("");
+    setMsg(`\u25B8 I = ${fmtTime(pos)} \u2014 ${t("now_out", "teraz prejdi na koniec \xFAseku a stla\u010D O")}`);
   };
   const markOut = () => {
     const pos = api.getPlayerPosition();
@@ -203,6 +237,7 @@ function ReelsPanel() {
       setMsg(t("err_overlap", "\xDAsek sa prekr\xFDva s in\xFDm \xFAsekom."));
       return;
     }
+    markDirty();
     const idx = segments.findIndex((s) => s.start > start);
     const at = idx === -1 ? segments.length : idx;
     const ns = [...segments];
@@ -213,13 +248,14 @@ function ReelsPanel() {
     setCuts(nc);
     setPendingIn(null);
     setSel(at);
-    setMsg("");
+    setMsg(`\u2713 ${t("seg_added", "\xDAsek pridan\xFD")}: ${fmtTime(start)} \u2013 ${fmtTime(end)}`);
   };
   const cancelDraft = () => {
     setPendingIn(null);
     setMsg("");
   };
   const removeSeg = (i) => {
+    markDirty();
     const ns = segments.filter((_, k) => k !== i);
     const nc = [...cuts];
     nc.splice(Math.min(i, nc.length - 1), 1);
@@ -236,15 +272,18 @@ function ReelsPanel() {
       setMsg(t("err_short", "\xDAsek je pr\xEDli\u0161 kr\xE1tky."));
       return;
     }
+    markDirty();
     setMsg("");
     setSegments(ns);
   };
   const setCut = (i, id) => {
+    markDirty();
     const nc = [...cuts];
     nc[i] = id;
     setCuts(nc);
   };
   const resetAll = () => {
+    markDirty();
     setSegments([]);
     setCuts([]);
     setPendingIn(null);
@@ -257,7 +296,10 @@ function ReelsPanel() {
   const pickMusic = async () => {
     const p = await api.pickFiles(AUDIO_FILTERS, false);
     const file = Array.isArray(p) ? p[0] : p;
-    if (file) setMusic({ path: file, volume: music?.volume ?? 30, mode: music?.mode || "mix" });
+    if (file) {
+      markDirty();
+      setMusic({ path: file, volume: music?.volume ?? 30, mode: music?.mode || "mix" });
+    }
   };
   const analyzeAuto = async () => {
     if (!path || autoBusy) return;
@@ -321,6 +363,7 @@ function ReelsPanel() {
         pid = "film";
         it = 0.65;
       }
+      markDirty();
       setPresetId(pid);
       setIntensity(+clamp01(it).toFixed(2));
       setMsg(`\u2728 ${t("preset_" + pid, pid)} ${Math.round(clamp01(it) * 100)} %`);
@@ -354,17 +397,32 @@ function ReelsPanel() {
       className: `absolute top-0 bottom-0 border-y-2 cursor-pointer ${sel === i ? "bg-accent/40 border-accent" : "bg-emerald-500/30 border-emerald-500"}`,
       style: { left: `${s.start / duration * 100}%`, width: `${(s.end - s.start) / duration * 100}%` }
     }
-  )), pendingIn != null && duration > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute top-0 bottom-0 w-0.5 bg-yellow-400", style: { left: `${pendingIn / duration * 100}%` } })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markIn, title: t("io_in_hint", "Ozna\u010D\xED za\u010Diatok \xFAseku na poz\xEDcii prehr\xE1va\u010Da") }, "I \xB7 ", t("io_in", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markOut, disabled: pendingIn == null, title: t("io_out_hint", "Uzavrie \xFAsek na poz\xEDcii prehr\xE1va\u010Da") }, "O \xB7 ", t("io_out", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: cancelDraft, disabled: pendingIn == null }, "\u2715"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: resetAll, disabled: !segments.length && presetId === "none" && !music }, t("reset", "Reset"))), msg ? /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-amber-400" }, msg) : null, segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim" }, t("segments", "\xDAseky"), " \xB7 ", fmtTime(total)), segments.map((s, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i, className: `rounded-md border px-2 py-1.5 ${sel === i ? "border-accent bg-accent/10" : "border-zinc-800"}` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5 cursor-pointer", onClick: () => setSel(sel === i ? -1 : i) }, /* @__PURE__ */ react_shim_default.createElement("b", null, i + 1, "."), /* @__PURE__ */ react_shim_default.createElement("span", null, fmtTime(s.start), " \u2013 ", fmtTime(s.end)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: (e) => {
+  )), pendingIn != null && duration > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "absolute top-0 bottom-0 w-0.5 bg-yellow-400", style: { left: `${pendingIn / duration * 100}%` } })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markIn, title: t("io_in_hint", "Ozna\u010D\xED za\u010Diatok \xFAseku na poz\xEDcii prehr\xE1va\u010Da") }, "I \xB7 ", t("io_in", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: markOut, disabled: pendingIn == null, title: t("io_out_hint", "Uzavrie \xFAsek na poz\xEDcii prehr\xE1va\u010Da") }, "O \xB7 ", t("io_out", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: cancelDraft, disabled: pendingIn == null }, "\u2715"), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 self-center text-text-dim" }, segments.length > 0 ? `${t("marked", "Ozna\u010Den\xE9")}: ${segments.length}` : ""), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: resetAll, disabled: !segments.length && presetId === "none" && !music }, t("reset", "Reset"))), msg ? /* @__PURE__ */ react_shim_default.createElement("div", { className: msg.startsWith("\u2713") || msg.startsWith("\u25B8") ? "text-emerald-400" : "text-amber-400" }, msg) : null, segments.length > 0 && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim" }, t("segments", "\xDAseky"), " \xB7 ", fmtTime(total)), segments.map((s, i) => /* @__PURE__ */ react_shim_default.createElement("div", { key: i, className: `rounded-md border px-2 py-1.5 ${sel === i ? "border-accent bg-accent/10" : "border-zinc-800"}` }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5 cursor-pointer", onClick: () => setSel(sel === i ? -1 : i) }, /* @__PURE__ */ react_shim_default.createElement("b", null, i + 1, "."), /* @__PURE__ */ react_shim_default.createElement("span", null, fmtTime(s.start), " \u2013 ", fmtTime(s.end)), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: (e) => {
     e.stopPropagation();
     removeSeg(i);
   } }, "\u2715")), sel === i && /* @__PURE__ */ react_shim_default.createElement("div", { className: "mt-1.5 flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("start", "Za\u010Diatok")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "number", step: "0.1", min: "0", className: inp, value: s.start.toFixed(1), onChange: (e) => updateSeg(i, "start", parseFloat(e.target.value)) }), /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("end", "Koniec")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "number", step: "0.1", min: "0", className: inp, value: s.end.toFixed(1), onChange: (e) => updateSeg(i, "end", parseFloat(e.target.value)) })), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("transition", "Prechod za \xFAsekom")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "flex-1 px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: cuts[i] || "none", onChange: (e) => setCut(i, e.target.value), disabled: i >= segments.length - 1 }, TRANSITIONS.map((id) => /* @__PURE__ */ react_shim_default.createElement("option", { key: id, value: id }, t("tr_" + id, id))))))))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("presets", "Look")), /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1" }), /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: analyzeAuto, disabled: autoBusy }, "\u2728 ", t("auto", "Automatick\xFD"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "grid grid-cols-3 gap-1" }, ["none", ...PRESETS.map((p) => p.id)].map((id) => /* @__PURE__ */ react_shim_default.createElement(
     "button",
     {
       key: id,
-      onClick: () => setPresetId(id),
+      onClick: () => {
+        markDirty();
+        setPresetId(id);
+      },
       className: `px-1 py-1.5 rounded-md border text-[10px] ${presetId === id ? "border-accent bg-accent/15 text-accent" : "border-zinc-800 bg-zinc-900 hover:border-zinc-600"}`
     },
     t("preset_" + id, id)
-  ))), presetId !== "none" && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("intensity", "Intenzita")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "10", max: "100", value: Math.round(intensity * 100), className: "flex-1", onChange: (e) => setIntensity(parseInt(e.target.value, 10) / 100) }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, Math.round(intensity * 100), " %"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("music", "Hudba")), music?.path ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 truncate", title: music.path }, "\u266A ", baseName(music.path)), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: () => setMusic(null) }, "\u2715")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("music_volume", "Hlasitos\u0165")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "0", max: "100", value: music.volume ?? 30, className: "flex-1", onChange: (e) => setMusic({ ...music, volume: parseInt(e.target.value, 10) }) }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, music.volume ?? 30, " %")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "px-1.5 py-1 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: music.mode || "mix", onChange: (e) => setMusic({ ...music, mode: e.target.value }) }, /* @__PURE__ */ react_shim_default.createElement("option", { value: "mix" }, t("music_mix", "Zmie\u0161a\u0165 s p\xF4vodn\xFDm zvukom")), /* @__PURE__ */ react_shim_default.createElement("option", { value: "replace" }, t("music_replace", "Nahradi\u0165 zvuk")))) : /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: pickMusic }, "\u266A ", t("music_pick", "Vybra\u0165 hudbu\u2026"))), applied && /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-emerald-400" }, "\u2713 ", t("applied", "Aplikovan\xE9 v Editore"), ": ", applied), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: () => api.exportEditor() }, t("export", "Exportova\u0165\u2026")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim text-[10px]" }, t("hint", "Zmeny sa aplikuj\xFA okam\u017Eite \u2014 n\xE1h\u013Ead Editora ukazuje re\xE1lny v\xFDsledok.")));
+  ))), presetId !== "none" && /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("intensity", "Intenzita")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "10", max: "100", value: Math.round(intensity * 100), className: "flex-1", onChange: (e) => {
+    markDirty();
+    setIntensity(parseInt(e.target.value, 10) / 100);
+  } }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, Math.round(intensity * 100), " %"))), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "text-text-dim" }, t("music", "Hudba")), music?.path ? /* @__PURE__ */ react_shim_default.createElement(react_shim_default.Fragment, null, /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-1.5" }, /* @__PURE__ */ react_shim_default.createElement("span", { className: "flex-1 truncate", title: music.path }, "\u266A ", baseName(music.path)), /* @__PURE__ */ react_shim_default.createElement("button", { className: "text-red-400 hover:text-red-300", onClick: () => {
+    markDirty();
+    setMusic(null);
+  } }, "\u2715")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ react_shim_default.createElement("label", { className: "text-text-dim" }, t("music_volume", "Hlasitos\u0165")), /* @__PURE__ */ react_shim_default.createElement("input", { type: "range", min: "0", max: "100", value: music.volume ?? 30, className: "flex-1", onChange: (e) => {
+    markDirty();
+    setMusic({ ...music, volume: parseInt(e.target.value, 10) });
+  } }), /* @__PURE__ */ react_shim_default.createElement("span", { className: "w-8 text-right" }, music.volume ?? 30, " %")), /* @__PURE__ */ react_shim_default.createElement("select", { className: "px-1.5 py-1 rounded bg-zinc-800 border border-zinc-700 text-[11px]", value: music.mode || "mix", onChange: (e) => {
+    markDirty();
+    setMusic({ ...music, mode: e.target.value });
+  } }, /* @__PURE__ */ react_shim_default.createElement("option", { value: "mix" }, t("music_mix", "Zmie\u0161a\u0165 s p\xF4vodn\xFDm zvukom")), /* @__PURE__ */ react_shim_default.createElement("option", { value: "replace" }, t("music_replace", "Nahradi\u0165 zvuk")))) : /* @__PURE__ */ react_shim_default.createElement("button", { className: btn, onClick: pickMusic }, "\u266A ", t("music_pick", "Vybra\u0165 hudbu\u2026"))), applied && /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-emerald-400" }, "\u2713 ", t("applied", "Aplikovan\xE9 v Editore"), ": ", applied), /* @__PURE__ */ react_shim_default.createElement("button", { className: btnA, onClick: () => api.exportEditor() }, t("export", "Exportova\u0165\u2026")), /* @__PURE__ */ react_shim_default.createElement("div", { className: "text-text-dim text-[10px]" }, t("hint", "Zmeny sa aplikuj\xFA okam\u017Eite \u2014 n\xE1h\u013Ead Editora ukazuje re\xE1lny v\xFDsledok.")));
 }
 api.registerEditorPanel(ReelsPanel);

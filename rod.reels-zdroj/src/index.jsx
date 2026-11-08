@@ -1,4 +1,4 @@
-// rod.reels v3.0.0 — Reels ako nástroj priamo v Editore (pravý panel)
+// rod.reels v3.0.1 — Reels ako nástroj priamo v Editore (pravý panel)
 //
 // Tok: otvoríš video v Editore → v paneli Reels označíš tlačidlami I/O
 // úseky na pozícii prehrávača → každému spoju zvolíš prechod → preset
@@ -47,6 +47,36 @@ const PRESETS = [
 const TRANSITIONS = ["none", "black", "white"];
 
 function clamp01(v) { return Math.min(1, Math.max(0, v)); }
+
+// krivka presetu → 256 hodnôt pre feComponentTransfer (živý náhľad Editora)
+function chanTable(pts, it) {
+  const out = [];
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    let a = pts[0], b = pts[pts.length - 1];
+    for (let k = 0; k < pts.length - 1; k++) {
+      if (x >= pts[k][0] && x <= pts[k + 1][0]) { a = pts[k]; b = pts[k + 1]; break; }
+    }
+    const span = b[0] - a[0] || 1;
+    const y = a[1] + (b[1] - a[1]) * ((x - a[0]) / span);
+    out.push((x + (y - x) * it).toFixed(4));
+  }
+  return out.join(" ");
+}
+
+// preset → LiveFilter (okamžitý náhľad bez renderu; WebGL/SVG overlay Editora)
+function buildLiveFilter(presetId, intensity) {
+  const p = PRESETS.find((x) => x.id === presetId);
+  if (!p) return null;
+  const it = clamp01(intensity);
+  return {
+    r: chanTable(p.r, it),
+    g: chanTable(p.g, it),
+    b: chanTable(p.b, it),
+    saturate: 1 + (p.sat - 1) * it,
+    fx: { blur: 0, sharpen: 0, vignette: Math.round(p.vig * 100 * it), grain: Math.round((p.grain || 0) * 10 * it) },
+  };
+}
 
 function buildPresetVf(presetId, intensity) {
   const p = PRESETS.find((x) => x.id === presetId);
@@ -107,6 +137,9 @@ function ReelsPanel() {
   const [autoBusy, setAutoBusy] = useState(false);
   const [applied, setApplied] = useState("");
   const cfgTimer = useRef(null);
+  const dirtyRef = useRef(false);   // používateľ už niečo označil — config ho nesmie prepísať
+  const loadedRef = useRef(false);  // config pre aktuálne video sa už načítal — až potom ukladať
+  const markDirty = () => { dirtyRef.current = true; };
 
   const duration = info?.duration || 0;
   const path = media?.path || null;
@@ -119,6 +152,8 @@ function ReelsPanel() {
 
   useEffect(() => {
     let dead = false;
+    dirtyRef.current = false;
+    loadedRef.current = false;
     setInfo(null); setThumbs(null); setMsg("");
     if (!path || media.kind !== "video") { setSegments([]); setCuts([]); setPendingIn(null); return; }
     (async () => {
@@ -126,20 +161,19 @@ function ReelsPanel() {
         const inf = await api.invoke("get_video_info", { path });
         if (dead) return;
         setInfo(inf);
-        // uložený stav pre toto video
+        // uložený stav pre toto video — len ak používateľ ešte nič neoznačil
         try {
           const cfg = await api.invoke("get_module_config", { id: api.moduleId });
           const saved = cfg?.reels?.[path];
-          if (saved && !dead) {
+          if (saved && !dead && !dirtyRef.current) {
             setSegments(saved.segments || []);
             setCuts(saved.cuts || []);
             setPresetId(saved.presetId || "none");
             setIntensity(saved.intensity ?? 0.75);
             setMusic(saved.music || null);
-          } else if (!dead) {
-            setSegments([]); setCuts([]); setPresetId("none"); setIntensity(0.75); setMusic(null);
           }
         } catch { /* config nie je kritický */ }
+        loadedRef.current = true;
         // miniatúry pásu
         try {
           const th = await api.invoke("video_thumbs_strip", { path, count: 120 });
@@ -152,9 +186,10 @@ function ReelsPanel() {
     return () => { dead = true; };
   }, [path]);
 
-  // uloženie stavu (debounce)
+  // uloženie stavu (debounce) — len po načítaní configu, inak by prázdny
+  // štartovací stav prepísal uloženú prácu skôr, než sa stihne načítať
   useEffect(() => {
-    if (!path) return;
+    if (!path || !loadedRef.current) return;
     clearTimeout(cfgTimer.current);
     cfgTimer.current = setTimeout(() => {
       api.invoke("get_module_config", { id: api.moduleId }).then((cfg) => {
@@ -176,6 +211,10 @@ function ReelsPanel() {
         }))
       : null;
     api.setEditorSegments(segs);
+
+    // živý náhľad looku (bez renderu) — krivky/sýtosť/vinětka/zrno cez
+    // live overlay Editora; renderovaný náhľad aj export použijú vf krok nižšie
+    api.setEditorLiveFilter(buildLiveFilter(presetId, intensity));
 
     const vf = buildPresetVf(presetId, intensity);
     let agraph, aInputs;
@@ -207,8 +246,9 @@ function ReelsPanel() {
   const markIn = () => {
     const pos = api.getPlayerPosition();
     if (pos == null) return;
+    markDirty();
     setPendingIn(pos);
-    setMsg("");
+    setMsg(`▸ I = ${fmtTime(pos)} — ${t("now_out", "teraz prejdi na koniec úseku a stlač O")}`);
   };
   const markOut = () => {
     const pos = api.getPlayerPosition();
@@ -218,14 +258,17 @@ function ReelsPanel() {
     if (end - start < MIN_SEG) { setMsg(t("err_short", "Úsek je príliš krátky.")); return; }
     const overlap = segments.some((s) => start < s.end - 0.001 && end > s.start + 0.001);
     if (overlap) { setMsg(t("err_overlap", "Úsek sa prekrýva s iným úsekom.")); return; }
+    markDirty();
     const idx = segments.findIndex((s) => s.start > start);
     const at = idx === -1 ? segments.length : idx;
     const ns = [...segments]; ns.splice(at, 0, { start, end });
     const nc = [...cuts]; nc.splice(at, 0, "none"); // spoj za novým úsekom
-    setSegments(ns); setCuts(nc); setPendingIn(null); setSel(at); setMsg("");
+    setSegments(ns); setCuts(nc); setPendingIn(null); setSel(at);
+    setMsg(`✓ ${t("seg_added", "Úsek pridaný")}: ${fmtTime(start)} – ${fmtTime(end)}`);
   };
   const cancelDraft = () => { setPendingIn(null); setMsg(""); };
   const removeSeg = (i) => {
+    markDirty();
     const ns = segments.filter((_, k) => k !== i);
     const nc = [...cuts];
     nc.splice(Math.min(i, nc.length - 1), 1); // zahoď spoj pred/za
@@ -237,18 +280,20 @@ function ReelsPanel() {
     const ns = segments.map((s, k) => (k === i ? { ...s, [key]: v } : s));
     const s = ns[i];
     if (s.end - s.start < MIN_SEG) { setMsg(t("err_short", "Úsek je príliš krátky.")); return; }
+    markDirty();
     setMsg("");
     setSegments(ns);
   };
-  const setCut = (i, id) => { const nc = [...cuts]; nc[i] = id; setCuts(nc); };
+  const setCut = (i, id) => { markDirty(); const nc = [...cuts]; nc[i] = id; setCuts(nc); };
   const resetAll = () => {
+    markDirty();
     setSegments([]); setCuts([]); setPendingIn(null); setSel(-1);
     setPresetId("none"); setIntensity(0.75); setMusic(null); setMsg("");
   };
   const pickMusic = async () => {
     const p = await api.pickFiles(AUDIO_FILTERS, false);
     const file = Array.isArray(p) ? p[0] : p;
-    if (file) setMusic({ path: file, volume: music?.volume ?? 30, mode: music?.mode || "mix" });
+    if (file) { markDirty(); setMusic({ path: file, volume: music?.volume ?? 30, mode: music?.mode || "mix" }); }
   };
 
   // Auto preset — analýza náhľadových snímok (jas/kontrast/sýtosť/teplota)
@@ -293,7 +338,7 @@ function ReelsPanel() {
       else if (warm > 25) { pid = "studio"; it = 0.65; }
       else if (warm < -15) { pid = "warm"; it = 0.6; }
       else { pid = "film"; it = 0.65; }
-      setPresetId(pid); setIntensity(+clamp01(it).toFixed(2));
+      markDirty(); setPresetId(pid); setIntensity(+clamp01(it).toFixed(2));
       setMsg(`✨ ${t("preset_" + pid, pid)} ${Math.round(clamp01(it) * 100)} %`);
     } catch (e) {
       setMsg(t("err_frames", "Snímky videa sa nepodarilo načítať."));
@@ -358,11 +403,11 @@ function ReelsPanel() {
         <button className={btnA} onClick={markIn} title={t("io_in_hint", "Označí začiatok úseku na pozícii prehrávača")}>I · {t("io_in", "Začiatok")}</button>
         <button className={btnA} onClick={markOut} disabled={pendingIn == null} title={t("io_out_hint", "Uzavrie úsek na pozícii prehrávača")}>O · {t("io_out", "Koniec")}</button>
         <button className={btn} onClick={cancelDraft} disabled={pendingIn == null}>✕</button>
-        <span className="flex-1" />
+        <span className="flex-1 self-center text-text-dim">{segments.length > 0 ? `${t("marked", "Označené")}: ${segments.length}` : ""}</span>
         <button className={btn} onClick={resetAll} disabled={!segments.length && presetId === "none" && !music}>{t("reset", "Reset")}</button>
       </div>
 
-      {msg ? <div className="text-amber-400">{msg}</div> : null}
+      {msg ? <div className={msg.startsWith("✓") || msg.startsWith("▸") ? "text-emerald-400" : "text-amber-400"}>{msg}</div> : null}
 
       {/* zoznam úsekov */}
       {segments.length > 0 && (
@@ -408,7 +453,7 @@ function ReelsPanel() {
           {["none", ...PRESETS.map((p) => p.id)].map((id) => (
             <button
               key={id}
-              onClick={() => setPresetId(id)}
+              onClick={() => { markDirty(); setPresetId(id); }}
               className={`px-1 py-1.5 rounded-md border text-[10px] ${presetId === id ? "border-accent bg-accent/15 text-accent" : "border-zinc-800 bg-zinc-900 hover:border-zinc-600"}`}
             >
               {t("preset_" + id, id)}
@@ -418,7 +463,7 @@ function ReelsPanel() {
         {presetId !== "none" && (
           <div className="flex items-center gap-2">
             <label className="text-text-dim">{t("intensity", "Intenzita")}</label>
-            <input type="range" min="10" max="100" value={Math.round(intensity * 100)} className="flex-1" onChange={(e) => setIntensity(parseInt(e.target.value, 10) / 100)} />
+            <input type="range" min="10" max="100" value={Math.round(intensity * 100)} className="flex-1" onChange={(e) => { markDirty(); setIntensity(parseInt(e.target.value, 10) / 100); }} />
             <span className="w-8 text-right">{Math.round(intensity * 100)} %</span>
           </div>
         )}
@@ -431,14 +476,14 @@ function ReelsPanel() {
           <>
             <div className="flex items-center gap-1.5">
               <span className="flex-1 truncate" title={music.path}>♪ {baseName(music.path)}</span>
-              <button className="text-red-400 hover:text-red-300" onClick={() => setMusic(null)}>✕</button>
+              <button className="text-red-400 hover:text-red-300" onClick={() => { markDirty(); setMusic(null); }}>✕</button>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-text-dim">{t("music_volume", "Hlasitosť")}</label>
-              <input type="range" min="0" max="100" value={music.volume ?? 30} className="flex-1" onChange={(e) => setMusic({ ...music, volume: parseInt(e.target.value, 10) })} />
+              <input type="range" min="0" max="100" value={music.volume ?? 30} className="flex-1" onChange={(e) => { markDirty(); setMusic({ ...music, volume: parseInt(e.target.value, 10) }); }} />
               <span className="w-8 text-right">{music.volume ?? 30} %</span>
             </div>
-            <select className="px-1.5 py-1 rounded bg-zinc-800 border border-zinc-700 text-[11px]" value={music.mode || "mix"} onChange={(e) => setMusic({ ...music, mode: e.target.value })}>
+            <select className="px-1.5 py-1 rounded bg-zinc-800 border border-zinc-700 text-[11px]" value={music.mode || "mix"} onChange={(e) => { markDirty(); setMusic({ ...music, mode: e.target.value }); }}>
               <option value="mix">{t("music_mix", "Zmiešať s pôvodným zvukom")}</option>
               <option value="replace">{t("music_replace", "Nahradiť zvuk")}</option>
             </select>

@@ -35,5 +35,8 @@
   "err_no_in": "Markiere zuerst den Anfang (I).",
   "err_short": "Das Segment ist zu kurz.",
   "err_overlap": "Das Segment überschneidet sich mit einem anderen.",
-  "err_frames": "Videobilder konnten nicht geladen werden."
+  "err_frames": "Videobilder konnten nicht geladen werden.",
+  "now_out": "jetzt zum Segmentende gehen und O drücken",
+  "seg_added": "Segment hinzugefügt",
+  "marked": "Markiert"
 }

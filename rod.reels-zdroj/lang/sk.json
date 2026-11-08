@@ -35,5 +35,8 @@
   "err_no_in": "Najprv označ začiatok (I).",
   "err_short": "Úsek je príliš krátky.",
   "err_overlap": "Úsek sa prekrýva s iným úsekom.",
-  "err_frames": "Snímky videa sa nepodarilo načítať."
+  "err_frames": "Snímky videa sa nepodarilo načítať.",
+  "now_out": "teraz prejdi na koniec úseku a stlač O",
+  "seg_added": "Úsek pridaný",
+  "marked": "Označené"
 }

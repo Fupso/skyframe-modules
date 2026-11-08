@@ -35,5 +35,8 @@
   "err_no_in": "Mark the start (I) first.",
   "err_short": "The segment is too short.",
   "err_overlap": "The segment overlaps another one.",
-  "err_frames": "Video frames could not be loaded."
+  "err_frames": "Video frames could not be loaded.",
+  "now_out": "now move to the segment end and press O",
+  "seg_added": "Segment added",
+  "marked": "Marked"
 }

@@ -35,5 +35,8 @@
   "err_no_in": "请先标记起点（I）。",
   "err_short": "片段太短。",
   "err_overlap": "片段与其他片段重叠。",
-  "err_frames": "无法加载视频帧。"
+  "err_frames": "无法加载视频帧。",
+  "now_out": "现在移动到片段终点并按 O",
+  "seg_added": "片段已添加",
+  "marked": "已标记"
 }
